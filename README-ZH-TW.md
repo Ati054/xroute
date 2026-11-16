@@ -15,14 +15,9 @@
 
 ![運作中的 XRoute 面板總覽](docs/images/panel-overview-zh-Hant.png)
 
-<details>
-<summary>路由與節點品質</summary>
-
 ![實際運作的 XRoute 節點品質面板](docs/images/panel-routing-zh-Hant.png)
 
-</details>
-
-截圖取自實際運作中的面板，網路位址已隱藏。
+運作中的測試環境截圖。裝置名稱與本機 IP 位址為測試資料，公開位址已隱藏。
 
 ## 需要準備什麼
 

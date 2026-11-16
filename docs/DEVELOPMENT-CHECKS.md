@@ -553,8 +553,10 @@ installation after its status and traffic counters have loaded. Capture the
 overview and a populated routing policy, with the same UI language as its README.
 Use complete application views without cutting controls or capturing loading
 placeholders. Keep recorded measurements unchanged and redact network addresses,
-client identities and other private values. Synthetic regression fixtures are
-not presented as live screenshots.
+client identities and other private values. Deliberately assigned example device
+names and private test addresses may remain visible in a test installation;
+public endpoints stay hidden. Keep the overview and routing screenshots visible
+in each README. Synthetic regression fixtures are not presented as live screenshots.
 
 Product and design notes live in docs/internal/PRODUCT.md and
 docs/internal/DESIGN.md. Next.js creates the static container UI;

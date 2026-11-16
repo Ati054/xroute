@@ -14,14 +14,9 @@
 
 ![运行中的 XRoute 面板概览](docs/images/panel-overview-zh-Hans.png)
 
-<details>
-<summary>路由与节点质量</summary>
-
 ![运行中的 XRoute 节点质量面板](docs/images/panel-routing-zh-Hans.png)
 
-</details>
-
-截图来自实际运行的面板，网络地址已隐藏。
+运行中的测试环境截图。设备名称和本地 IP 地址为测试数据，公网地址已隐藏。
 
 ## 需要准备什么
 

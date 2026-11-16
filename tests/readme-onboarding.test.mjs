@@ -30,6 +30,9 @@ test("README language links resolve and the global landing page uses English UI"
     assert.ok(body.includes("docs/images/" + localeImages[name]), name + ": use the matching UI language");
     const overviewImages = { "README.md": "panel-overview-en.png", "README-RU.md": "panel-overview-ru.png", "README-FA.md": "panel-overview-fa.png", "README-ZH.md": "panel-overview-zh-Hans.png", "README-ZH-TW.md": "panel-overview-zh-Hant.png" };
     assert.ok(body.includes("docs/images/" + overviewImages[name]), name + ": use the matching overview language");
+    const previewEnd = body.indexOf("## ", body.indexOf("panel-routing"));
+    const screenshotSection = body.slice(0, previewEnd);
+    assert.doesNotMatch(screenshotSection, /<details>/, name + ": both screenshots stay visible");
     for (const imageName of [overviewImages[name], localeImages[name]]) {
       const image = await readFile(new URL("../docs/images/" + imageName, import.meta.url));
       assert.equal(image.subarray(1, 4).toString(), "PNG");

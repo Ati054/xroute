@@ -16,14 +16,9 @@ This release provides ARM64 images. The x86-64 CHR build will follow after separ
 
 ![XRoute overview in English](docs/images/panel-overview-en.png)
 
-<details>
-<summary>Routing and node quality</summary>
-
 ![Route quality in a running XRoute panel](docs/images/panel-routing-en.png)
 
-</details>
-
-Screenshots from a running installation. Network addresses are hidden.
+Live screenshots from a test installation. Device names and local IP addresses are examples; public endpoints are hidden.
 
 ## What you need
 
