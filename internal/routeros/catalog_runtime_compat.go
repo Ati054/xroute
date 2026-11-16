@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 // ValidateCatalogRuntimeImageProof permits only read-only reconstruction during
@@ -24,7 +26,7 @@ func (client *Client) ValidateCatalogRuntimeImageProof(ctx context.Context, prod
 	var previous *CatalogImageContainer
 	for _, row := range rows {
 		role := text(row["comment"])
-		if role != "SB-GATEWAY container" && role != "SB-GATEWAY container rollback" && role != "SB-GATEWAY container previous" {
+		if role != managedidentity.Literal("XROUTE container") && role != managedidentity.Literal("XROUTE container rollback") && role != managedidentity.Literal("XROUTE container previous") {
 			continue
 		}
 		value, err := compatContainer(row)
@@ -32,19 +34,19 @@ func (client *Client) ValidateCatalogRuntimeImageProof(ctx context.Context, prod
 			return err
 		}
 		switch value.Role {
-		case "SB-GATEWAY container":
+		case managedidentity.Literal("XROUTE container"):
 			if current != nil {
 				return ErrCatalogImageCompatibility
 			}
 			copy := value
 			current = &copy
-		case "SB-GATEWAY container rollback":
+		case managedidentity.Literal("XROUTE container rollback"):
 			if rollback != nil {
 				return ErrCatalogImageCompatibility
 			}
 			copy := value
 			rollback = &copy
-		case "SB-GATEWAY container previous":
+		case managedidentity.Literal("XROUTE container previous"):
 			if previous != nil {
 				return ErrCatalogImageCompatibility
 			}
@@ -69,10 +71,10 @@ func (client *Client) ValidateCatalogRuntimeImageProof(ctx context.Context, prod
 			return ErrCatalogImageCompatibility
 		}
 		arrival := false
-		name, comment := imageUpdateTransfer, "SB-GATEWAY image transfer metadata"
+		name, comment := imageUpdateTransfer, managedidentity.Literal("XROUTE image transfer metadata")
 		if len(receipts) == 0 {
 			arrival = true
-			name, comment = CatalogImageArrivalName, "SB-GATEWAY catalog image arrival"
+			name, comment = CatalogImageArrivalName, managedidentity.Literal("XROUTE catalog image arrival")
 			receipts, err = client.List(ctx, "/rest/system/script?name="+CatalogImageArrivalName)
 		}
 		if err != nil || len(receipts) != 1 || text(receipts[0]["name"]) != name || text(receipts[0]["comment"]) != comment {

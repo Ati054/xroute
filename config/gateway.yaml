@@ -7,7 +7,7 @@ system:
   architecture: arm64
   primary_interface: web
   cli_mode: recovery-only
-  object_comment_prefix: SB-GATEWAY
+  object_comment_prefix: XROUTE
   xray_version: "26.7.28"
   logging:
     xray_level: warning
@@ -36,7 +36,7 @@ system:
     tun_mtu: 1400
     addresses_confirmed: false
     tcp_mss_clamp: auto
-    routing_table: to-sb-gateway
+    routing_table: to-xroute
     connection_mark: sb-managed
     preserve_client_source_ip: true
     ipv6_mode: block_managed

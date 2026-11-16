@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
@@ -98,7 +99,7 @@ func UpdateRouterOSEndpointSource(committed string, previous, desired []string) 
 		}
 	}
 	block := func(values []string) string {
-		return strings.Join(renderRouterOSAddressList("Bypass", "SB_BYPASS_ENDPOINTS", "SB-GATEWAY loop bypass", values), "\n") + "\n"
+		return strings.Join(renderRouterOSAddressList("Bypass", "SB_BYPASS_ENDPOINTS", managedidentity.Literal("XROUTE loop bypass"), values), "\n") + "\n"
 	}
 	old := block(previous)
 	if strings.Count(committed, old) != 1 || strings.Count(committed, ":local wantedBypass ") != 1 {
@@ -220,7 +221,7 @@ func BuildRouterOSRenderModel(config map[string]any, nodes []map[string]any) (Ro
 	model.RouterOSGateway = gateway.String()
 	model.BridgeName = textValue(networking["bridge_name"])
 	model.VethName = textValue(networking["veth_name"])
-	model.RoutingTable = textDefault(networking["routing_table"], "to-sb-gateway")
+	model.RoutingTable = textDefault(networking["routing_table"], managedidentity.Literal("to-xroute"))
 	for field, value := range map[string]string{"bridge_name": model.BridgeName, "veth_name": model.VethName, "routing_table": model.RoutingTable} {
 		if !routerOSNamePattern.MatchString(value) {
 			return RouterOSRenderModel{}, fmt.Errorf("system.networking.%s must be an actual safe RouterOS name", field)
@@ -419,7 +420,7 @@ func routerOSPublicIngress(config map[string]any) ([]RouterOSPublicIngress, []Ro
 			suffix := hex.EncodeToString(digest[:])[:12]
 			sourceList = "SB_PUBLIC_" + strings.ToUpper(suffix)
 			sourceLists[sourceList] = RouterOSPublicSourceList{
-				Name: sourceList, Comment: "SB-GATEWAY public source " + suffix, CIDRs: normalized,
+				Name: sourceList, Comment: managedidentity.Literal("XROUTE public source ") + suffix, CIDRs: normalized,
 			}
 			trusted = append(trusted, normalized...)
 		default:

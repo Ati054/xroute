@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/applytiming"
 	"github.com/Ati054/xroute/internal/routeros"
 	"github.com/Ati054/xroute/internal/runtimeconfig"
@@ -562,7 +563,7 @@ func (server *Server) runRouterOSApply(
 	if err != nil {
 		return routerOSApplyOutput{}, err
 	}
-	name := "SB-GATEWAY-" + server.now().UTC().Format("20060102T150405Z") + "-" + mustRevisionPrefix(desired)
+	name := managedidentity.Literal("XROUTE-") + server.now().UTC().Format("20060102T150405Z") + "-" + mustRevisionPrefix(desired)
 	backup, err := stack.REST.CreateBackup(ctx, name, stack.BackupPassword)
 	if err != nil {
 		return routerOSApplyOutput{}, err

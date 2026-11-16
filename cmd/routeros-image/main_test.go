@@ -6,7 +6,44 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
+
+func TestInstallerBundleContainsMatchingCurrentAndLegacyScripts(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, _ := managedidentity.Parse(managedidentity.LegacyPrefix)
+	for _, architecture := range []string{"arm64", "amd64"} {
+		t.Run(architecture, func(t *testing.T) {
+			out := filepath.Join(t.TempDir(), "routeros")
+			if err := writeRouterOSScripts(root, out, architecture); err != nil {
+				t.Fatal(err)
+			}
+			files, err := filepath.Glob(filepath.Join(root, "routeros", "*.rsc"))
+			if err != nil || len(files) < 10 {
+				t.Fatal("maintained installers missing", err)
+			}
+			for _, source := range files {
+				body, err := os.ReadFile(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for subdir, expected := range map[string][]byte{
+					"":       bundleScriptContents(filepath.Base(source), body, architecture),
+					"legacy": bundleScriptContents(filepath.Base(source), []byte(legacy.Source(string(body))), architecture),
+				} {
+					actual, err := os.ReadFile(filepath.Join(out, subdir, filepath.Base(source)))
+					if err != nil || string(actual) != string(expected) {
+						t.Fatalf("%s/%s mismatch: %v", subdir, filepath.Base(source), err)
+					}
+				}
+			}
+		})
+	}
+}
 
 func TestWindowsTempDirCleanupOnly(t *testing.T) {
 	cleanup := []byte(

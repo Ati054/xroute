@@ -1,4 +1,40 @@
-# SB-GATEWAY read-mostly capability preflight. It does not change update channel,
+:local xrouteFileNamespace "XROUTE"
+:local xrouteDelegated false
+# XRoute namespace compatibility guard: begin
+:local xrouteCurrentKnown [/container/find where comment~"^XROUTE (container|rollback container)( previous| candidate| rollback| failed)?\$"]
+:local xrouteLegacyKnown [/container/find where comment~"^SB-GATEWAY (container|rollback container)( previous| candidate| rollback| failed)?\$"]
+:if (([:len $xrouteCurrentKnown] > 0) && ([:len $xrouteLegacyKnown] > 0)) do={ :error "XRoute: managed namespaces are mixed; no changes made" }
+:local xrouteKnown [/container/find where (comment="XROUTE container") or (comment="SB-GATEWAY container")]
+:if ([:len $xrouteKnown] > 1) do={ :error "XRoute: managed container identity is ambiguous; no changes made" }
+:if (([:len $xrouteKnown] = 0) && ([:len $xrouteLegacyKnown] > 0)) do={ :set xrouteKnown [:pick $xrouteLegacyKnown 0 1] }
+:if (([:len $xrouteKnown] = 0) && ([:len $xrouteCurrentKnown] > 0)) do={ :set xrouteKnown [:pick $xrouteCurrentKnown 0 1] }
+:if ([:len $xrouteKnown] = 1) do={
+  :if (($xrouteFileNamespace = "SB-GATEWAY") && ([:len $xrouteCurrentKnown] > 0)) do={ :error "XRoute: legacy installer cannot manage a new installation" }
+  :if (($xrouteFileNamespace = "XROUTE") && ([:len $xrouteLegacyKnown] > 0)) do={
+    :local xrouteOwnedRoot [:tostr [/container/get $xrouteKnown root-dir]]
+    :if ([:pick $xrouteOwnedRoot 0 1] = "/") do={ :set xrouteOwnedRoot [:pick $xrouteOwnedRoot 1 [:len $xrouteOwnedRoot]] }
+    :local xrouteLastSlash -1
+    :local xrouteScan [:find $xrouteOwnedRoot "/"]
+    :while ([:typeof $xrouteScan] = "num") do={ :set xrouteLastSlash $xrouteScan; :set xrouteScan [:find $xrouteOwnedRoot "/" ($xrouteScan + 1)] }
+    :if ($xrouteLastSlash < 1) do={ :error "XRoute: existing storage identity is invalid" }
+    :local xrouteRootName [:pick $xrouteOwnedRoot ($xrouteLastSlash + 1) [:len $xrouteOwnedRoot]]
+    :if (($xrouteRootName != "root") && ([:pick $xrouteRootName 0 5] != "root-")) do={ :error "XRoute: existing container root is not recognized" }
+    :local xrouteCompatibilityFile ([:pick $xrouteOwnedRoot 0 $xrouteLastSlash] . "/legacy/preflight.rsc")
+    :if ([:len [/file/find where name=$xrouteCompatibilityFile]] != 1) do={ :error "XRoute: upload the matching legacy installer directory beside the existing installation" }
+    /import file-name=$xrouteCompatibilityFile
+    :set xrouteDelegated true
+  }
+}
+# XRoute namespace compatibility guard: end
+
+:if ($xrouteDelegated != true) do={
+# Reject a conflicting ownership binding before making any changes.
+:local xrouteExistingBinding [/container/envs/find where list="xroute-env" and key="SB_ROUTEROS_NAMESPACE"]
+:if ([:len $xrouteExistingBinding] > 1) do={ :error "XROUTE: managed namespace environment is ambiguous" }
+:if ([:len $xrouteExistingBinding] = 1) do={ :if ([/container/envs/get $xrouteExistingBinding value] != "XROUTE") do={ :error "XROUTE: managed namespace environment does not match this installation" } }
+
+
+# XROUTE read-mostly capability preflight. It does not change update channel,
 # stop an existing container, or alter existing routes/firewall.
 
 :global "SB_IMAGE"
@@ -17,89 +53,90 @@
 
 :local version [/system/resource/get version]
 :local architecture [/system/resource/get architecture-name]
-:if ([:pick $version 0 2] != "7.") do={ :error ("SB-GATEWAY requires RouterOS major 7; detected " . $version) }
+:if ([:pick $version 0 2] != "7.") do={ :error ("XROUTE requires RouterOS major 7; detected " . $version) }
 :if (($architecture != "arm64") && ($architecture != "x86") && ($architecture != "x86_64")) do={ :error ("XRoute requires ARM64 or x86_64; detected " . $architecture) }
 
 :local channel "unknown"
-:do { :set channel [/system/package/update/get channel] } on-error={ :log warning "SB-GATEWAY: unable to read update channel; no channel change will be made" }
-:log info ("SB-GATEWAY: RouterOS " . $version . ", channel=" . $channel . ", architecture=" . $architecture)
+:do { :set channel [/system/package/update/get channel] } on-error={ :log warning "XROUTE: unable to read update channel; no channel change will be made" }
+:log info ("XROUTE: RouterOS " . $version . ", channel=" . $channel . ", architecture=" . $architecture)
 :if (($channel != "stable") && ($channel != "long-term")) do={
-  :log warning ("SB-GATEWAY: channel " . $channel . " is accepted but is lower-trust metadata; it will not be changed automatically")
+  :log warning ("XROUTE: channel " . $channel . " is accepted but is lower-trust metadata; it will not be changed automatically")
 }
 
-:if ([:len [/system/package/find where name="container"]] = 0) do={ :error "SB-GATEWAY: container package is not installed" }
+:if ([:len [/system/package/find where name="container"]] = 0) do={ :error "XROUTE: container package is not installed" }
 :local containerMode ""
-:do { :set containerMode [/system/device-mode/get container] } on-error={ :error "SB-GATEWAY: RouterOS does not expose device-mode container capability" }
-:if (($containerMode != true) && ($containerMode != "yes")) do={ :error "SB-GATEWAY: container device-mode is disabled; enable it physically before applying" }
+:do { :set containerMode [/system/device-mode/get container] } on-error={ :error "XROUTE: RouterOS does not expose device-mode container capability" }
+:if (($containerMode != true) && ($containerMode != "yes")) do={ :error "XROUTE: container device-mode is disabled; enable it physically before applying" }
 
-:if (([:len $"SB_STORAGE_ROOT"] = 0) || ([:find $"SB_STORAGE_ROOT" "flash"] = 0)) do={ :error "SB-GATEWAY: storage root must be an external disk, not internal flash" }
+:if (([:len $"SB_STORAGE_ROOT"] = 0) || ([:find $"SB_STORAGE_ROOT" "flash"] = 0)) do={ :error "XROUTE: storage root must be an external disk, not internal flash" }
 :if ([:typeof [:find $"SB_STORAGE_ROOT" "/"]] = "nil") do={
   :if (([:pick [/system/resource/get board-name] 0 3] != "CHR") || (($architecture != "x86") && ($architecture != "x86_64"))) do={ :error "XRoute: a system-disk project directory is supported only on x86 CHR" }
   :if (($"SB_STORAGE_ROOT" ~ "^(disk|usb|slot|sata|nvme)[0-9]+\$") || ($"SB_STORAGE_ROOT" ~ "^(skins|pub|hotspot|web-proxy)\$")) do={ :error "XRoute: select a dedicated project directory, not a disk or system directory" }
 }
-:if (($"SB_IMAGE_SOURCE" != "file") && ($"SB_IMAGE_SOURCE" != "registry")) do={ :error "SB-GATEWAY: SB_IMAGE_SOURCE must be file or registry" }
-:local projectContainers [/container/find where comment="SB-GATEWAY container"]
-:if ([:len $projectContainers] > 1) do={ :error "SB-GATEWAY: project container is ambiguous" }
+:if (($"SB_IMAGE_SOURCE" != "file") && ($"SB_IMAGE_SOURCE" != "registry")) do={ :error "XROUTE: SB_IMAGE_SOURCE must be file or registry" }
+:local projectContainers [/container/find where comment="XROUTE container"]
+:if ([:len $projectContainers] > 1) do={ :error "XROUTE: project container is ambiguous" }
 :if ([:len $projectContainers] = 0) do={
   :if ($"SB_IMAGE_SOURCE" = "file") do={
-    :if ([:len $"SB_IMAGE_FILE"] = 0) do={ :error "SB-GATEWAY: set SB_IMAGE_FILE to the verified Docker archive for this architecture uploaded through WebFig Files" }
-    :if ([:find $"SB_IMAGE_FILE" ($"SB_STORAGE_ROOT" . "/")] != 0) do={ :error "SB-GATEWAY: local image archive must be stored below SB_STORAGE_ROOT on the external disk" }
+    :if ([:len $"SB_IMAGE_FILE"] = 0) do={ :error "XROUTE: set SB_IMAGE_FILE to the verified Docker archive for this architecture uploaded through WebFig Files" }
+    :if ([:find $"SB_IMAGE_FILE" ($"SB_STORAGE_ROOT" . "/")] != 0) do={ :error "XROUTE: local image archive must be stored below SB_STORAGE_ROOT on the external disk" }
     :local localImage [/file/find where name=$"SB_IMAGE_FILE"]
-    :if ([:len $localImage] != 1) do={ :error ("SB-GATEWAY: local image archive is missing or ambiguous: " . $"SB_IMAGE_FILE") }
-    :if ([/file/get $localImage size] < 1048576) do={ :error "SB-GATEWAY: local image archive is unexpectedly small; verify its SHA256 on the administrator PC and upload it again" }
+    :if ([:len $localImage] != 1) do={ :error ("XROUTE: local image archive is missing or ambiguous: " . $"SB_IMAGE_FILE") }
+    :if ([/file/get $localImage size] < 1048576) do={ :error "XROUTE: local image archive is unexpectedly small; verify its SHA256 on the administrator PC and upload it again" }
   }
   :if ($"SB_IMAGE_SOURCE" = "registry") do={
-    :if (([:len $"SB_IMAGE"] = 0) || ([:typeof [:find $"SB_IMAGE" "example.invalid"]] != "nil")) do={ :error "SB-GATEWAY: set a real immutable registry image reference for this architecture" }
-    :if ([:typeof [:find $"SB_IMAGE" "@sha256:"]] = "nil") do={ :error "SB-GATEWAY: registry image must be pinned by @sha256 digest" }
+    :if (([:len $"SB_IMAGE"] = 0) || ([:typeof [:find $"SB_IMAGE" "example.invalid"]] != "nil")) do={ :error "XROUTE: set a real immutable registry image reference for this architecture" }
+    :if ([:typeof [:find $"SB_IMAGE" "@sha256:"]] = "nil") do={ :error "XROUTE: registry image must be pinned by @sha256 digest" }
   }
 } else={
-  :log info "SB-GATEWAY: project container already exists; image archive/reference is informational for this idempotent preflight"
+  :log info "XROUTE: project container already exists; image archive/reference is informational for this idempotent preflight"
 }
-:if ($"SB_ADDRESSES_CONFIRMED" != true) do={ :error "SB-GATEWAY: replace/confirm every example network value and set SB_ADDRESSES_CONFIRMED=true in the private variables file" }
-:if ([:len $"SB_MANAGED_CLIENTS"] = 0) do={ :log warning "SB-GATEWAY: SB_MANAGED_CLIENTS is empty; local diversion will remain a no-op" }
-:if ([:len $"SB_MANAGEMENT_INGRESS_INTERFACES"] = 0) do={ :error "SB-GATEWAY: select at least one actual trusted ingress interface in the Web UI" }
-:if (($"SB_ROUTEROS_REST_PORT" < 1) || ($"SB_ROUTEROS_REST_PORT" > 65535)) do={ :error "SB-GATEWAY: select and confirm the existing www-ssl TCP port; zero/default placeholders are rejected" }
+:if ($"SB_ADDRESSES_CONFIRMED" != true) do={ :error "XROUTE: replace/confirm every example network value and set SB_ADDRESSES_CONFIRMED=true in the private variables file" }
+:if ([:len $"SB_MANAGED_CLIENTS"] = 0) do={ :log warning "XROUTE: SB_MANAGED_CLIENTS is empty; local diversion will remain a no-op" }
+:if ([:len $"SB_MANAGEMENT_INGRESS_INTERFACES"] = 0) do={ :error "XROUTE: select at least one actual trusted ingress interface in the Web UI" }
+:if (($"SB_ROUTEROS_REST_PORT" < 1) || ($"SB_ROUTEROS_REST_PORT" > 65535)) do={ :error "XROUTE: select and confirm the existing www-ssl TCP port; zero/default placeholders are rejected" }
 :foreach interfaceName in=$"SB_MANAGEMENT_INGRESS_INTERFACES" do={
-  :if ([:len [/interface/find where name=$interfaceName]] != 1) do={ :error ("SB-GATEWAY: trusted ingress interface is missing or ambiguous: " . $interfaceName) }
+  :if ([:len [/interface/find where name=$interfaceName]] != 1) do={ :error ("XROUTE: trusted ingress interface is missing or ambiguous: " . $interfaceName) }
 }
 
 :local sbWanList [/interface/list/find where name="WAN"]
-:if ([:len $sbWanList] != 1) do={ :error "SB-GATEWAY: exactly one existing WAN interface-list is required" }
-:if ([:len [/interface/list/member/find where list="WAN"]] = 0) do={ :error "SB-GATEWAY: WAN interface-list must contain at least one interface" }
+:if ([:len $sbWanList] != 1) do={ :error "XROUTE: exactly one existing WAN interface-list is required" }
+:if ([:len [/interface/list/member/find where list="WAN"]] = 0) do={ :error "XROUTE: WAN interface-list must contain at least one interface" }
 
 :local existingIngressList [/interface/list/find where name="SB_MANAGEMENT_INGRESS"]
 :if ([:len $existingIngressList] > 0) do={
-  :if (([:len $existingIngressList] != 1) || ([/interface/list/get $existingIngressList comment] != "SB-GATEWAY management ingress list")) do={ :error "SB-GATEWAY: interface-list name collision: SB_MANAGEMENT_INGRESS" }
+  :if (([:len $existingIngressList] != 1) || ([/interface/list/get $existingIngressList comment] != "XROUTE management ingress list")) do={ :error "XROUTE: interface-list name collision: SB_MANAGEMENT_INGRESS" }
   :foreach member in=[/interface/list/member/find where list="SB_MANAGEMENT_INGRESS"] do={
-    :if ([/interface/list/member/get $member comment] != "SB-GATEWAY management ingress") do={ :error "SB-GATEWAY: unowned member found in project management ingress list" }
+    :if ([/interface/list/member/get $member comment] != "XROUTE management ingress") do={ :error "XROUTE: unowned member found in project management ingress list" }
   }
 }
 
 :if (($"SB_IPV6_MODE" = "block_managed") && ([:len $"SB_MANAGED_CLIENTS"] > 0) && ([:len $"SB_MANAGED_CLIENTS_V6"] = 0)) do={
   :local ipv6Disabled true
   :do { :set ipv6Disabled [/ipv6/settings/get disable-ipv6] } on-error={ :set ipv6Disabled true }
-  :if ($ipv6Disabled = false) do={ :error "SB-GATEWAY: IPv6 is active; populate SB_MANAGED_CLIENTS_V6 or implement parity before applying" }
+  :if ($ipv6Disabled = false) do={ :error "XROUTE: IPv6 is active; populate SB_MANAGED_CLIENTS_V6 or implement parity before applying" }
 }
 
 :local existingBridge [/interface/bridge/find where name=$"SB_BRIDGE"]
 :if ([:len $existingBridge] > 0) do={
-  :if ([/interface/bridge/get $existingBridge comment] != "SB-GATEWAY container bridge") do={ :error ("SB-GATEWAY: bridge name collision: " . $"SB_BRIDGE") }
+  :if ([/interface/bridge/get $existingBridge comment] != "XROUTE container bridge") do={ :error ("XROUTE: bridge name collision: " . $"SB_BRIDGE") }
 }
 :local existingVeth [/interface/veth/find where name=$"SB_VETH"]
 :if ([:len $existingVeth] > 0) do={
-  :if ([/interface/veth/get $existingVeth comment] != "SB-GATEWAY container veth") do={ :error ("SB-GATEWAY: veth name collision: " . $"SB_VETH") }
+  :if ([/interface/veth/get $existingVeth comment] != "XROUTE container veth") do={ :error ("XROUTE: veth name collision: " . $"SB_VETH") }
 }
 :local existingTable [/routing/table/find where name=$"SB_ROUTING_TABLE"]
 :if ([:len $existingTable] > 0) do={
-  :if ([/routing/table/get $existingTable comment] != "SB-GATEWAY routing table") do={ :error ("SB-GATEWAY: routing table name collision: " . $"SB_ROUTING_TABLE") }
+  :if ([/routing/table/get $existingTable comment] != "XROUTE routing table") do={ :error ("XROUTE: routing table name collision: " . $"SB_ROUTING_TABLE") }
 }
 
 :local fasttrack [/ip/firewall/filter/find where action="fasttrack-connection" and disabled=no]
-:if ([:len $fasttrack] > 1) do={ :error "SB-GATEWAY: multiple enabled FastTrack rules are ambiguous; no patch was applied" }
+:if ([:len $fasttrack] > 1) do={ :error "XROUTE: multiple enabled FastTrack rules are ambiguous; no patch was applied" }
 :if ([:len $fasttrack] = 1) do={
   :local mark [/ip/firewall/filter/get $fasttrack connection-mark]
-  :if (($mark != "") && ($mark != "no-mark")) do={ :error ("SB-GATEWAY: FastTrack already has an incompatible connection-mark matcher: " . $mark) }
+  :if (($mark != "") && ($mark != "no-mark")) do={ :error ("XROUTE: FastTrack already has an incompatible connection-mark matcher: " . $mark) }
 }
-:if ([:len $fasttrack] = 0) do={ :log warning "SB-GATEWAY: no enabled FastTrack rule found; no FastTrack patch is needed" }
+:if ([:len $fasttrack] = 0) do={ :log warning "XROUTE: no enabled FastTrack rule found; no FastTrack patch is needed" }
 
-:log info "SB-GATEWAY: capability preflight passed; restart-policy/restart-interval (or legacy auto-restart-interval) is verified atomically when the container is added"
+:log info "XROUTE: capability preflight passed; restart-policy/restart-interval (or legacy auto-restart-interval) is verified atomically when the container is added"
+}

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func (server *Server) uninstallPreview(response http.ResponseWriter, request *http.Request) {
@@ -22,11 +24,11 @@ func (server *Server) uninstallPreview(response http.ResponseWriter, request *ht
 	server.writeJSON(response, http.StatusOK, map[string]any{
 		"storage_root": root,
 		"removes": []any{
-			"точный RouterOS-контейнер SB-GATEWAY",
-			"firewall, маршруты, списки и scheduler с владением SB-GATEWAY",
-			"envs, mounts, veth и bridge с владением SB-GATEWAY",
+			managedidentity.Literal("точный RouterOS-контейнер XROUTE"),
+			managedidentity.Literal("firewall, маршруты, списки и scheduler с владением XROUTE"),
+			managedidentity.Literal("envs, mounts, veth и bridge с владением XROUTE"),
 			"выделенный каталог проекта на внешнем накопителе",
-			"REST user/group и управляемые backup-файлы SB-GATEWAY",
+			managedidentity.Literal("REST user/group и управляемые backup-файлы XROUTE"),
 		},
 		"preserves": []any{
 			"чужие правила firewall и маршруты RouterOS",
@@ -34,6 +36,7 @@ func (server *Server) uninstallPreview(response http.ResponseWriter, request *ht
 			"остальные файлы и каталоги внешнего накопителя",
 			"пакеты RouterOS, channel и device-mode",
 		},
+		// Stable API token; the panel displays its localized XRoute confirmation.
 		"confirmation": "УДАЛИТЬ SB-GATEWAY",
 	})
 }
@@ -106,7 +109,7 @@ func managedContainerStorageRoot(containers []map[string]any) (string, error) {
 	rootDirectory := ""
 	matches := 0
 	for _, container := range containers {
-		if text(container["comment"]) != "SB-GATEWAY container" {
+		if text(container["comment"]) != managedidentity.Literal("XROUTE container") {
 			continue
 		}
 		matches++

@@ -26,7 +26,8 @@ const (
 	recoveryMaxArchiveBytes   = recoveryMaxPlainBytes + (8 << 20)
 )
 
-var recoveryArchiveName = regexp.MustCompile(`^SB-GATEWAY-state-\d{8}T\d{6}Z-[0-9a-f]{12}\.sbgw$`)
+// Recovery filenames are portable data, not RouterOS ownership selectors.
+var recoveryArchiveName = regexp.MustCompile(`^(?:XROUTE|SB-GATEWAY)-state-\d{8}T\d{6}Z-[0-9a-f]{12}\.sbgw$`)
 
 type recoveryWrapperSlot struct {
 	index      int

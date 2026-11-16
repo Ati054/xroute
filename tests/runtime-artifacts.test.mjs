@@ -201,30 +201,30 @@ test("Reverse portal avoids blocked receivers without terminating streams", asyn
 test("RouterOS container uses kernel TPROXY and mount lists", async () => {
   const install = await text("routeros/install.rsc");
   const preflight = await text("scripts/preflight.sh");
-  assert.match(install, /mountlists="sb-gateway-config,/);
+  assert.match(install, /mountlists="xroute-config,/);
   assert.doesNotMatch(install, /devices="\/dev\/net\/tun"/);
   assert.doesNotMatch(preflight, /\/dev\/net\/tun/);
-  assert.match(install, /\/container\/mounts\/add list="sb-gateway-config"/);
+  assert.match(install, /\/container\/mounts\/add list="xroute-config"/);
   assert.doesNotMatch(install, /\/container\/mounts\/add name=/);
   assert.match(
     install,
     /\}\s*\n\s*# Apply lifecycle limits to both[\s\S]*\/container\/set \$containerId restart-policy=always restart-interval=10s[\s\S]*:local imageReady false/,
   );
   const managementAllow = install.indexOf(
-    'comment="SB-GATEWAY management allow"',
+    'comment="XROUTE management allow"',
   );
   const managementDeny = install.indexOf(
-    'comment="SB-GATEWAY management deny"',
+    'comment="XROUTE management deny"',
   );
   const managedAccept = install.indexOf(
-    'comment="SB-GATEWAY managed to container"',
+    'comment="XROUTE managed to container"',
   );
   const containerReturn = install.indexOf(
-    'comment="SB-GATEWAY container return to managed"',
+    'comment="XROUTE container return to managed"',
   );
   const containerLanDeny = install.indexOf(
-    'comment="SB-GATEWAY container LAN deny"',
-    'comment="SB-GATEWAY container LAN masquerade"',
+    'comment="XROUTE container LAN deny"',
+    'comment="XROUTE container LAN masquerade"',
   );
   assert.ok(
     managementAllow >= 0 &&
@@ -236,7 +236,7 @@ test("RouterOS container uses kernel TPROXY and mount lists", async () => {
   assert.match(install, /in-interface-list="SB_MANAGEMENT_INGRESS"/);
   assert.match(
     install,
-    /name="SB_MANAGEMENT_INGRESS" comment="SB-GATEWAY management ingress list"/,
+    /name="SB_MANAGEMENT_INGRESS" comment="XROUTE management ingress list"/,
   );
   assert.match(
     install,
@@ -255,12 +255,12 @@ test("RouterOS container uses kernel TPROXY and mount lists", async () => {
     /in-interface=\$"SB_BRIDGE" src-address=\$"SB_CONTAINER_IP" dst-address=\$"SB_ROUTER_IP" protocol=tcp dst-port=\$"SB_ROUTEROS_REST_PORT"/,
   );
   assert.match(install, /:local remoteManagementPorts .*\/ip\/service\/get/);
-  assert.match(install, /comment="SB-GATEWAY RouterOS remote full management allow"/);
-  assert.match(install, /obsoleteComment in=\{"SB-GATEWAY RouterOS www-ssl management allow";"SB-GATEWAY RouterOS www-ssl deny"\}/);
+  assert.match(install, /comment="XROUTE RouterOS remote full management allow"/);
+  assert.match(install, /obsoleteComment in=\{"XROUTE RouterOS www-ssl management allow";"XROUTE RouterOS www-ssl deny"\}/);
   assert.doesNotMatch(install, /\/ip\/service\/(?:set|enable|disable)/);
   assert.match(
     install,
-    /set \$routerManagementDeny chain="sb-gateway-input" action=drop src-address=\$"SB_CONTAINER_IP"/,
+    /set \$routerManagementDeny chain="xroute-input" action=drop src-address=\$"SB_CONTAINER_IP"/,
   );
   assert.match(
     install,
@@ -374,21 +374,21 @@ test("setup mode cannot falsely advertise data-plane readiness", async () => {
 
 test("RouterOS boot starts fail-open and reloads persisted watchdog settings", async () => {
   const watchdog = await text("routeros/watchdog.rsc");
-  assert.match(watchdog, /SB-GATEWAY-watchdog-config/);
+  assert.match(watchdog, /XROUTE-watchdog-config/);
   assert.match(watchdog, /9080\/traffic-ready/);
-  assert.match(watchdog, /SB-GATEWAY-startup-fail-open/);
+  assert.match(watchdog, /XROUTE-startup-fail-open/);
   assert.match(watchdog, /sbStartupSafety true/);
   assert.match(watchdog, /\$sbStartupSafety = true/);
   assert.match(watchdog, /interval=0s start-time=startup/);
   assert.match(
     watchdog,
-    /\/system\/script\/run SB-GATEWAY-watchdog-config/,
+    /\/system\/script\/run XROUTE-watchdog-config/,
   );
   const startup = watchdog.indexOf(
-    '/system/script/add name="SB-GATEWAY-startup-fail-open"',
+    '/system/script/add name="XROUTE-startup-fail-open"',
   );
   const periodic = watchdog.indexOf(
-    '/system/script/add name="SB-GATEWAY-health-watchdog"',
+    '/system/script/add name="XROUTE-health-watchdog"',
   );
   assert.ok(startup >= 0 && periodic > startup);
 });
@@ -580,8 +580,8 @@ test("destructive RouterOS cleanup uses the complete ownership prefix", async ()
     text("routeros/rollback.rsc"),
   ]);
   for (const script of scripts) {
-    assert.doesNotMatch(script, /comment~"\^SB-GATEWAY"/);
-    assert.match(script, /comment~"\^SB-GATEWAY "/);
+    assert.doesNotMatch(script, /comment~"\^XROUTE"/);
+    assert.match(script, /comment~"\^XROUTE "/);
   }
 });
 
@@ -620,7 +620,7 @@ test("single-entry RouterOS bootstrap validates the full bundle before mutation"
   assert.match(webfig, /existing dedicated REST account verified; password was not changed/);
   assert.match(webfig, /existing REST account is not restricted to the configured container \/32/);
   assert.match(webfig, /\} else=\{/);
-  assert.doesNotMatch(webfig, /^\s*:return(?:\s|$)/m);
+  assert.doesNotMatch(webfig.split("# XRoute namespace compatibility guard: end").at(-1), /^\s*:return(?:\s|$)/m);
   assert.doesNotMatch(webfig, /\/user\/set[^\n]*password=/);
 });
 

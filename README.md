@@ -1,5 +1,7 @@
 [English](README.md) | [Русский](README-RU.md) | [فارسی](README-FA.md) | [简体中文](README-ZH.md) | [繁體中文](README-ZH-TW.md)
 
+<img src="public/favicon.svg" width="40" height="40" alt="XRoute">
+
 # XRoute for MikroTik RouterOS 7
 
 > **Looking for OpenWrt? → [XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt)**
@@ -116,21 +118,28 @@ Copyright © 2026 [Ati054](https://github.com/Ati054). Licensed under
 
 ## FAQ
 
-### How do I set up selective Xray / VLESS routing with a web panel on MikroTik RouterOS 7?
+### Can I route only selected devices or services through a proxy?
 
-Install the XRoute container, add a subscription, create a routing policy and
-assign devices to it. Choose VLESS with WAN exceptions for services that should
-stay direct, or WAN with VLESS exceptions for selected services. Save and Apply.
-See the [installation guide](docs/INSTALL.md) and [panel guide](docs/WEB-UI.md).
+Yes. Create a routing policy for selected LAN devices or WireGuard peers. Route
+traffic through a proxy with direct WAN exceptions, or keep WAN as the default
+and send only selected services and domains through the proxy. See the
+[installation guide](docs/INSTALL.md) and [panel guide](docs/WEB-UI.md).
 
-### How is XRoute for OpenWrt different from Podkop and PassWall2?
+### Where is XRoute stored, and does it change my existing network?
 
-[XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt) uses Xray, a Go
-controller and LuCI. [Podkop](https://github.com/itdoginfo/podkop) configures
-sing-box; [PassWall2](https://github.com/Openwrt-Passwall/openwrt-passwall2)
-supports several proxy cores, including Xray and sing-box. They have different
-interfaces and configuration models; compare their supported workflows with
-your routing needs.
+The container image, rule databases and subscription catalog use external
+SSD/USB storage to avoid filling or wearing out the router's internal flash.
+XRoute creates marked RouterOS objects. Changes to existing network objects
+require an explicit selection in the setup or Apply plan; XRoute does not
+replace your LAN or Wi-Fi configuration. Network changes use a backup and
+an automatic rollback guard.
+
+### Why use XRoute instead of configuring Xray by hand?
+
+One container bundles the web panel, Xray, transparent TPROXY for TCP and UDP,
+split DoH/DoT DNS, URLTest and priority failover, guarded container updates,
+and mobile client subscriptions. You can manage these from the panel without
+editing Xray JSON or maintaining separate routing scripts.
 
 ## Community
 

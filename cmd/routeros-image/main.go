@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Ati054/xroute/internal/imagebundle"
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
@@ -198,8 +199,24 @@ func run() error {
 	if err := atomicWrite(filepath.Join(output, strings.TrimSuffix(archiveName, ".tar")+".manifest.json"), append(manifestBody, '\n')); err != nil {
 		return err
 	}
-	scriptsOutput := filepath.Join(output, "routeros")
+	if err := writeRouterOSScripts(root, filepath.Join(output, "routeros"), defaults.architecture); err != nil {
+		return err
+	}
+	fmt.Println("RouterOS WebFig bundle ready:", output)
+	fmt.Println("Archive:", archiveName)
+	fmt.Println("SHA256:", archiveHash)
+	return nil
+}
+
+func writeRouterOSScripts(root, scriptsOutput, architecture string) error {
 	if err := os.MkdirAll(scriptsOutput, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(scriptsOutput, "legacy"), 0o755); err != nil {
+		return err
+	}
+	legacy, err := managedidentity.Parse(managedidentity.LegacyPrefix)
+	if err != nil {
 		return err
 	}
 	scripts, err := filepath.Glob(filepath.Join(root, "routeros", "*.rsc"))
@@ -212,13 +229,14 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err := atomicWrite(filepath.Join(scriptsOutput, filepath.Base(script)), bundleScriptContents(filepath.Base(script), body, defaults.architecture)); err != nil {
+		if err := atomicWrite(filepath.Join(scriptsOutput, filepath.Base(script)), bundleScriptContents(filepath.Base(script), body, architecture)); err != nil {
+			return err
+		}
+		legacyBody := []byte(legacy.Source(string(body)))
+		if err := atomicWrite(filepath.Join(scriptsOutput, "legacy", filepath.Base(script)), bundleScriptContents(filepath.Base(script), legacyBody, architecture)); err != nil {
 			return err
 		}
 	}
-	fmt.Println("RouterOS WebFig bundle ready:", output)
-	fmt.Println("Archive:", archiveName)
-	fmt.Println("SHA256:", archiveHash)
 	return nil
 }
 

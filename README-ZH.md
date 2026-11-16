@@ -2,6 +2,8 @@
 
 > 使用 OpenWrt？请查看面向该平台的 [XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt)。
 
+<img src="public/favicon.svg" width="40" height="40" alt="XRoute">
+
 # XRoute · RouterOS 7 原生容器分流，无需旁路由
 
 我开发 XRoute，是为了在 MikroTik 上管理代理路由时，不必再手动编辑 JSON。
@@ -116,19 +118,24 @@ CI 无法复现所有 MikroTik 型号或外部代理服务器，
 
 ## 常见问题
 
-### 如何通过网页面板在 MikroTik RouterOS 7 上设置 Xray / VLESS 选择性路由？
+### 可以只让指定设备或服务走代理吗？
 
-安装 XRoute 容器，添加订阅，创建路由策略并将设备分配给该策略。
-对于需要保持直连的服务，选择“VLESS，例外通过 WAN”；
-如果只有指定服务需要代理，则选择“WAN，例外通过 VLESS”。保存并应用更改。
-具体步骤请参阅[安装指南](docs/INSTALL.md)和[面板指南](docs/WEB-UI.md)。
+可以。为指定的局域网设备或 WireGuard 对等端创建路由策略：既可以默认走代理，
+将部分服务设为 WAN 直连，也可以默认直连，仅让选定的服务和域名走代理。
+详见[安装指南](docs/INSTALL.md)和[面板指南](docs/WEB-UI.md)。
 
-### XRoute for OpenWrt 与 Podkop、PassWall2 有什么区别？
+### XRoute 存储在哪里？会改动现有网络吗？
 
-[XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt) 使用 Xray、Go 控制器和 LuCI。
-[Podkop](https://github.com/itdoginfo/podkop) 配置的是 sing-box；
-[PassWall2](https://github.com/Openwrt-Passwall/openwrt-passwall2) 支持多种代理内核，包括 Xray 和 sing-box。
-它们的界面和配置方式不同，请结合自己的路由需求比较各自支持的使用流程。
+容器镜像、规则数据库和订阅目录存储在外接 SSD 或 USB 存储设备上，避免占满或
+磨损路由器内置闪存。XRoute 会创建带标记的 RouterOS 对象。只有在安装过程或
+Apply 计划中明确选择后，才会修改现有网络对象；不会替换 LAN 和 Wi-Fi 配置。
+应用网络变更前会创建备份，并启用自动回滚保护。
+
+### 为什么不直接手动配置 Xray？
+
+XRoute 在一个容器中集成了网页面板、Xray、TCP/UDP 透明代理 TPROXY、分离的
+DoH/DoT DNS、URLTest 与按优先级故障切换、带保护的容器更新，以及移动客户端
+订阅。通过面板即可管理，无需手动编辑 Xray JSON 或维护单独的路由脚本。
 
 ## 社区
 

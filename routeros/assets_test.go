@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func TestManagedConntrackCleanupHandlesEmptyAndExpiredRecords(t *testing.T) {
@@ -17,7 +19,7 @@ func TestManagedConntrackCleanupHandlesEmptyAndExpiredRecords(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(body), cleanup) || strings.Contains(string(body), `/ip/firewall/connection/remove [find`) {
+		if !strings.Contains(managedidentity.Script(string(body)), cleanup) || strings.Contains(string(body), `/ip/firewall/connection/remove [find`) {
 			t.Fatalf("%s still permits empty-list or stale-record cleanup failure", name)
 		}
 	}

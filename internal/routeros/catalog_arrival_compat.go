@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 // ValidateCompletedCatalogImageArrival proves predecessor capability without
@@ -80,7 +82,7 @@ func (client *Client) ValidateCompletedCatalogImageArrival(ctx context.Context, 
 
 func (client *Client) completedCatalogArrival(ctx context.Context) (map[string]any, error) {
 	rows, err := client.List(ctx, "/rest/system/script?name="+CatalogImageArrivalName)
-	if err != nil || len(rows) != 1 || !compatObjectID.MatchString(text(rows[0][".id"])) || text(rows[0]["name"]) != CatalogImageArrivalName || text(rows[0]["comment"]) != "SB-GATEWAY catalog image arrival" {
+	if err != nil || len(rows) != 1 || !compatObjectID.MatchString(text(rows[0][".id"])) || text(rows[0]["name"]) != CatalogImageArrivalName || text(rows[0]["comment"]) != managedidentity.Literal("XROUTE catalog image arrival") {
 		return nil, ErrCatalogImageCompatibility
 	}
 	return rows[0], nil

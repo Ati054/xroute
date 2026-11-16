@@ -1,5 +1,9 @@
 # Установка XRoute 1.7.0
 
+> В новых установках служебные имена начинаются с `XROUTE`. При обновлении
+> сохраняются старые имена `SB-GATEWAY` и пути: для такой установки подставляйте
+> старый префикс в примеры ниже. Вручную объекты переименовывать не нужно.
+
 В этом выпуске доступен образ ARM64. Сборка для x86-64 CHR проходит отдельные проверки и в эти файлы не входит.
 
 Инструкция описывает первую установку на MikroTik ARM64 с RouterOS 7. Английская
@@ -145,7 +149,7 @@ Bootstrap проверит комплектность файлов, выполн
 Для просмотра сообщений установки выполните:
 
 ```routeros
-/log/print without-paging where message~"SB-GATEWAY"
+/log/print without-paging where message~"XROUTE"
 ```
 
 ## Завершение настройки в Web UI
@@ -153,7 +157,7 @@ Bootstrap проверит комплектность файлов, выполн
 Дождитесь состояния контейнера `running` или `healthy`:
 
 ```routeros
-/container/print detail where comment="SB-GATEWAY container"
+/container/print detail where comment="XROUTE container"
 ```
 
 Откройте панель из management LAN. Стандартный адрес:
@@ -181,9 +185,9 @@ https://172.31.255.2:9443
 Проверьте контейнер, watchdog и diversion gate:
 
 ```routeros
-/container/print detail where comment="SB-GATEWAY container"
-/system/scheduler/print detail where name="SB-GATEWAY-health-watchdog"
-/ip/firewall/mangle/print detail where comment="SB-GATEWAY diversion-gate"
+/container/print detail where comment="XROUTE container"
+/system/scheduler/print detail where name="XROUTE-health-watchdog"
+/ip/firewall/mangle/print detail where comment="XROUTE diversion-gate"
 ```
 
 Diversion gate может оставаться выключенным, пока не включена политика

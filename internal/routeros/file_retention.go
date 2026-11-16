@@ -7,12 +7,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 const managedRouterOSBackupRetention = 3
 
 var (
-	managedBackupFilePattern  = regexp.MustCompile(`^(SB-GATEWAY-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12})(?:-export\.rsc|\.backup)$`)
+	managedBackupFilePattern  = regexp.MustCompile(managedidentity.Literal(`^(XROUTE-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12})(?:-export\.rsc|\.backup)$`))
 	managedStorageRootPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$`)
 	managedImageArchiveName   = regexp.MustCompile(`^(?:sb-gateway|xroute)-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?-linux-(?:arm64|amd64)\.tar(?:\.sha256)?$`)
 )

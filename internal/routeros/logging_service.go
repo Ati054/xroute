@@ -12,9 +12,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-const serviceLogCommentPrefix = "SB-GATEWAY auth-log v1 "
+var serviceLogCommentPrefix = managedidentity.Literal("XROUTE auth-log v1 ")
+
 const serviceLogSourceFilter = "^($|[^u])"
 const serviceLogRuleProperties = "/rest/system/logging?.proplist=.id,topics,action,prefix,regex,disabled,comment"
 const maxServiceLogSources = 8
@@ -63,7 +66,7 @@ func (client *Client) SuppressServiceInfoLogs(ctx context.Context) (bool, error)
 		return changed, fmt.Errorf("check pending RouterOS uninstall before log filtering: %w", err)
 	}
 	for _, scheduler := range schedulers {
-		if text(scheduler["name"]) == fullUninstallScheduler && text(scheduler["comment"]) == "SB-GATEWAY autonomous full uninstall" && scheduler["disabled"] != true && text(scheduler["disabled"]) != "true" {
+		if text(scheduler["name"]) == fullUninstallScheduler && text(scheduler["comment"]) == managedidentity.Literal("XROUTE autonomous full uninstall") && scheduler["disabled"] != true && text(scheduler["disabled"]) != "true" {
 			return changed, nil
 		}
 	}
@@ -75,7 +78,7 @@ func (client *Client) SuppressServiceInfoLogs(ctx context.Context) (bool, error)
 	for _, user := range users {
 		if text(user["name"]) == client.username {
 			matches++
-			owned = text(user["group"]) == "sb-gateway-api" && text(user["comment"]) == "SB-GATEWAY control-plane REST user"
+			owned = text(user["group"]) == managedidentity.Literal("xroute-api") && text(user["comment"]) == managedidentity.Literal("XROUTE control-plane REST user")
 		}
 	}
 	if matches > 1 {

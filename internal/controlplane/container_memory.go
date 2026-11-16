@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/memorybudget"
 	"github.com/Ati054/xroute/internal/routeros"
 )
@@ -38,7 +39,7 @@ func (server *Server) containerMemoryStatus(response http.ResponseWriter, reques
 	var current map[string]any
 	count := 0
 	for _, row := range rows {
-		if text(row["comment"]) == "SB-GATEWAY container" {
+		if text(row["comment"]) == managedidentity.Literal("XROUTE container") {
 			current = row
 			count++
 		}
@@ -160,7 +161,7 @@ func (server *Server) updateContainerMemory(response http.ResponseWriter, reques
 	}
 	var current map[string]any
 	for _, row := range rows {
-		if text(row["comment"]) == "SB-GATEWAY container" {
+		if text(row["comment"]) == managedidentity.Literal("XROUTE container") {
 			current = row
 		}
 	}

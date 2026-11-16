@@ -4,7 +4,12 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func TestNativeFullUninstallRequiresLiveMatchingOwnedContainer(t *testing.T) {
@@ -13,7 +18,7 @@ func TestNativeFullUninstallRequiresLiveMatchingOwnedContainer(t *testing.T) {
 		response.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/container":
-			_, _ = response.Write([]byte(`[{".id":"*1","comment":"SB-GATEWAY container","root-dir":"/usb1/sb-gateway/root"}]`))
+			_, _ = response.Write([]byte(managedidentity.Literal(`[{".id":"*1","comment":"XROUTE container","root-dir":"/usb1/sb-gateway/root"}]`)))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/system/script":
 			_, _ = response.Write([]byte(`[]`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/system/logging":
@@ -45,6 +50,35 @@ func TestNativeFullUninstallRequiresLiveMatchingOwnedContainer(t *testing.T) {
 	}, map[string]string{csrfHeader: csrf}, cookie)
 	if accepted.Code != http.StatusAccepted || !scheduled {
 		t.Fatalf("uninstall not scheduled: %d %s", accepted.Code, accepted.Body.String())
+	}
+}
+
+func TestCurrentNamespaceKeepsThePanelUninstallProtocol(t *testing.T) {
+	if os.Getenv("XROUTE_CURRENT_UNINSTALL_TEST") == "1" {
+		TestNativeFullUninstallRequiresLiveMatchingOwnedContainer(t)
+		return
+	}
+	command := exec.Command(os.Args[0], "-test.run=^TestCurrentNamespaceKeepsThePanelUninstallProtocol$")
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, managedidentity.Environment+"=") {
+			command.Env = append(command.Env, value)
+		}
+	}
+	command.Env = append(command.Env, managedidentity.Environment+"=XROUTE", "XROUTE_CURRENT_UNINSTALL_TEST=1")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("new namespace uninstall: %v: %s", err, output)
+	}
+}
+
+func TestRecoveryFilenameDoesNotDependOnRouterOSOwnership(t *testing.T) {
+	for _, prefix := range []string{"XROUTE", "SB-GATEWAY"} {
+		name := prefix + "-state-20260101T000000Z-012345abcdef.sbgw"
+		if _, err := recoveryArchivePath(t.TempDir(), name); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := recoveryArchivePath(t.TempDir(), "../"+name); err == nil {
+			t.Fatal("accepted recovery path traversal")
+		}
 	}
 }
 

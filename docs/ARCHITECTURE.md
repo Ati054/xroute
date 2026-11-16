@@ -1,12 +1,16 @@
 # Архитектура XRoute
 
+> В новых установках служебные имена начинаются с `XROUTE`. При обновлении
+> сохраняются старые имена `SB-GATEWAY` и пути: для такой установки подставляйте
+> старый префикс в примеры ниже. Вручную объекты переименовывать не нужно.
+
 Документ соответствует XRoute 1.6.35, серверному Xray-core 26.9.30 и runtime renderer
 schema 38.
 
 ## Границы системы
 
 Проект добавляет изолированный контейнер `sb-gateway` и строго именованные
-объекты RouterOS с комментарием `SB-GATEWAY`. Он не становится владельцем
+объекты RouterOS с комментарием `XROUTE`. Он не становится владельцем
 существующих интерфейсов, VPN, маршрутов, Wi‑Fi или firewall. Для явно
 выбранного WireGuard egress допускается одно обратимое изменение существующего
 peer: расширение `allowed-address` после сохранения исходного значения. Скрипт
@@ -344,7 +348,7 @@ keep-alive соединениями под общим 30-секундным dead
 выбираемые статические LAN, WireGuard peer и PPP источники. WAN interface-list
 и DHCP-client используются для исключения внешних connected/route CIDR.
 Динамические DHCP, публичные dynamic routes, default WireGuard route,
-выключенные и `SB-GATEWAY`-owned объекты не выдаются
+выключенные и `XROUTE`-owned объекты не выдаются
 за пользовательские устройства. Live WireGuard egress eligibility пока явно
 возвращается неполной, пока отдельный detector не перенесён в Go.
 
@@ -354,7 +358,7 @@ keep-alive соединениями под общим 30-секундным dead
 `password`, `private-key`, `preshared-key`, `secret` и `token`; допустимы только
 штатно скрытые значения. Один проход собирает interface/network inventory,
 адреса самого роутера, version/channel, LAN management suggestions, существующую
-`SB-GATEWAY` topology и предупреждения о небезопасном SOCKS, SSTP/WAN firewall
+`XROUTE` topology и предупреждения о небезопасном SOCKS, SSTP/WAN firewall
 или WireGuard default route. Найденные CIDR не применяются автоматически:
 покрытые уже настроенной сетью помечаются `accepted`, прежние явные решения
 `accepted/ignored` сохраняются, остальные остаются `pending`, а deployment-ready
@@ -761,7 +765,7 @@ WireGuard-egress. Имена RouterOS, адреса, HTTPS REST origin и пор
 `core/dns/watchdog/address-lists/wireguard-egress/ipv6/finalize`. На Apply
 diversion gate сначала выключается, управляемый default route снова указывает
 на TUN-контейнер. При очистке списков рассматриваются только объекты с
-комментарием `SB-GATEWAY`, а при добавлении уже существующие пользовательские
+комментарием `XROUTE`, а при добавлении уже существующие пользовательские
 `list + address` удовлетворяют требуемому членству без захвата ownership и без
 дубликата. Для каждого WireGuard-egress создаются отдельные
 source-based rule/table/default route и обратный маршрут к контейнеру; удалённые
@@ -786,7 +790,7 @@ delta больше 80% полного RSC автоматически выбир�
 command/action endpoints используют тот же connection pool, но ждут завершения
 RouterOS script до двух минут. Credentials передаются только Basic Auth внутри TLS и не
 попадают в ошибки. Небольшой симметричный delta до 16 КиБ устанавливается как
-content-addressed `SB-GATEWAY-apply|rollback-*` script и запускается выбранным guard;
+content-addressed `XROUTE-apply|rollback-*` script и запускается выбранным guard;
 существующий script обновляется только при точном owner-comment. Крупный delta или полный RSC не
 проталкивается через ограниченное поле `source`: его потоково передаёт
 нативный SCP transport, а короткий import-wrapper запускается выбранным guard.
@@ -973,7 +977,7 @@ pending-operation проверяются AEAD каждого чанка, пер�
 точный набор обычных файлов, размеры и SHA-256; live state остаётся неизменным.
 После staging Go устанавливает через RouterOS REST только фиксированные
 project-owned worker и one-shot scheduler. Worker сначала удаляет scheduler,
-затем требует ровно один контейнер с комментарием `SB-GATEWAY container` и
+затем требует ровно один контейнер с комментарием `XROUTE container` и
 перезапускает его. При недоступном RouterOS проверенный staging сохраняется, а
 ответ явно требует ручного перезапуска вместо потери подготовленного restore.
 
@@ -989,7 +993,7 @@ layer blobs никогда не копируются в память проце�
 
 Full uninstall также планируется нативно. Перед любой мутацией Go API получает
 живой список RouterOS containers, требует ровно один объект с комментарием
-`SB-GATEWAY container`, выводит external storage root из его `root-dir` и
+`XROUTE container`, выводит external storage root из его `root-dir` и
 сравнивает с явно подтверждённым значением. В RouterOS сначала записывается
 фиксированный worker, затем последним REST-запросом создаётся one-shot scheduler.
 Worker возвращает исходные WireGuard `allowed-address`, удаляет только объекты с
@@ -1691,7 +1695,7 @@ control plane разрешает запись из доверенного
 
 ```text
 BOOT / UNKNOWN
-  │  startup-script выключает точный SB-GATEWAY gate
+  │  startup-script выключает точный XROUTE gate
   ▼
 BYPASS ── контейнер готов ──→ RECOVERING
                                │  recovery probes + cooldown
@@ -1704,7 +1708,7 @@ SUSPECT ── успешная проверка ──→ HEALTHY
   │  3-я ошибка
   ▼
 BYPASS
-  │  mangle SB-GATEWAY для новых локальных соединений выключен
+  │  mangle XROUTE для новых локальных соединений выключен
   │  RouterOS auto-restart пытается поднять контейнер каждые 10 s
   ▼
 RECOVERING
@@ -1755,7 +1759,7 @@ generation/active/LKG/draft pointers; при любом сомнении вып�
    owner-секциям. Распознанные небольшие изменения получают симметричный
    apply/rollback delta из целых секций; неизвестная схема или delta ≥80%
    автоматически использует полный candidate. REST устанавливает выбранные
-   `SB-GATEWAY` apply/rollback scripts и **до** изменения ставит независимый
+   `XROUTE` apply/rollback scripts и **до** изменения ставит независимый
    одноразовый rollback-scheduler на 10 минут.
    Симметричные apply/rollback delta до 16 КиБ каждый записываются прямо в
    управляемые scripts через REST. Большие delta и полные content-addressed

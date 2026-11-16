@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	routerosassets "github.com/Ati054/xroute/routeros"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 type installedScriptSpec struct {
@@ -35,9 +37,9 @@ func (client *Client) SyncInstalledScripts(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	specs := []installedScriptSpec{
-		{"SB-GATEWAY-health-watchdog", "SB-GATEWAY health watchdog", routerosassets.HealthWatchdogSource(), false},
-		{"SB-GATEWAY-startup-fail-open", "SB-GATEWAY startup fail-open", routerosassets.StartupFailOpenSource(), false},
-		{"SB-GATEWAY-cloudflare-update", "SB-GATEWAY Cloudflare updater", routerosassets.CloudflareUpdateSource(), true},
+		{managedidentity.Literal("XROUTE-health-watchdog"), managedidentity.Literal("XROUTE health watchdog"), routerosassets.HealthWatchdogSource(), false},
+		{managedidentity.Literal("XROUTE-startup-fail-open"), managedidentity.Literal("XROUTE startup fail-open"), routerosassets.StartupFailOpenSource(), false},
+		{managedidentity.Literal("XROUTE-cloudflare-update"), managedidentity.Literal("XROUTE Cloudflare updater"), routerosassets.CloudflareUpdateSource(), true},
 	}
 	changed := 0
 	for _, spec := range specs {
@@ -89,8 +91,8 @@ func (client *Client) SyncInstalledScripts(ctx context.Context) (int, error) {
 // SetCloudflareUpdaterEnabled changes only the exact optional project-owned
 // scheduler. Missing scripts/schedulers remain missing by user choice.
 func (client *Client) SetCloudflareUpdaterEnabled(ctx context.Context, enabled bool) (bool, error) {
-	const name = "SB-GATEWAY-cloudflare-update"
-	const comment = "SB-GATEWAY Cloudflare scheduler"
+	name := managedidentity.Literal("XROUTE-cloudflare-update")
+	comment := managedidentity.Literal("XROUTE Cloudflare scheduler")
 	scripts, err := client.list(ctx, "/rest/system/script?.proplist=name,comment")
 	if err != nil {
 		return false, err
@@ -100,7 +102,7 @@ func (client *Client) SetCloudflareUpdaterEnabled(ctx context.Context, enabled b
 		if text(script["name"]) != name {
 			continue
 		}
-		if installed || text(script["comment"]) != "SB-GATEWAY Cloudflare updater" {
+		if installed || text(script["comment"]) != managedidentity.Literal("XROUTE Cloudflare updater") {
 			return false, errors.New("Cloudflare updater script is ambiguous or unowned")
 		}
 		installed = true

@@ -8,12 +8,14 @@ import (
 	"strings"
 
 	routerosassets "github.com/Ati054/xroute/routeros"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-const (
-	containerStartupWorker  = "SB-GATEWAY-startup-migration-worker"
-	containerStartupOnce    = "SB-GATEWAY-startup-migration-once"
-	containerStartupComment = "SB-GATEWAY one-shot startup migration"
+var (
+	containerStartupWorker  = managedidentity.Literal("XROUTE-startup-migration-worker")
+	containerStartupOnce    = managedidentity.Literal("XROUTE-startup-migration-once")
+	containerStartupComment = managedidentity.Literal("XROUTE one-shot startup migration")
 )
 
 // ReconcileContainerStartup also supports images installed by an older updater.
@@ -25,7 +27,7 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 	}
 	for _, row := range schedulers {
 		name := text(row["name"])
-		if name == imageUpdateScheduler || name == ContainerMemoryScheduler || name == recoveryRestartScheduler || name == fullUninstallScheduler || strings.HasPrefix(name, "SB-GATEWAY-safe-rollback-") {
+		if name == imageUpdateScheduler || name == ContainerMemoryScheduler || name == recoveryRestartScheduler || name == fullUninstallScheduler || strings.HasPrefix(name, managedidentity.Literal("XROUTE-safe-rollback-")) {
 			return false, ErrImageUpdateInProgress
 		}
 	}
@@ -35,7 +37,7 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 	}
 	var target map[string]any
 	for _, row := range containers {
-		if text(row["comment"]) != "SB-GATEWAY container" {
+		if text(row["comment"]) != managedidentity.Literal("XROUTE container") {
 			continue
 		}
 		if target != nil {
@@ -63,15 +65,15 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 			return false, ErrImageUpdateInProgress
 		}
 	}
-	ready, err := ownedStartupObject(scripts, "SB-GATEWAY-storage-ready", "SB-GATEWAY storage readiness")
+	ready, err := ownedStartupObject(scripts, managedidentity.Literal("XROUTE-storage-ready"), managedidentity.Literal("XROUTE storage readiness"))
 	if err != nil {
 		return false, err
 	}
-	boot, err := ownedStartupObject(scripts, "SB-GATEWAY-container-startup", "SB-GATEWAY storage-aware startup")
+	boot, err := ownedStartupObject(scripts, managedidentity.Literal("XROUTE-container-startup"), managedidentity.Literal("XROUTE storage-aware startup"))
 	if err != nil {
 		return false, err
 	}
-	schedule, err := ownedStartupObject(schedulers, "SB-GATEWAY-container-startup", "SB-GATEWAY storage-aware startup scheduler")
+	schedule, err := ownedStartupObject(schedulers, managedidentity.Literal("XROUTE-container-startup"), managedidentity.Literal("XROUTE storage-aware startup scheduler"))
 	if err != nil {
 		return false, err
 	}
@@ -79,7 +81,7 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	worker, err := ownedStartupObject(scripts, containerStartupWorker, "SB-GATEWAY managed script "+containerStartupWorker)
+	worker, err := ownedStartupObject(scripts, containerStartupWorker, managedidentity.Literal("XROUTE managed script ")+containerStartupWorker)
 	if err != nil {
 		return false, err
 	}
@@ -90,7 +92,7 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 		return false, nil // Includes a lost scheduling acknowledgement; never re-arm.
 	}
 	if bootFlag == "false" && ready != nil && boot != nil && schedule != nil &&
-		(text(schedule["interval"]) == "0s" || text(schedule["interval"]) == "00:00:00") && text(schedule["start-time"]) == "startup" && text(schedule["on-event"]) == "/system/script/run SB-GATEWAY-container-startup" {
+		(text(schedule["interval"]) == "0s" || text(schedule["interval"]) == "00:00:00") && text(schedule["start-time"]) == "startup" && text(schedule["on-event"]) == managedidentity.Literal("/system/script/run XROUTE-container-startup") {
 		// Fetch only the two boot bodies, not every historical Apply script.
 		readySource, err := client.startupScriptSource(ctx, ready)
 		if err != nil {
@@ -109,7 +111,7 @@ func (client *Client) ReconcileContainerStartup(ctx context.Context) (bool, erro
 		return false, err
 	}
 	for _, job := range jobs {
-		if name := text(job["script"]); name == containerStartupWorker || name == "SB-GATEWAY-container-startup" || strings.HasPrefix(name, "SB-GATEWAY-apply-") || strings.HasPrefix(name, "SB-GATEWAY-rollback-") {
+		if name := text(job["script"]); name == containerStartupWorker || name == managedidentity.Literal("XROUTE-container-startup") || strings.HasPrefix(name, managedidentity.Literal("XROUTE-apply-")) || strings.HasPrefix(name, managedidentity.Literal("XROUTE-rollback-")) {
 			return false, ErrImageUpdateInProgress
 		}
 	}
@@ -159,7 +161,7 @@ func (client *Client) StartupMigrationPending(ctx context.Context) (bool, error)
 		return false, err
 	}
 	for _, job := range jobs {
-		if name := text(job["script"]); name == containerStartupWorker || name == "SB-GATEWAY-container-startup" {
+		if name := text(job["script"]); name == containerStartupWorker || name == managedidentity.Literal("XROUTE-container-startup") {
 			return true, nil
 		}
 	}
@@ -185,31 +187,31 @@ func renderContainerStartupMigration(root string) string {
 		return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "\n", `\n`).Replace(value) + `"`
 	}
 	return strings.Join([]string{
-		"# SB-GATEWAY one-shot storage startup migration",
+		managedidentity.Literal("# XROUTE one-shot storage startup migration"),
 		`:local migrate do={`,
 		`:if ([:len [/system/script/job/find where script="` + containerStartupWorker + `"]] > 1) do={ :return true }`,
 		`:local once [/system/scheduler/find where name="` + containerStartupOnce + `"]; :if ([:len $once] != 1) do={ :error "Startup migration schedule is ambiguous" }; :if ([/system/scheduler/get $once comment] != "` + containerStartupComment + `") do={ :error "Startup migration schedule is not owned" }`,
-		`:if (([:len [/system/scheduler/find where name="SB-GATEWAY-image-update"]] > 0) || ([:len [/system/script/find where name="SB-GATEWAY-image-update-transfer"]] > 0) || ([:len [/system/scheduler/find where name="SB-GATEWAY-container-memory-once"]] > 0) || ([:len [/system/scheduler/find where name="SB-GATEWAY-recovery-restart-once"]] > 0) || ([:len [/system/scheduler/find where name="` + fullUninstallScheduler + `"]] > 0) || ([:len [/system/scheduler/find where name~"^SB-GATEWAY-safe-rollback-"]] > 0) || ([:len [/system/script/job/find where script~"^SB-GATEWAY-(apply|rollback)-"]] > 0) || ([:len [/system/script/job/find where script="SB-GATEWAY-container-startup"]] > 0)) do={ :return true }`,
-		`:local target [/container/find where comment="SB-GATEWAY container"]; :if ([:len $target] != 1) do={ :error "Startup migration container is ambiguous" }`,
+		managedidentity.Literal(`:if (([:len [/system/scheduler/find where name="XROUTE-image-update"]] > 0) || ([:len [/system/script/find where name="XROUTE-image-update-transfer"]] > 0) || ([:len [/system/scheduler/find where name="XROUTE-container-memory-once"]] > 0) || ([:len [/system/scheduler/find where name="XROUTE-recovery-restart-once"]] > 0) || ([:len [/system/scheduler/find where name="`) + fullUninstallScheduler + managedidentity.Literal(`"]] > 0) || ([:len [/system/scheduler/find where name~"^XROUTE-safe-rollback-"]] > 0) || ([:len [/system/script/job/find where script~"^XROUTE-(apply|rollback)-"]] > 0) || ([:len [/system/script/job/find where script="XROUTE-container-startup"]] > 0)) do={ :return true }`),
+		managedidentity.Literal(`:local target [/container/find where comment="XROUTE container"]; :if ([:len $target] != 1) do={ :error "Startup migration container is ambiguous" }`),
 		`:if ([/container/get $target root-dir] != "/` + root + `") do={ /system/scheduler/remove $once; :error "Startup migration root changed" }`,
 		`:if (([/container/get $target running] != true) && ([/container/get $target healthy] != true)) do={ :return true }`,
-		`:local watchdog [/system/scheduler/find where name="SB-GATEWAY-health-watchdog" and comment="SB-GATEWAY health scheduler" and disabled=no]; :if ([:len $watchdog] != 1) do={ :error "Startup migration needs an active watchdog" }`,
-		`:local gate [/ip/firewall/mangle/find where comment="SB-GATEWAY diversion-gate"]; :if ([:len $gate] != 1) do={ :error "Startup migration gate is ambiguous" }; :if ([/ip/firewall/mangle/get $gate disabled] = true) do={ :return true }`,
+		managedidentity.Literal(`:local watchdog [/system/scheduler/find where name="XROUTE-health-watchdog" and comment="XROUTE health scheduler" and disabled=no]; :if ([:len $watchdog] != 1) do={ :error "Startup migration needs an active watchdog" }`),
+		managedidentity.Literal(`:local gate [/ip/firewall/mangle/find where comment="XROUTE diversion-gate"]; :if ([:len $gate] != 1) do={ :error "Startup migration gate is ambiguous" }; :if ([/ip/firewall/mangle/get $gate disabled] = true) do={ :return true }`),
 		`:local ready [:parse ` + quote(routerosassets.ContainerStorageReadySource()) + `]; :if ([$ready $target] != true) do={ :return true }`,
 		`:local setup [:parse ` + quote(routerosassets.ContainerStartupInstallSource()) + `]; $setup false`,
-		`:local boot [/system/scheduler/find where name="SB-GATEWAY-container-startup" and comment="SB-GATEWAY storage-aware startup scheduler"]; :if ([:len $boot] != 1) do={ :error "Startup migration boot schedule is missing" }`,
+		managedidentity.Literal(`:local boot [/system/scheduler/find where name="XROUTE-container-startup" and comment="XROUTE storage-aware startup scheduler"]; :if ([:len $boot] != 1) do={ :error "Startup migration boot schedule is missing" }`),
 		// Enable boot recovery before changing the native flag, including power loss.
 		`/system/scheduler/enable $boot`,
 		`/system/scheduler/remove $once`,
-		`:if ([/container/get $target start-on-boot] = false) do={ :log info "SB-GATEWAY: storage startup scripts reconciled"; :return true }`,
+		managedidentity.Literal(`:if ([/container/get $target start-on-boot] = false) do={ :log info "XROUTE: storage startup scripts reconciled"; :return true }`),
 		`/ip/firewall/mangle/disable $gate`,
 		`/container/stop $target`,
 		`:local attempt 0; :while (([/container/get $target stopped] != true) && ($attempt < 30)) do={ :delay 1s; :set attempt ($attempt + 1) }`,
 		`:if ([/container/get $target stopped] != true) do={ :error "Startup migration stop deadline expired; boot policy unchanged" }`,
 		`:do { /container/set $target start-on-boot=no } on-error={ /container/start $target; :error "Startup migration boot policy change failed" }`,
 		`:if ([/container/get $target start-on-boot] != false) do={ /container/start $target; :error "Startup migration boot policy readback failed" }`,
-		`/system/script/run SB-GATEWAY-container-startup`,
-		`:log info "SB-GATEWAY: storage-aware startup migration completed; watchdog must confirm readiness"`,
+		managedidentity.Literal(`/system/script/run XROUTE-container-startup`),
+		managedidentity.Literal(`:log info "XROUTE: storage-aware startup migration completed; watchdog must confirm readiness"`),
 		`}`,
 		`:local result [$migrate]`,
 	}, "\n")

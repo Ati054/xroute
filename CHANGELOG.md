@@ -13,4 +13,3 @@ Initial public release under the **XRoute** name for MikroTik RouterOS 7.
 - Apply previews, configuration backups and guarded container updates with rollback. Existing settings and installation paths are preserved during upgrades.
 - Incoming connections, TLS certificate management, mobile client subscriptions and exported connection profiles.
 - Apply uses the latest saved settings after pending saves finish. DNS startup and TCP listener recovery are improved, and panel dependencies are updated.
-- Исправлены ошибки, улучшена стабильность.

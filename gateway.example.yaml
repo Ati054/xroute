@@ -8,7 +8,7 @@ system:
   architecture: arm64
   primary_interface: web
   cli_mode: recovery-only
-  object_comment_prefix: SB-GATEWAY
+  object_comment_prefix: XROUTE
   xray_version: "26.7.28"
   management:
     api_listen: 127.0.0.1:8080
@@ -34,8 +34,8 @@ system:
     subscriptions: /config/subscriptions.yaml
     rulesets: /config/rulesets.yaml
   networking:
-    bridge_name: bridge-sb
-    veth_name: veth-sb
+    bridge_name: bridge-xroute
+    veth_name: veth-xroute
     routeros_gateway: 172.31.255.1
     container_address: 172.31.255.2/30
     container_dns: 172.31.255.1
@@ -43,7 +43,7 @@ system:
     tun_mtu: 1400
     addresses_confirmed: false
     tcp_mss_clamp: auto
-    routing_table: to-sb-gateway
+    routing_table: to-xroute
     connection_mark: sb-managed
     preserve_client_source_ip: true
     ipv6_mode: block_managed

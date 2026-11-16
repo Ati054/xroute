@@ -9,11 +9,13 @@ import (
 	"strings"
 
 	routerosassets "github.com/Ati054/xroute/routeros"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-const (
-	fullUninstallWorker    = "SB-GATEWAY-uninstall-worker"
-	fullUninstallScheduler = "SB-GATEWAY-uninstall-once"
+var (
+	fullUninstallWorker    = managedidentity.Literal("XROUTE-uninstall-worker")
+	fullUninstallScheduler = managedidentity.Literal("XROUTE-uninstall-once")
 	maxFixedScriptBytes    = 64 << 10
 )
 
@@ -24,15 +26,15 @@ func validFixedManagedScript(name, source string) bool {
 	var prefix string
 	switch name {
 	case recoveryRestartWorker:
-		prefix = "# SB-GATEWAY one-shot recovery restart\n"
+		prefix = managedidentity.Literal("# XROUTE one-shot recovery restart\n")
 	case fullUninstallWorker:
-		prefix = "# SB-GATEWAY exact-scope full uninstall\n"
+		prefix = managedidentity.Literal("# XROUTE exact-scope full uninstall\n")
 	case imageUpdateWorker:
-		prefix = "# SB-GATEWAY autonomous one-image switch\n"
+		prefix = managedidentity.Literal("# XROUTE autonomous one-image switch\n")
 	case containerMemoryWorker:
-		prefix = "# SB-GATEWAY one-shot container memory update\n"
+		prefix = managedidentity.Literal("# XROUTE one-shot container memory update\n")
 	case containerStartupWorker:
-		prefix = "# SB-GATEWAY one-shot storage startup migration\n"
+		prefix = managedidentity.Literal("# XROUTE one-shot storage startup migration\n")
 	default:
 		return false
 	}
@@ -54,7 +56,7 @@ func (client *Client) ScheduleFullUninstall(ctx context.Context, storageRoot str
 	if _, err := client.installFixedManagedScript(ctx, fullUninstallWorker, worker); err != nil {
 		return nil, err
 	}
-	comment := "SB-GATEWAY autonomous full uninstall"
+	comment := managedidentity.Literal("XROUTE autonomous full uninstall")
 	rows, err := client.list(ctx, "/rest/system/scheduler?.proplist=.id,name,comment")
 	if err != nil {
 		return nil, err
@@ -120,38 +122,38 @@ func withStorageRootGuard(root string, lines []string) []string {
 
 func renderFullUninstallWorker(root string) string {
 	lines := []string{
-		"# SB-GATEWAY exact-scope full uninstall",
+		managedidentity.Literal("# XROUTE exact-scope full uninstall"),
 		`:local sbScheduler [/system/scheduler/find where name="` + fullUninstallScheduler + `"]`,
 		`:if ([:len $sbScheduler] = 1) do={ /system/scheduler/remove $sbScheduler }`,
 		`:local storageEntry [/file/find where name="` + root + `"]`,
-		`:if ([:len $storageEntry] != 1) do={ :error "SB-GATEWAY exact project storage directory is missing or ambiguous" }`,
-		`:local gate [/ip/firewall/mangle/find where comment="SB-GATEWAY diversion-gate"]`,
+		managedidentity.Literal(`:if ([:len $storageEntry] != 1) do={ :error "XROUTE exact project storage directory is missing or ambiguous" }`),
+		managedidentity.Literal(`:local gate [/ip/firewall/mangle/find where comment="XROUTE diversion-gate"]`),
 		`:if ([:len $gate] = 1) do={ /ip/firewall/mangle/disable $gate }`,
 		routerosassets.ManagedConnectionCleanupSource(),
-		`:foreach state in=[/system/script/find where comment~"^SB-GATEWAY WG egress peer state "] do={`,
+		managedidentity.Literal(`:foreach state in=[/system/script/find where comment~"^XROUTE WG egress peer state "] do={`),
 		`  :local stateData [/system/script/get $state source]`,
 		`  :local separator [:find $stateData "|"]`,
-		`  :if (($separator = nil) || ($separator < 2)) do={ :error "SB-GATEWAY WireGuard peer restore state is invalid" }`,
+		managedidentity.Literal(`  :if (($separator = nil) || ($separator < 2)) do={ :error "XROUTE WireGuard peer restore state is invalid" }`),
 		`  :local peerKey [:pick $stateData 1 $separator]`,
 		`  :local originalAllowed [:pick $stateData ($separator + 1) [:len $stateData]]`,
 		`  :local peer [/interface/wireguard/peers/find where public-key=$peerKey]`,
-		`  :if ([:len $peer] != 1) do={ :error "SB-GATEWAY WireGuard peer restore target is missing or ambiguous" }`,
+		managedidentity.Literal(`  :if ([:len $peer] != 1) do={ :error "XROUTE WireGuard peer restore target is missing or ambiguous" }`),
 		`  /interface/wireguard/peers/set $peer allowed-address=$originalAllowed`,
 		`}`,
-		`/system/scheduler/remove [find where comment~"^SB-GATEWAY "]`,
-		`/ip/firewall/mangle/remove [find where comment~"^SB-GATEWAY "]`,
-		`/ip/firewall/filter/remove [find where comment~"^SB-GATEWAY "]`,
-		`/ip/firewall/nat/remove [find where comment~"^SB-GATEWAY "]`,
+		managedidentity.Literal(`/system/scheduler/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/ip/firewall/mangle/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/ip/firewall/filter/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/ip/firewall/nat/remove [find where comment~"^XROUTE "]`),
 		`/ip/firewall/address-list/remove [find where list="SB_PUBLIC_ABUSE"]`,
-		`/ip/firewall/address-list/remove [find where comment~"^SB-GATEWAY "]`,
-		`:do { /ipv6/firewall/filter/remove [find where comment~"^SB-GATEWAY "] } on-error={}`,
-		`:do { /ipv6/firewall/address-list/remove [find where comment~"^SB-GATEWAY "] } on-error={}`,
-		`/ip/route/remove [find where comment~"^SB-GATEWAY "]`,
-		`:do { /interface/list/member/remove [find where comment~"^SB-GATEWAY "] } on-error={}`,
-		`:foreach containerId in=[/container/find where comment="SB-GATEWAY container" || comment="SB-GATEWAY container previous"] do={`,
+		managedidentity.Literal(`/ip/firewall/address-list/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`:do { /ipv6/firewall/filter/remove [find where comment~"^XROUTE "] } on-error={}`),
+		managedidentity.Literal(`:do { /ipv6/firewall/address-list/remove [find where comment~"^XROUTE "] } on-error={}`),
+		managedidentity.Literal(`/ip/route/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`:do { /interface/list/member/remove [find where comment~"^XROUTE "] } on-error={}`),
+		managedidentity.Literal(`:foreach containerId in=[/container/find where comment="XROUTE container" || comment="XROUTE container previous"] do={`),
 		`  :local containerRoot [/container/get $containerId root-dir]`,
-		`  :if (([:pick $containerRoot 0 ` + fmt.Sprint(len("/"+root+"/root-")) + `] != "/` + root + `/root-") && ($containerRoot != "/` + root + `/root")) do={ :error "SB-GATEWAY container root is outside managed storage" }`,
-		`  :if ([:typeof [:find $containerRoot "/" ` + fmt.Sprint(len("/"+root+"/root-")) + `]] != "nil") do={ :error "SB-GATEWAY container root is nested" }`,
+		`  :if (([:pick $containerRoot 0 ` + fmt.Sprint(len("/"+root+"/root-")) + `] != "/` + root + `/root-") && ($containerRoot != "/` + root + managedidentity.Literal(`/root")) do={ :error "XROUTE container root is outside managed storage" }`),
+		`  :if ([:typeof [:find $containerRoot "/" ` + fmt.Sprint(len("/"+root+"/root-")) + managedidentity.Literal(`]] != "nil") do={ :error "XROUTE container root is nested" }`),
 		`  :do { /container/stop $containerId } on-error={}`,
 		`  :local stopped false`,
 		`  :local stopAttempt 0`,
@@ -161,23 +163,23 @@ func renderFullUninstallWorker(root string) string {
 		`    :do { :if ([/container/get $containerId status] = "stopped") do={ :set stopped true } } on-error={}`,
 		`    :if ($stopped = false) do={ :set stopAttempt ($stopAttempt + 1); :delay 2s }`,
 		`  }`,
-		`  :if ($stopped = false) do={ :error "SB-GATEWAY container did not stop; storage was preserved" }`,
+		managedidentity.Literal(`  :if ($stopped = false) do={ :error "XROUTE container did not stop; storage was preserved" }`),
 		`  /container/remove $containerId`,
 		`}`,
-		`/container/envs/remove [find where comment~"^SB-GATEWAY "]`,
-		`/container/mounts/remove [find where comment~"^SB-GATEWAY "]`,
-		`/ip/address/remove [find where comment~"^SB-GATEWAY "]`,
-		`/interface/bridge/port/remove [find where comment~"^SB-GATEWAY "]`,
-		`/interface/veth/remove [find where comment~"^SB-GATEWAY "]`,
-		`/interface/bridge/remove [find where comment~"^SB-GATEWAY "]`,
-		`/interface/list/remove [find where comment~"^SB-GATEWAY "]`,
-		`/routing/table/remove [find where comment="SB-GATEWAY routing table"]`,
-		`/user/remove [find where comment="SB-GATEWAY control-plane REST user"]`,
-		`/user/group/remove [find where comment="SB-GATEWAY REST group"]`,
+		managedidentity.Literal(`/container/envs/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/container/mounts/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/ip/address/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/interface/bridge/port/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/interface/veth/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/interface/bridge/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/interface/list/remove [find where comment~"^XROUTE "]`),
+		managedidentity.Literal(`/routing/table/remove [find where comment="XROUTE routing table"]`),
+		managedidentity.Literal(`/user/remove [find where comment="XROUTE control-plane REST user"]`),
+		managedidentity.Literal(`/user/group/remove [find where comment="XROUTE REST group"]`),
 		`/file/remove [find where name~"^sb-gateway-(before-|pre-)"]`,
 		`/file/remove $storageEntry`,
-		`:log warning "SB-GATEWAY: full uninstall complete; foreign RouterOS objects were preserved"`,
-		`:foreach scriptId in=[/system/script/find where comment~"^SB-GATEWAY "] do={ /system/script/remove $scriptId }`,
+		managedidentity.Literal(`:log warning "XROUTE: full uninstall complete; foreign RouterOS objects were preserved"`),
+		managedidentity.Literal(`:foreach scriptId in=[/system/script/find where comment~"^XROUTE "] do={ /system/script/remove $scriptId }`),
 	}
 	return strings.Join(withStorageRootGuard(root, lines), "\n")
 }

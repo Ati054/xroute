@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
@@ -29,7 +30,7 @@ func (client *Client) SyncCDNSources(ctx context.Context, provider string, value
 	if p.ID == "cloudflare" {
 		name = "SB_CDN_CLOUDFLARE_V4"
 	}
-	prefix := "SB-GATEWAY CDN " + p.ID + " "
+	prefix := managedidentity.Literal("XROUTE CDN ") + p.ID + " "
 	digest := sha256.Sum256([]byte(strings.Join(values, "\n")))
 	comment := prefix + hex.EncodeToString(digest[:])[:12]
 	rows, err := client.List(ctx, "/rest/ip/firewall/address-list")

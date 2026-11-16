@@ -132,14 +132,14 @@
       "allow_wan_ping": true,
       "remote_ipv6_mode": "proxy_only",
       "routeros_gateway": "",
-      "routing_table": "to-sb-gateway",
+      "routing_table": "to-xroute",
       "tun_address": "",
       "tun_mtu": 1400,
       "veth_name": "",
       "wireguard_egress_enabled": false,
       "wireguard_egress_exits": []
     },
-    "object_comment_prefix": "SB-GATEWAY"
+    "object_comment_prefix": "XROUTE"
   },
   "tls_profiles": [
     {

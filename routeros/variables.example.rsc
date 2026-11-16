@@ -1,4 +1,4 @@
-# SB-GATEWAY variables for RouterOS 7. Import a private copy, not this example.
+# XROUTE variables for RouterOS 7. Import a private copy, not this example.
 # Last tested baseline: RouterOS 7.21.5 long-term on ARM64. The scripts accept
 # any RouterOS 7 channel and gate changes on concrete capabilities.
 
@@ -8,15 +8,15 @@
 :global "SB_IMAGE_SOURCE" "file"
 :global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.0-linux-arm64.tar"
 :global "SB_IMAGE" ""
-:global "SB_BRIDGE" "bridge-sb"
-:global "SB_VETH" "veth-sb"
+:global "SB_BRIDGE" "bridge-xroute"
+:global "SB_VETH" "veth-xroute"
 :global "SB_ROUTER_ADDRESS" "172.31.255.1/30"
 :global "SB_ROUTER_IP" "172.31.255.1"
 :global "SB_CONTAINER_ADDRESS" "172.31.255.2/30"
 :global "SB_CONTAINER_IP" "172.31.255.2"
 :global "SB_CONTAINER_NETWORK" "172.31.255.0/30"
 :global "SB_TUN_ADDRESS" "172.31.254.1/30"
-:global "SB_ROUTING_TABLE" "to-sb-gateway"
+:global "SB_ROUTING_TABLE" "to-xroute"
 # Set true only in the private copy after every address above has been replaced
 # or deliberately confirmed against the current RouterOS configuration.
 :global "SB_ADDRESSES_CONFIRMED" false
@@ -67,7 +67,7 @@
 
 # Web-UI control plane REST bootstrap. Set the password interactively in a
 # private script or WebFig terminal; never commit it.
-:global "SB_ROUTEROS_API_USER" "sb-gateway-api"
+:global "SB_ROUTEROS_API_USER" "xroute-api"
 :global "SB_ROUTEROS_API_PASSWORD" ""
 # Dedicated high www-ssl port used only for RouterOS REST/WebFig management.
 # Keep 17443 free for the user-facing XRoute panel. Confirm that 59443 is

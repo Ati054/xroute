@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 // RunManagedScript avoids RouterOS REST's fixed 60-second command timeout.
@@ -58,7 +60,7 @@ func managedScriptCommand(name string) (string, string, error) {
 	receipt := "OK:" + name
 	command := `:do { :local target [/system/script/find where name="` + name + `"]; ` +
 		`:if ([:len $target] != 1) do={ :error "managed script missing or ambiguous" }; ` +
-		`:if ([/system/script/get $target comment] != "SB-GATEWAY managed script ` + name + `") do={ :error "unowned script" }; ` +
+		managedidentity.Literal(`:if ([/system/script/get $target comment] != "XROUTE managed script `) + name + `") do={ :error "unowned script" }; ` +
 		`/system/script/run $target; :put "` + receipt + `" } on-error={ :put "ERROR:` + name + `" }`
 	return command, receipt, nil
 }

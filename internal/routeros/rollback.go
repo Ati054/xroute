@@ -10,11 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-const rollbackSchedulerComment = "SB-GATEWAY Safe Mode rollback fallback"
+var rollbackSchedulerComment = managedidentity.Literal("XROUTE Safe Mode rollback fallback")
 
-var rollbackSchedulerNamePattern = regexp.MustCompile(`^SB-GATEWAY-safe-rollback-[0-9a-f]{8}$`)
+var rollbackSchedulerNamePattern = regexp.MustCompile(managedidentity.Literal(`^XROUTE-safe-rollback-[0-9a-f]{8}$`))
 
 var ErrRollbackGuardPending = errors.New("previous RouterOS rollback guard remains armed")
 
@@ -30,7 +32,7 @@ type RollbackOptions struct {
 // the control-plane process and is intentionally independent from SSH Safe
 // Mode. RouterOS' own clock is used so host clock skew cannot delay rollback.
 func (client *Client) ArmRollback(ctx context.Context, scriptName string, options RollbackOptions) (string, error) {
-	if !managedNamePattern.MatchString(scriptName) || !strings.HasPrefix(scriptName, "SB-GATEWAY-rollback-") {
+	if !managedNamePattern.MatchString(scriptName) || !strings.HasPrefix(scriptName, managedidentity.Literal("XROUTE-rollback-")) {
 		return "", errors.New("managed RouterOS rollback script name is invalid")
 	}
 	if options.ManagedImport != "" && !managedImportNamePattern.MatchString(options.ManagedImport) {
@@ -69,10 +71,10 @@ func (client *Client) ArmRollback(ctx context.Context, scriptName string, option
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", errors.New("generate RouterOS rollback scheduler name")
 	}
-	name := "SB-GATEWAY-safe-rollback-" + hex.EncodeToString(nonce[:])
+	name := managedidentity.Literal("XROUTE-safe-rollback-") + hex.EncodeToString(nonce[:])
 	commands := []string{"/system script run " + scriptName}
 	if options.ResumeWatchdog {
-		commands = append(commands, `/system scheduler enable [find where name="SB-GATEWAY-health-watchdog"]`)
+		commands = append(commands, managedidentity.Literal(`/system scheduler enable [find where name="XROUTE-health-watchdog"]`))
 	}
 	if options.ManagedImport != "" {
 		commands = append(commands, `/file remove [find where name="`+options.ManagedImport+`"]`)

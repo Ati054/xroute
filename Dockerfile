@@ -182,6 +182,7 @@ ARG SB_URLTEST_PLANNING_MODE=fresh-paired
 # The legacy title and io.sb-gateway labels are the update wire contract.
 LABEL org.opencontainers.image.title="sb-gateway" \
       io.xroute.product.name="XRoute" \
+      io.xroute.routeros.namespace.version="1" \
       org.opencontainers.image.description="ARM64 and AMD64 Xray proxy gateway and local Web UI for MikroTik RouterOS 7" \
       org.opencontainers.image.source="${SB_GATEWAY_SOURCE}" \
       org.opencontainers.image.version="${SB_GATEWAY_VERSION}" \

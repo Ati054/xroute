@@ -12,11 +12,13 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-const CatalogImageContractName = "SB-GATEWAY-catalog-data-contract"
-const CatalogImageArrivalName = "SB-GATEWAY-catalog-image-arrival"
-const catalogImageContractComment = "SB-GATEWAY catalog data compatibility"
+var CatalogImageContractName = managedidentity.Literal("XROUTE-catalog-data-contract")
+var CatalogImageArrivalName = managedidentity.Literal("XROUTE-catalog-image-arrival")
+var catalogImageContractComment = managedidentity.Literal("XROUTE catalog data compatibility")
 
 var ErrCatalogImageCompatibility = errors.New("RouterOS catalog image compatibility is unconfirmed")
 var compatIdentifier = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -179,7 +181,7 @@ func (client *Client) InspectCatalogImageCompatibility(ctx context.Context) (Cat
 	}
 	for _, row := range schedulers {
 		name := text(row["name"])
-		if name == imageUpdateScheduler || strings.HasPrefix(name, "SB-GATEWAY-safe-rollback-") {
+		if name == imageUpdateScheduler || strings.HasPrefix(name, managedidentity.Literal("XROUTE-safe-rollback-")) {
 			return result, ErrCatalogImageCompatibility
 		}
 	}
@@ -189,7 +191,7 @@ func (client *Client) InspectCatalogImageCompatibility(ctx context.Context) (Cat
 	}
 	for _, row := range jobs {
 		name := text(row["script"])
-		if strings.HasPrefix(name, "SB-GATEWAY-image-") || strings.HasPrefix(name, "SB-GATEWAY-apply-") || strings.HasPrefix(name, "SB-GATEWAY-rollback-") {
+		if strings.HasPrefix(name, managedidentity.Literal("XROUTE-image-")) || strings.HasPrefix(name, managedidentity.Literal("XROUTE-apply-")) || strings.HasPrefix(name, managedidentity.Literal("XROUTE-rollback-")) {
 			return result, ErrCatalogImageCompatibility
 		}
 	}
@@ -197,7 +199,7 @@ func (client *Client) InspectCatalogImageCompatibility(ctx context.Context) (Cat
 		// Other containers are outside this compatibility proof; their optional
 		// environment fields do not affect the managed image identities.
 		role := text(row["comment"])
-		if role != "SB-GATEWAY container" && role != "SB-GATEWAY container previous" && role != "SB-GATEWAY container candidate" && role != "SB-GATEWAY container rollback" && role != "SB-GATEWAY container failed" {
+		if role != managedidentity.Literal("XROUTE container") && role != managedidentity.Literal("XROUTE container previous") && role != managedidentity.Literal("XROUTE container candidate") && role != managedidentity.Literal("XROUTE container rollback") && role != managedidentity.Literal("XROUTE container failed") {
 			continue
 		}
 		container, err := compatContainer(row)
@@ -205,18 +207,18 @@ func (client *Client) InspectCatalogImageCompatibility(ctx context.Context) (Cat
 			return result, err
 		}
 		switch container.Role {
-		case "SB-GATEWAY container":
+		case managedidentity.Literal("XROUTE container"):
 			if result.Current.ID != "" {
 				return result, ErrCatalogImageCompatibility
 			}
 			result.Current = container
-		case "SB-GATEWAY container previous":
+		case managedidentity.Literal("XROUTE container previous"):
 			if result.Previous != nil || !container.Stopped {
 				return result, ErrCatalogImageCompatibility
 			}
 			copy := container
 			result.Previous = &copy
-		case "SB-GATEWAY container candidate", "SB-GATEWAY container rollback", "SB-GATEWAY container failed":
+		case managedidentity.Literal("XROUTE container candidate"), managedidentity.Literal("XROUTE container rollback"), managedidentity.Literal("XROUTE container failed"):
 			return result, ErrCatalogImageCompatibility
 		}
 	}

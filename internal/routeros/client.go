@@ -19,20 +19,22 @@ import (
 	"time"
 
 	routerosassets "github.com/Ati054/xroute/routeros"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 const maxResponseBytes = 4 << 20
 const maxDirectScriptBytes = 16 << 10
 
-const (
-	recoveryRestartWorker    = "SB-GATEWAY-recovery-restart-worker"
-	recoveryRestartScheduler = "SB-GATEWAY-recovery-restart-once"
-	watchdogConfigScript     = "SB-GATEWAY-watchdog-config"
-	startupFailOpenScript    = "SB-GATEWAY-startup-fail-open"
+var (
+	recoveryRestartWorker    = managedidentity.Literal("XROUTE-recovery-restart-worker")
+	recoveryRestartScheduler = managedidentity.Literal("XROUTE-recovery-restart-once")
+	watchdogConfigScript     = managedidentity.Literal("XROUTE-watchdog-config")
+	startupFailOpenScript    = managedidentity.Literal("XROUTE-startup-fail-open")
 )
 
 var managedRolePattern = regexp.MustCompile(`^(apply|rollback)$`)
-var managedNamePattern = regexp.MustCompile(`^SB-GATEWAY-(?:apply|rollback)-[0-9a-f]{12}$`)
+var managedNamePattern = regexp.MustCompile(managedidentity.Literal(`^XROUTE-(?:apply|rollback)-[0-9a-f]{12}$`))
 var prohibitedScriptPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)/system[\s/]+(reset|reboot|shutdown|package[\s/]+update)`),
 	regexp.MustCompile(`(?i)/user\b`),
@@ -218,7 +220,7 @@ func (client *Client) RunManagedScript(ctx context.Context, name string) (map[st
 		if id != "" {
 			return nil, errors.New("managed RouterOS script name is ambiguous")
 		}
-		if text(row["comment"]) != "SB-GATEWAY managed script "+name {
+		if text(row["comment"]) != managedidentity.Literal("XROUTE managed script ")+name {
 			return nil, errors.New("refusing to run an unowned RouterOS script")
 		}
 		id = text(row[".id"])
@@ -265,7 +267,7 @@ func (client *Client) ownedStartupFailOpenID(ctx context.Context) (string, error
 		if text(row["name"]) != startupFailOpenScript {
 			continue
 		}
-		if id != "" || text(row["comment"]) != "SB-GATEWAY startup fail-open" || text(row[".id"]) == "" {
+		if id != "" || text(row["comment"]) != managedidentity.Literal("XROUTE startup fail-open") || text(row[".id"]) == "" {
 			return "", errors.New("planned Apply safety script is ambiguous or unowned")
 		}
 		id = text(row[".id"])
@@ -286,7 +288,7 @@ func (client *Client) WaitManagedDiversion(ctx context.Context) error {
 		if err == nil {
 			found := false
 			for _, row := range rows {
-				if text(row["comment"]) != "SB-GATEWAY diversion-gate" {
+				if text(row["comment"]) != managedidentity.Literal("XROUTE diversion-gate") {
 					continue
 				}
 				if found {
@@ -325,9 +327,9 @@ func (client *Client) EnforceStartupTrafficSafety(ctx context.Context) (bool, er
 		item    ownedScript
 		seen    bool
 	}{
-		watchdogConfigScript:         {comment: "SB-GATEWAY watchdog persisted config"},
-		startupFailOpenScript:        {comment: "SB-GATEWAY startup fail-open"},
-		"SB-GATEWAY-health-watchdog": {comment: "SB-GATEWAY health watchdog"},
+		watchdogConfigScript:                              {comment: managedidentity.Literal("XROUTE watchdog persisted config")},
+		startupFailOpenScript:                             {comment: managedidentity.Literal("XROUTE startup fail-open")},
+		managedidentity.Literal("XROUTE-health-watchdog"): {comment: managedidentity.Literal("XROUTE health watchdog")},
 	}
 	for _, row := range rows {
 		name := text(row["name"])
@@ -347,7 +349,7 @@ func (client *Client) EnforceStartupTrafficSafety(ctx context.Context) (bool, er
 	}
 	config := wanted[watchdogConfigScript]
 	failOpen := wanted[startupFailOpenScript]
-	watchdog := wanted["SB-GATEWAY-health-watchdog"]
+	watchdog := wanted[managedidentity.Literal("XROUTE-health-watchdog")]
 	if !config.seen || config.item.id == "" || !failOpen.seen || failOpen.item.id == "" || !watchdog.seen || watchdog.item.id == "" {
 		return false, errors.New("startup traffic safety scripts are missing")
 	}
@@ -410,7 +412,7 @@ func (client *Client) EnforceStartupTrafficSafety(ctx context.Context) (bool, er
 // PrepareImportScript installs a bounded wrapper for a previously uploaded
 // project-owned RSC. The full candidate never passes through REST JSON.
 func (client *Client) PrepareImportScript(ctx context.Context, role, importName string) (string, error) {
-	if !managedRolePattern.MatchString(role) || !managedImportNamePattern.MatchString(importName) || !strings.HasPrefix(importName, "SB-GATEWAY-"+role+"-") {
+	if !managedRolePattern.MatchString(role) || !managedImportNamePattern.MatchString(importName) || !strings.HasPrefix(importName, managedidentity.Literal("XROUTE-")+role+"-") {
 		return "", errors.New("managed RouterOS import role or name is invalid")
 	}
 	source := `/import file-name="` + importName + `" verbose=no`
@@ -429,15 +431,15 @@ func (client *Client) PrepareImportScript(ctx context.Context, role, importName 
 // so an interrupted HTTP request cannot turn into an endless restart loop.
 func (client *Client) ScheduleRecoveryRestart(ctx context.Context) (map[string]any, error) {
 	workerSource := strings.Join([]string{
-		"# SB-GATEWAY one-shot recovery restart",
+		managedidentity.Literal("# XROUTE one-shot recovery restart"),
 		`:local scheduler [/system/scheduler/find where name="` + recoveryRestartScheduler + `"]`,
 		`:if ([:len $scheduler] = 1) do={ /system/scheduler/remove $scheduler }`,
-		`:local target [/container/find where comment="SB-GATEWAY container"]`,
+		managedidentity.Literal(`:local target [/container/find where comment="XROUTE container"]`),
 		`:if ([:len $target] != 1) do={ :error "managed container is missing or ambiguous" }`,
 		`/container/stop $target`,
 		`:delay 3s`,
 		`/container/start $target`,
-		`:log warning "SB-GATEWAY: recovery restore restart executed"`,
+		managedidentity.Literal(`:log warning "XROUTE: recovery restore restart executed"`),
 	}, "\n")
 	if _, err := client.installFixedManagedScript(ctx, recoveryRestartWorker, workerSource); err != nil {
 		return nil, err
@@ -454,7 +456,7 @@ func (client *Client) ScheduleRecoveryRestart(ctx context.Context) (map[string]a
 		if existingID != "" {
 			return nil, errors.New("recovery restart scheduler is ambiguous")
 		}
-		if text(row["comment"]) != "SB-GATEWAY one-shot recovery restart" {
+		if text(row["comment"]) != managedidentity.Literal("XROUTE one-shot recovery restart") {
 			return nil, errors.New("refusing to replace an unowned recovery restart scheduler")
 		}
 		existingID = text(row[".id"])
@@ -469,7 +471,7 @@ func (client *Client) ScheduleRecoveryRestart(ctx context.Context) (map[string]a
 	}
 	if _, err := client.request(ctx, http.MethodPut, "/rest/system/scheduler", map[string]any{
 		"name": recoveryRestartScheduler, "interval": "60s", "on-event": "/system/script/run " + recoveryRestartWorker,
-		"policy": "read,write,test,policy", "comment": "SB-GATEWAY one-shot recovery restart", "disabled": "false",
+		"policy": "read,write,test,policy", "comment": managedidentity.Literal("XROUTE one-shot recovery restart"), "disabled": "false",
 	}); err != nil {
 		return nil, err
 	}
@@ -480,7 +482,7 @@ func (client *Client) installFixedManagedScript(ctx context.Context, name, sourc
 	if !validFixedManagedScript(name, source) {
 		return "", errors.New("fixed managed RouterOS script is invalid")
 	}
-	comment := "SB-GATEWAY managed script " + name
+	comment := managedidentity.Literal("XROUTE managed script ") + name
 	rows, err := client.list(ctx, "/rest/system/script?.proplist=.id,name,comment")
 	if err != nil {
 		return "", err
@@ -530,13 +532,13 @@ func (client *Client) installManagedScript(ctx context.Context, name, source str
 		if id != "" {
 			return "", errors.New("managed RouterOS script name is ambiguous")
 		}
-		if text(row["comment"]) != "SB-GATEWAY managed script "+name {
+		if text(row["comment"]) != managedidentity.Literal("XROUTE managed script ")+name {
 			return "", errors.New("refusing to replace an unowned RouterOS script")
 		}
 		id = text(row[".id"])
 	}
 	payload := map[string]any{
-		"name": name, "source": source, "comment": "SB-GATEWAY managed script " + name,
+		"name": name, "source": source, "comment": managedidentity.Literal("XROUTE managed script ") + name,
 		"policy": "ftp,read,write,test,policy",
 	}
 	if id == "" {
@@ -682,7 +684,7 @@ func managedScriptName(role, source string) (string, error) {
 		return "", errors.New("managed RouterOS script role is invalid")
 	}
 	digest := sha256.Sum256([]byte(source))
-	return "SB-GATEWAY-" + role + "-" + hex.EncodeToString(digest[:])[:12], nil
+	return managedidentity.Literal("XROUTE-") + role + "-" + hex.EncodeToString(digest[:])[:12], nil
 }
 
 func validateDirectDelta(source string) error {
@@ -696,7 +698,7 @@ func validateImportedDelta(source string) error {
 	if len(source) == 0 || len(source) > maxManagedImportBytes || strings.IndexByte(source, 0) >= 0 {
 		return errors.New("imported RouterOS delta must fit in 2 MiB and contain no NUL")
 	}
-	if !strings.HasPrefix(source, "# SB-GATEWAY generated minimal delta; complete managed sections\n") {
+	if !strings.HasPrefix(source, managedidentity.Literal("# XROUTE generated minimal delta; complete managed sections\n")) {
 		return errors.New("direct RouterOS script is not a generated section delta")
 	}
 	for _, pattern := range prohibitedScriptPatterns {

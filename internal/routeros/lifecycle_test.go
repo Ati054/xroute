@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func TestScheduleFullUninstallStagesWorkerBeforeOneShotScheduler(t *testing.T) {
@@ -100,7 +102,7 @@ func TestManualTeardownStopsBeforeMutationWithManagedLogFilters(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			source := string(data)
+			source := managedidentity.Script(string(data))
 			guard := strings.Index(source, `/system/logging/find where comment~"^SB-GATEWAY auth-log v1 "`)
 			mutation := strings.Index(source, `/ip/firewall/mangle/disable`)
 			if guard < 0 || mutation < 0 || guard > mutation || !strings.Contains(source[:mutation], `disabled=no and regex="^(\$|[^u])"`) || !strings.Contains(source[:mutation], `:error "SB-GATEWAY: restore service account logging before manual`) || !strings.Contains(source[:mutation], "# Service log preflight.") || !strings.Contains(source[:mutation], "# End service log preflight.") {

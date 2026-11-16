@@ -1,5 +1,9 @@
 # Install XRoute 1.7.0
 
+> New installations use `XROUTE` ownership labels. Upgraded installations keep
+> `SB-GATEWAY` labels and their existing paths; use that prefix in the examples
+> below for an older installation. Never rename these objects manually.
+
 This release provides ARM64 images. The x86-64 CHR build is being tested separately and is not included in these downloads.
 
 This guide covers the first installation on an ARM64 MikroTik running
@@ -150,7 +154,7 @@ pass readiness checks.
 Follow installation messages if needed:
 
 ```routeros
-/log/print without-paging where message~"SB-GATEWAY"
+/log/print without-paging where message~"XROUTE"
 ```
 
 ## Finish setup in the Web UI
@@ -158,7 +162,7 @@ Follow installation messages if needed:
 Wait for the container to reach `running` or `healthy`:
 
 ```routeros
-/container/print detail where comment="SB-GATEWAY container"
+/container/print detail where comment="XROUTE container"
 ```
 
 Open the panel from the management LAN. The default address is:
@@ -186,9 +190,9 @@ offline copy if you need it for recovery.
 Check the container, watchdog, and diversion gate:
 
 ```routeros
-/container/print detail where comment="SB-GATEWAY container"
-/system/scheduler/print detail where name="SB-GATEWAY-health-watchdog"
-/ip/firewall/mangle/print detail where comment="SB-GATEWAY diversion-gate"
+/container/print detail where comment="XROUTE container"
+/system/scheduler/print detail where name="XROUTE-health-watchdog"
+/ip/firewall/mangle/print detail where comment="XROUTE diversion-gate"
 ```
 
 The diversion gate can remain disabled until you enable a client policy and the

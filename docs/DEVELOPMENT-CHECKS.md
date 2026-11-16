@@ -566,6 +566,8 @@ intentional; vite.config.ts is not a Vitest configuration.
 The canonical Go module is github.com/Ati054/xroute and the main command source
 is cmd/xroute. Existing runtime paths, SB_* environment variables and RouterOS
 ownership markers remain compatibility identifiers for installed systems.
+New installers bind XROUTE ownership with SB_ROUTEROS_NAMESPACE; an absent
+entry retains the legacy namespace. The setting survives image updates.
 
 XRoute release archives and OCI tags use the lowercase xroute name. The image
 also provides an xroute command alias. Existing sb-gateway invocations, image
@@ -575,6 +577,11 @@ valid so an installed gateway can verify and apply the renamed image.
 The sidebar shows the route mark and XRoute wordmark without a platform subtitle.
 The overview keeps health, restart and recovery details without an outage slogan.
 Legacy `SB-GATEWAY` ownership labels and API confirmation tokens remain unchanged.
+New installations use XROUTE ownership labels, xroute-api and dedicated
+bridge-xroute / veth-xroute interfaces. Bundle generation produces legacy/
+install scripts from the same maintained source. Regression coverage must verify
+current and legacy ownership, correct prefix lengths, rejection of ambiguous
+ownership, and preservation of interpolated credentials and storage paths.
 
 Managed install-artifact cleanup accepts both legacy sb-gateway and lowercase
 xroute versioned ARM64 TAR/checksum names in the confirmed storage root only.

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/rulesets"
 )
 
@@ -177,11 +178,11 @@ func renderRouterOSOutage(groups []routerOSOutageGroup) []string {
 	type entry struct{ domain, key string }
 	entries := []entry{}
 	for _, group := range groups {
-		sources = append(sources, "SB-GATEWAY outage source "+group.Key)
+		sources = append(sources, managedidentity.Literal("XROUTE outage source ")+group.Key)
 		for _, proto := range []string{"TCP", "UDP"} {
-			rules = append(rules, "SB-GATEWAY outage direct "+proto+" "+group.Key)
+			rules = append(rules, managedidentity.Literal("XROUTE outage direct ")+proto+" "+group.Key)
 		}
-		dns = append(dns, "SB-GATEWAY outage DNS "+group.Key)
+		dns = append(dns, managedidentity.Literal("XROUTE outage DNS ")+group.Key)
 		for _, domain := range group.Domains {
 			entries = append(entries, entry{domain, group.Key})
 		}
@@ -199,38 +200,38 @@ func renderRouterOSOutage(groups []routerOSOutageGroup) []string {
 		records = append(records, item.domain+"|"+item.key)
 	}
 	lines = append(lines, fmt.Sprintf(`:local outageRecords %s`, routerOSArray(records)),
-		`:foreach record in=$outageRecords do={ :local outageDomain [:pick $record 0 [:find $record "|"]]; :foreach entry in=[/ip/dns/static/find where name=$outageDomain] do={ :if (([/ip/dns/static/get $entry comment] ~ "^SB-GATEWAY outage DNS ") = false) do={ :error "SB-GATEWAY outage DNS conflicts with an unowned record" } } }`)
+		managedidentity.Literal(`:foreach record in=$outageRecords do={ :local outageDomain [:pick $record 0 [:find $record "|"]]; :foreach entry in=[/ip/dns/static/find where name=$outageDomain] do={ :if (([/ip/dns/static/get $entry comment] ~ "^XROUTE outage DNS ") = false) do={ :error "XROUTE outage DNS conflicts with an unowned record" } } }`))
 	// Revoke obsolete permits before publishing any additions. All cleanup is
 	// restricted to owned comments; user DNS/firewall rules are untouched.
-	lines = append(lines, renderRouterOSOwnedCleanup("/ip/firewall/filter", "SB-GATEWAY outage direct ", "OutageRules", rules)...)
-	lines = append(lines, renderRouterOSOwnedCleanup("/ip/firewall/address-list", "SB-GATEWAY outage source ", "OutageSources", sources)...)
+	lines = append(lines, renderRouterOSOwnedCleanup("/ip/firewall/filter", managedidentity.Literal("XROUTE outage direct "), "OutageRules", rules)...)
+	lines = append(lines, renderRouterOSOwnedCleanup("/ip/firewall/address-list", managedidentity.Literal("XROUTE outage source "), "OutageSources", sources)...)
 	// Retire DNS-created dynamic addresses along with obsolete owned records.
 	lines = append(lines, fmt.Sprintf(`:local outageWantedDNS %s`, routerOSArray(dns)),
-		`:foreach entry in=[/ip/dns/static/find where comment~"^SB-GATEWAY outage DNS "] do={ :local keep false; :local c [/ip/dns/static/get $entry comment]; :foreach wanted in=$outageWantedDNS do={ :if ($wanted = $c) do={ :set keep true } }; :if ($keep = false) do={ :local oldList [/ip/dns/static/get $entry address-list]; :if ($oldList ~ "^SB_OUTAGE_DST_[0-9A-F_]+\$") do={ /ip/firewall/address-list/remove [find where list=$oldList and dynamic=yes] } } }`)
-	lines = append(lines, renderRouterOSOwnedCleanup("/ip/dns/static", "SB-GATEWAY outage DNS ", "OutageDNS", dns)...)
+		managedidentity.Literal(`:foreach entry in=[/ip/dns/static/find where comment~"^XROUTE outage DNS "] do={ :local keep false; :local c [/ip/dns/static/get $entry comment]; :foreach wanted in=$outageWantedDNS do={ :if ($wanted = $c) do={ :set keep true } }; :if ($keep = false) do={ :local oldList [/ip/dns/static/get $entry address-list]; :if ($oldList ~ "^SB_OUTAGE_DST_[0-9A-F_]+\$") do={ /ip/firewall/address-list/remove [find where list=$oldList and dynamic=yes] } } }`))
+	lines = append(lines, renderRouterOSOwnedCleanup("/ip/dns/static", managedidentity.Literal("XROUTE outage DNS "), "OutageDNS", dns)...)
 	if len(groups) > 0 {
-		lines = append(lines, `:if ([/ip/dns/get allow-remote-requests] != true) do={ :error "SB-GATEWAY outage exceptions require RouterOS DNS" }`)
+		lines = append(lines, managedidentity.Literal(`:if ([/ip/dns/get allow-remote-requests] != true) do={ :error "XROUTE outage exceptions require RouterOS DNS" }`))
 	}
 	for _, proto := range []string{"tcp", "udp"} {
-		comment := "SB-GATEWAY outage DNS " + strings.ToUpper(proto) + " redirect"
+		comment := managedidentity.Literal("XROUTE outage DNS ") + strings.ToUpper(proto) + " redirect"
 		fields := fmt.Sprintf(`chain=dstnat action=redirect src-address-list="SB_FAIL_CLOSED_CLIENTS" connection-mark=no-mark dst-address-type=!local protocol=%s dst-port=53 disabled=no`, proto)
 		lines = append(lines, fmt.Sprintf(`:local outageRedirect [/ip/firewall/nat/find where comment="%s"]`, comment),
-			`:if ([:len $outageRedirect] > 1) do={ :error "SB-GATEWAY outage DNS redirect ambiguous" }`,
+			managedidentity.Literal(`:if ([:len $outageRedirect] > 1) do={ :error "XROUTE outage DNS redirect ambiguous" }`),
 			fmt.Sprintf(`:if ([:len $outageRedirect] = 0) do={ /ip/firewall/nat/add %s place-before=0 comment="%s" } else={ /ip/firewall/nat/set $outageRedirect %s }`, fields, comment, fields))
 	}
 	for _, group := range groups {
 		src, dst := "SB_OUTAGE_SRC_"+group.Key, "SB_OUTAGE_DST_"+group.Key
-		lines = append(lines, renderRouterOSAddressList("Outage"+group.Key, src, "SB-GATEWAY outage source "+group.Key, group.Sources)...)
+		lines = append(lines, renderRouterOSAddressList("Outage"+group.Key, src, managedidentity.Literal("XROUTE outage source ")+group.Key, group.Sources)...)
 		for _, proto := range []string{"tcp", "udp"} {
 			ports := "443"
 			if proto == "tcp" {
 				ports = "80,443"
 			}
-			comment := "SB-GATEWAY outage direct " + strings.ToUpper(proto) + " " + group.Key
-			fields := fmt.Sprintf(`chain="sb-gateway-forward" action=accept connection-mark=no-mark src-address-list="%s" dst-address-list="%s" out-interface-list=WAN protocol=%s dst-port=%s disabled=no`, src, dst, proto, ports)
+			comment := managedidentity.Literal("XROUTE outage direct ") + strings.ToUpper(proto) + " " + group.Key
+			fields := fmt.Sprintf(managedidentity.Literal(`chain="xroute-forward" action=accept connection-mark=no-mark src-address-list="%s" dst-address-list="%s" out-interface-list=WAN protocol=%s dst-port=%s disabled=no`), src, dst, proto, ports)
 			lines = append(lines,
 				fmt.Sprintf(`:local outageRule [/ip/firewall/filter/find where comment="%s"]`, comment),
-				`:if ([:len $outageRule] > 1) do={ :error "SB-GATEWAY outage rule ambiguous" }`,
+				managedidentity.Literal(`:if ([:len $outageRule] > 1) do={ :error "XROUTE outage rule ambiguous" }`),
 				fmt.Sprintf(`:if ([:len $outageRule] = 0) do={ /ip/firewall/filter/add %s place-before=$outageDrop comment="%s" } else={ /ip/firewall/filter/set $outageRule %s; /ip/firewall/filter/move $outageRule destination=$outageDrop }`, fields, comment, fields))
 		}
 	}
@@ -241,12 +242,12 @@ func renderRouterOSOutage(groups []routerOSOutageGroup) []string {
 		`  :local outageSeparator [:find $record "|"]`,
 		`  :local outageDomain [:pick $record 0 $outageSeparator]`,
 		`  :local outageKey [:pick $record ($outageSeparator + 1) [:len $record]]`,
-		`  :local outageComment ("SB-GATEWAY outage DNS " . $outageKey)`,
+		managedidentity.Literal(`  :local outageComment ("XROUTE outage DNS " . $outageKey)`),
 		`  :local outageDestination ("SB_OUTAGE_DST_" . $outageKey)`,
 		`  :local outageDNS [/ip/dns/static/find where name=$outageDomain and comment=$outageComment]`,
-		`  :if ([:len $outageDNS] > 1) do={ :error "SB-GATEWAY outage DNS ambiguous" }`,
+		managedidentity.Literal(`  :if ([:len $outageDNS] > 1) do={ :error "XROUTE outage DNS ambiguous" }`),
 		`  :if ([:len $outageDNS] = 0) do={ /ip/dns/static/add name=$outageDomain type=FWD match-subdomain=yes address-list=$outageDestination disabled=no comment=$outageComment; :set outageDNS [/ip/dns/static/find where name=$outageDomain and comment=$outageComment] } else={ /ip/dns/static/set $outageDNS name=$outageDomain type=FWD match-subdomain=yes address-list=$outageDestination disabled=no }`,
-		`  :local firstDNS [:pick [/ip/dns/static/find where comment~"^SB-GATEWAY outage DNS "] 0 1]`,
+		managedidentity.Literal(`  :local firstDNS [:pick [/ip/dns/static/find where comment~"^XROUTE outage DNS "] 0 1]`),
 		`  :if ($outageDNS != $firstDNS) do={ /ip/dns/static/move $outageDNS destination=$firstDNS }`,
 		`}`)
 	return lines

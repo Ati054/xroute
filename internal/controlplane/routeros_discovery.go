@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 type routerOSDiscoveryFunc func(context.Context, map[string]any) (map[string]any, error)
@@ -455,9 +457,9 @@ func managedContainers(rows []map[string]any) (map[string]any, map[string]any) {
 	var managed, rollback map[string]any
 	for _, row := range rows {
 		comment := text(row["comment"])
-		if comment == "SB-GATEWAY container rollback" || comment == "SB-GATEWAY rollback container" {
+		if comment == managedidentity.Literal("XROUTE container rollback") || comment == managedidentity.Literal("XROUTE rollback container") {
 			rollback = row
-		} else if comment == "SB-GATEWAY container" || managed == nil && (strings.HasPrefix(comment, "SB-GATEWAY") || strings.HasPrefix(text(row["name"]), "sb-gateway")) {
+		} else if comment == managedidentity.Literal("XROUTE container") || managed == nil && (strings.HasPrefix(comment, managedidentity.Literal("XROUTE")) || strings.HasPrefix(text(row["name"]), "sb-gateway")) {
 			managed = row
 		}
 	}
@@ -482,7 +484,7 @@ func firstRow(rows []map[string]any) map[string]any {
 	return rows[0]
 }
 func projectOwned(row map[string]any) bool {
-	return strings.HasPrefix(strings.TrimSpace(text(row["comment"])), "SB-GATEWAY")
+	return strings.HasPrefix(strings.TrimSpace(text(row["comment"])), managedidentity.Literal("XROUTE"))
 }
 func restBool(value any) bool {
 	return value == true || strings.EqualFold(text(value), "true") || text(value) == "yes"

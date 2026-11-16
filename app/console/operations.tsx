@@ -96,7 +96,7 @@ function MikroTik({
       <SectionTitle
         eyebrow="MikroTik"
         title={tr("Сначала читаем, потом предлагаем патч")}
-        description={tr("Панель управляет только объектами с комментарием SB-GATEWAY и не меняет существующие VPN, LAN, Wi‑Fi и firewall.")}
+        description={tr("Панель управляет служебными объектами XRoute. Изменения существующей сети показаны в плане Apply.")}
         action={
           <button
             className="button button-primary"
@@ -366,7 +366,7 @@ function MikroTik({
                   ? tr("Только live-проверка")
                   : tr("Backup только при изменении RouterOS"),
             ],
-            ["02", tr("Точный diff"), tr("Только SB-GATEWAY")],
+            ["02", tr("Точный diff"), tr("Только XRoute")],
             ["03", tr("Проверка"), tr("Маршруты и FastTrack")],
             ["04", tr("Применение"), tr("С таймером отката")],
             ["05", "Health-check", tr("Интернет и панель")],
@@ -1188,7 +1188,7 @@ export function Operations({
             </div>
             <div className="transport-detail">
               <span className="signal-dot signal-warn" aria-hidden="true" />
-              <span>{tr("Только контейнер, файлы и RouterOS-объекты с точной меткой SB-GATEWAY")}</span>
+              <span>{tr("Только контейнер, файлы и служебные объекты XRoute")}</span>
             </div>
           </div>
           <div className="transport-actions">
@@ -1246,9 +1246,9 @@ export function Operations({
             <form onSubmit={startFullUninstall}>
               <p className="eyebrow">{tr("Опасная операция")}</p>
               <h2 id="full-uninstall-title">{tr("Полностью удалить XRoute")}</h2>
-              <p className="modal-lead">{tr("Удаляются только подтверждённый каталог проекта и RouterOS-объекты с точной меткой SB-GATEWAY.")}</p>
+              <p className="modal-lead">{tr("Удаляются только подтверждённый каталог проекта и служебные объекты XRoute.")}</p>
               {uninstallPreview ? <div className="lifecycle-preview"><div><strong>{tr("Будет удалено")}</strong><ul>{asStringList(uninstallPreview.removes).map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>{tr("Будет сохранено")}</strong><ul>{asStringList(uninstallPreview.preserves).map((item) => <li key={item}>{item}</li>)}</ul></div></div> : null}
-              <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Удалить XRoute полностью")}</strong><small>{tr("Каталог")} {lifecycleStorageRoot || tr("проекта")}  {tr("и только объекты с меткой SB-GATEWAY.")}</small></span></label>
+              <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Удалить XRoute полностью")}</strong><small>{tr("Каталог")} {lifecycleStorageRoot || tr("проекта")}  {tr("и только служебные объекты XRoute.")}</small></span></label>
               <div className="modal-actions"><button className="button button-tertiary" type="button" disabled={lifecycleBusy} onClick={() => setUninstallDialogOpen(false)}>{tr("Отмена")}</button><button className="button button-danger" type="submit" disabled={lifecycleBusy || !lifecycleStorageRoot}>{lifecycleBusy ? tr("Проверяю…") : tr("Проверить и удалить")}</button></div>
             </form>
           </section>

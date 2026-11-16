@@ -20,14 +20,16 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 const maxManagedImportBytes = 2 << 20
 
-var managedImportNamePattern = regexp.MustCompile(`^SB-GATEWAY-(?:apply|rollback)-[0-9a-f]{12}\.rsc$`)
+var managedImportNamePattern = regexp.MustCompile(managedidentity.Literal(`^XROUTE-(?:apply|rollback)-[0-9a-f]{12}\.rsc$`))
 var sshHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 
-const managedCandidateHeader = "# SB-GATEWAY generated candidate; managed objects only\n"
+var managedCandidateHeader = managedidentity.Literal("# XROUTE generated candidate; managed objects only\n")
 
 var managedCandidateSections = []string{"core", "dns", "watchdog", "address-lists", "outage-exceptions", "wireguard-egress", "ipv6", "finalize"}
 
@@ -122,7 +124,7 @@ func (transport *SSHTransport) uploadCandidate(ctx context.Context, role, source
 		return "", err
 	}
 	validate := validateFullCandidate
-	if strings.HasPrefix(source, "# SB-GATEWAY generated minimal delta; complete managed sections\n") {
+	if strings.HasPrefix(source, managedidentity.Literal("# XROUTE generated minimal delta; complete managed sections\n")) {
 		validate = validateImportedDelta
 	}
 	if err := validate(source); err != nil {
@@ -210,7 +212,7 @@ func managedImportName(role, source string) (string, error) {
 		return "", errors.New("managed RouterOS import role is invalid")
 	}
 	digest := sha256.Sum256([]byte(source))
-	return "SB-GATEWAY-" + role + "-" + hex.EncodeToString(digest[:])[:12] + ".rsc", nil
+	return managedidentity.Literal("XROUTE-") + role + "-" + hex.EncodeToString(digest[:])[:12] + ".rsc", nil
 }
 
 func validateFullCandidate(source string) error {
@@ -222,7 +224,7 @@ func validateFullCandidate(source string) error {
 	}
 	position := len(managedCandidateHeader)
 	for _, section := range managedCandidateSections {
-		marker := "# SB-GATEWAY section:" + section + "\n"
+		marker := managedidentity.Literal("# XROUTE section:") + section + "\n"
 		index := strings.Index(source[position:], marker)
 		if index < 0 {
 			return errors.New("full RouterOS candidate is missing a managed section")

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/routeros"
 )
 
@@ -70,7 +71,7 @@ func (server *Server) repairIncompleteLifecycleCatalogCompatibility(ctx context.
 	if old.FormatVersion != 1 || old.ProducerCatalogSchema != 1 || old.State != "preparing" || old.Kind != "legacy-snapshot" || recordedFiles && len(old.Files) == 0 || !recordedFiles && old.Files != nil || old.Mountlist != "" || old.Previous == nil || !old.Previous.Stopped || !ok || len(refs) != 0 || !safeRevision(old.Identifier) || !safeRevision(old.SourceEpoch) || !safeRevision(old.CurrentFingerprint) {
 		return errSubscriptionCatalogReferencesPending
 	}
-	if old.Producer.Role != "SB-GATEWAY container" || old.Producer.Stopped || old.Producer.ID == "" || old.Producer.Root == "" || len(old.Producer.Environment) == 0 || len(old.Producer.Mountlists) == 0 || old.Previous.Role != "SB-GATEWAY container previous" || old.Previous.ID == "" || old.Previous.Root == "" || len(old.Previous.Environment) == 0 {
+	if old.Producer.Role != managedidentity.Literal("XROUTE container") || old.Producer.Stopped || old.Producer.ID == "" || old.Producer.Root == "" || len(old.Producer.Environment) == 0 || len(old.Producer.Mountlists) == 0 || old.Previous.Role != managedidentity.Literal("XROUTE container previous") || old.Previous.ID == "" || old.Previous.Root == "" || len(old.Previous.Environment) == 0 {
 		return errSubscriptionCatalogReferencesPending
 	}
 	poolPath := server.opts.Runtime.XrayHealthPool
@@ -162,7 +163,7 @@ func (server *Server) validateRecordedLifecycleCatalogPreparation(ctx context.Co
 
 func validateRecordedCatalogHandoffReferences(ctx context.Context, client *routeros.Client, inventory routeros.CatalogImageInventory, id string, mounts []routeros.CatalogImageMount) error {
 	list := "sb-catalog-compat-" + id[:16]
-	comment := "SB-GATEWAY catalog data compatibility " + id
+	comment := managedidentity.Literal("XROUTE catalog data compatibility ") + id
 	expected := make(map[string]string, len(mounts))
 	var sources [4]string
 	if len(mounts) != len(sources) {

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/netip"
 	"sort"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 // SyncSubscriptionEndpoints owns ONLY static host entries with this exact
@@ -13,7 +15,7 @@ import (
 // Repeating either phase after a crash is safe and never deletes foreign rows.
 func (client *Client) SyncSubscriptionEndpoints(ctx context.Context, values []string, prune bool) error {
 	const name = "SB_BYPASS_ENDPOINTS"
-	const comment = "SB-GATEWAY loop bypass"
+	comment := managedidentity.Literal("XROUTE loop bypass")
 	wanted := map[string]bool{}
 	for _, value := range values {
 		p, err := netip.ParsePrefix(value)

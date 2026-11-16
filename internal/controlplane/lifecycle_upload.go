@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/releasecontract"
 	"github.com/Ati054/xroute/internal/routeros"
 )
@@ -30,7 +31,7 @@ const (
 
 var (
 	lifecycleUploadNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,126}\.tar$`)
-	lifecycleStoredNamePattern = regexp.MustCompile(`^sb-gateway-upload-[a-f0-9]{16}\.tar$`)
+	lifecycleStoredNamePattern = regexp.MustCompile(managedidentity.Literal(`^xroute-upload-[a-f0-9]{16}\.tar$`))
 	lifecycleVersionPattern    = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9._-]+)?$`)
 )
 
@@ -171,7 +172,7 @@ func (server *Server) uploadLifecycleImage(response http.ResponseWriter, request
 		server.internalStateError(response, request, err)
 		return
 	}
-	finalName := "sb-gateway-upload-" + digest[:16] + ".tar"
+	finalName := managedidentity.Literal("xroute-upload-") + digest[:16] + ".tar"
 	finalPath := filepath.Join(uploadRoot, finalName)
 	if err := replaceRegularFile(temporaryPath, finalPath); err != nil {
 		server.internalStateError(response, request, err)

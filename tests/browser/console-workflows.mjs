@@ -7,6 +7,8 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
   const receipts = [];
   for (const locale of ["ru", "en"]) {
     const config = structuredClone(defaults);
+    // Exercise both fresh and upgraded installations with the same UI bundle.
+    config.system.object_comment_prefix = locale === "en" ? "XROUTE" : "SB-GATEWAY";
     config.transports.forEach(transport => { transport.enabled = false; });
     config.transports.find(transport => transport.id === "xhttp-reality").enabled = true;
     config.system.deployment_ready = true;
@@ -30,6 +32,7 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
     const heldStatus = [];
     const releaseStatus = () => {holdStatus = false; heldStatus.splice(0).forEach(resolve => resolve());};
     const writes = [], applies = [], unexpected = [], errors = [];
+    let firstLaunch = true;
     const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
     await context.route("**/*", async route => {
       if (new URL(route.request().url()).origin !== new URL(baseURL).origin) {
@@ -41,17 +44,17 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(String(error)));
     const envelope = () => ({config: draft, revision: String(revision), has_active_configuration: true, pending_config_change_count: revision === activeRevision ? 0 : 1});
-    const overview = () => ({build: {container_version: "test", active_core_name: "Xray"}, active_revision: String(activeRevision), draft_revision: String(revision), pending_config_change_count: revision === activeRevision ? 0 : 1, status: {state: "healthy"}, routeros: {}});
+    const overview = () => ({build: {container_version: "test", active_core_name: "Xray"}, active_revision: String(activeRevision), draft_revision: String(revision), pending_config_change_count: revision === activeRevision ? 0 : 1, status: {state: firstLaunch ? "unconfigured" : "healthy"}, routeros: {}});
     await context.route("**/api/v1/**", async route => {
       const request = route.request(), pathname = new URL(request.url()).pathname.slice(7), method = request.method();
       const body = request.postDataJSON();
       let response;
       if (pathname === "/auth/session") response = {authenticated: true, username: "Test administrator", csrf_token: "test-token"};
-      else if (pathname === "/bootstrap-state") response = {overview: overview(), draft: envelope(), status: {state: "healthy"}};
+      else if (pathname === "/bootstrap-state") response = {overview: overview(), draft: envelope(), status: {state: firstLaunch ? "unconfigured" : "healthy"}};
       else if (pathname === "/overview") response = overview();
       else if (pathname === "/status") {
         if (holdStatus) await new Promise(resolve => heldStatus.push(resolve));
-        response = {state: "healthy", active_revision: String(activeRevision), selector_health: {}, subscriptions: {}, acme: {}};
+        response = {state: firstLaunch ? "unconfigured" : "healthy", active_revision: String(activeRevision), selector_health: {}, subscriptions: {}, acme: {}};
       }
       else if (pathname === "/client-telemetry") response = {sampled_at: "test", clients: []};
       else if (pathname === "/routeros/discover") response = {routeros: {
@@ -101,6 +104,13 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
         const screen = ["overview", "clients", "routing", "connections", "operations", "settings"][index];
         await page.waitForURL(url => url.hash === `#/${screen}`);
       };
+      await navigate(0);
+      await page.getByRole("button", {name: locale === "ru" ? "Настроить шлюз" : "Set up gateway", exact: true}).click();
+      const wizard = page.locator(".setup-modal");
+      assert.equal(await wizard.locator('input[autocomplete="username"]').inputValue(), locale === "en" ? "xroute-api" : "sb-gateway-api");
+      await wizard.locator(".modal-close").click();
+      firstLaunch = false;
+      await page.reload({waitUntil: "networkidle"});
       await navigate(2);
       const ping = page.locator(".routing-behavior-settings input[type=checkbox]").filter({visible: true}).first();
       await ping.waitFor();

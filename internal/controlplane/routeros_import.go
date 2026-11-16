@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 var routerOSVersionPattern = regexp.MustCompile(`(?im)^#\s*(?:.*?\bRouterOS\s+)?(7\.\d+(?:\.\d+)?(?:[A-Za-z]+\d*)?)\b`)
@@ -264,7 +266,7 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 			facts.managementNetworks[network] = true
 		}
 	}
-	facts.managedLines = strings.Count(value, "SB-GATEWAY")
+	facts.managedLines = strings.Count(value, managedidentity.Literal("XROUTE"))
 	return facts, nil
 }
 
@@ -426,7 +428,7 @@ func exportTruthy(value string) bool {
 }
 func exportDisabled(properties map[string]string) bool { return exportTruthy(properties["disabled"]) }
 func exportProjectOwned(properties map[string]string) bool {
-	return strings.HasPrefix(strings.TrimSpace(properties["comment"]), "SB-GATEWAY")
+	return strings.HasPrefix(strings.TrimSpace(properties["comment"]), managedidentity.Literal("XROUTE"))
 }
 func setString(target map[string]any, key, value string) {
 	if value != "" {
@@ -648,7 +650,7 @@ func suggestRouterOSTopology(networks, interfaces map[string]bool, managed map[s
 		}
 		return ""
 	}
-	bridge, veth := availableName("bridge-sb"), availableName("veth-sb")
+	bridge, veth := availableName(managedidentity.Literal("bridge-xroute")), availableName(managedidentity.Literal("veth-xroute"))
 	if bridge == "" || veth == "" {
 		return map[string]any{}
 	}

@@ -2,6 +2,8 @@ package runtimeconfig
 
 import (
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 type RouterOSDeltaPlan struct {
@@ -57,8 +59,8 @@ func BuildRouterOSDelta(previousSource, desiredSource string, maximumRatio float
 	}
 	assemble := func(source map[string]string) string {
 		lines := []string{
-			"# SB-GATEWAY generated minimal delta; complete managed sections",
-			"# SB-GATEWAY delta sections: " + strings.Join(sections, ","),
+			managedidentity.Literal("# XROUTE generated minimal delta; complete managed sections"),
+			managedidentity.Literal("# XROUTE delta sections: ") + strings.Join(sections, ","),
 		}
 		for _, name := range sections {
 			lines = append(lines, routerOSSectionPrefix+name)
@@ -128,8 +130,8 @@ func routerOSDeltaPrelude(section string) []string {
 		return renderRouterOSFailClosedDrop()
 	case "wireguard-egress":
 		return []string{
-			`:local sbBridge [/interface/bridge/find where comment="SB-GATEWAY container bridge"]`,
-			`:if ([:len $sbBridge] != 1) do={ :error "SB-GATEWAY container bridge missing or ambiguous" }`,
+			managedidentity.Literal(`:local sbBridge [/interface/bridge/find where comment="XROUTE container bridge"]`),
+			managedidentity.Literal(`:if ([:len $sbBridge] != 1) do={ :error "XROUTE container bridge missing or ambiguous" }`),
 			`:local sbBridgeName [/interface/bridge/get $sbBridge name]`,
 		}
 	default:

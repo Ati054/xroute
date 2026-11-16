@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/releasecontract"
 
 	"github.com/Ati054/xroute/internal/routeros"
@@ -253,7 +254,7 @@ func (server *Server) reconcileLifecycleOperation(parent context.Context, config
 	}
 	schedulerPresent := false
 	for _, scheduler := range schedulers {
-		if text(scheduler["name"]) == "SB-GATEWAY-image-update" && text(scheduler["comment"]) == "SB-GATEWAY autonomous image update" {
+		if text(scheduler["name"]) == managedidentity.Literal("XROUTE-image-update") && text(scheduler["comment"]) == managedidentity.Literal("XROUTE autonomous image update") {
 			schedulerPresent = true
 		}
 	}
@@ -262,10 +263,10 @@ func (server *Server) reconcileLifecycleOperation(parent context.Context, config
 	transitionCount := 0
 	for _, container := range containers {
 		switch text(container["comment"]) {
-		case "SB-GATEWAY container":
+		case managedidentity.Literal("XROUTE container"):
 			currentCount++
 			currentRoot = strings.Trim(text(container["root-dir"]), "/")
-		case "SB-GATEWAY container candidate", "SB-GATEWAY container rollback", "SB-GATEWAY container failed":
+		case managedidentity.Literal("XROUTE container candidate"), managedidentity.Literal("XROUTE container rollback"), managedidentity.Literal("XROUTE container failed"):
 			transitionCount++
 		}
 	}
@@ -338,7 +339,7 @@ func (server *Server) imageUpdateTrafficAdmitted(ctx context.Context, client *ro
 	}
 	found, enabled := 0, false
 	for _, row := range rows {
-		if text(row["comment"]) == "SB-GATEWAY diversion-gate" {
+		if text(row["comment"]) == managedidentity.Literal("XROUTE diversion-gate") {
 			found++
 			enabled = row["disabled"] == false || text(row["disabled"]) == "false"
 		}
@@ -374,9 +375,9 @@ func imageUpdateLiveRoots(containers []map[string]any) (storageRoot, containerRo
 	managed := 0
 	for _, container := range containers {
 		switch text(container["comment"]) {
-		case "SB-GATEWAY container candidate", "SB-GATEWAY container rollback", "SB-GATEWAY container failed":
+		case managedidentity.Literal("XROUTE container candidate"), managedidentity.Literal("XROUTE container rollback"), managedidentity.Literal("XROUTE container failed"):
 			return "", "", errors.New("a previous image transition is still present on RouterOS")
-		case "SB-GATEWAY container":
+		case managedidentity.Literal("XROUTE container"):
 			managed++
 			containerRoot = strings.Trim(text(container["root-dir"]), "/")
 		}

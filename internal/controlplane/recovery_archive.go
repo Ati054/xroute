@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
@@ -843,7 +844,7 @@ func recoveryArchiveFilename(created time.Time, revision string) string {
 	if safeRevision(revision) {
 		label = revision[:12]
 	}
-	return "SB-GATEWAY-state-" + created.Format("20060102T150405Z") + "-" + label + ".sbgw"
+	return managedidentity.Literal("XROUTE-state-") + created.Format("20060102T150405Z") + "-" + label + ".sbgw"
 }
 
 func (server *Server) updateRecoveryIndex(metadata recoveryArchiveMetadata) error {

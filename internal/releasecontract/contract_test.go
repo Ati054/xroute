@@ -2,6 +2,21 @@ package releasecontract
 
 import "testing"
 
+func TestNamespaceCompatibilityPreservesLegacyButGuardsNewInstallations(t *testing.T) {
+	for _, capability := range []string{"", "1", "2"} {
+		labels := map[string]string{RouterOSNamespaceLabel: capability}
+		if !namespaceCompatible(labels, "SB-GATEWAY") {
+			t.Fatal("legacy update contract changed")
+		}
+		if namespaceCompatible(labels, "XROUTE") != (capability == RouterOSNamespaceVersion) {
+			t.Fatalf("new installation compatibility for %q is unsafe", capability)
+		}
+		if namespaceCompatible(labels, "other") {
+			t.Fatal("unknown ownership accepted")
+		}
+	}
+}
+
 func TestCompatibleAllowsSkippedReleaseSchemas(t *testing.T) {
 	labels := map[string]string{
 		"org.opencontainers.image.title": ImageTitle,

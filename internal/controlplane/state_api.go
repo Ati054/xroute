@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/runtimeconfig"
 	"github.com/Ati054/xroute/internal/runtimeproof"
 )
@@ -60,7 +61,7 @@ func (server *Server) getDraft() (map[string]any, error) {
 		config, err = server.repository.loadActive()
 	}
 	if errors.Is(err, os.ErrNotExist) || len(config) == 0 {
-		config, err = decodeObject(defaultConfigJSON)
+		config, err = decodeObject([]byte(managedidentity.Script(string(defaultConfigJSON))))
 		fresh = true
 	}
 	if err != nil {
@@ -530,8 +531,8 @@ func managedDNSRulesNeedUpdate(active string, metadata map[string]any) bool {
 		return true
 	}
 	for _, comment := range []string{
-		"SB-GATEWAY managed DNS mark UDP", "SB-GATEWAY managed DNS mark TCP",
-		"SB-GATEWAY managed DNS UDP", "SB-GATEWAY managed DNS TCP",
+		managedidentity.Literal("XROUTE managed DNS mark UDP"), managedidentity.Literal("XROUTE managed DNS mark TCP"),
+		managedidentity.Literal("XROUTE managed DNS UDP"), managedidentity.Literal("XROUTE managed DNS TCP"),
 	} {
 		if !strings.Contains(source, `comment="`+comment+`"`) {
 			return true

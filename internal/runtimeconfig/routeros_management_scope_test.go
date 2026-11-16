@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func TestRouterOSCandidateDoesNotOwnUserManagementServices(t *testing.T) {
@@ -36,7 +38,7 @@ func TestRouterOSInstallReturnsUnownedInputTrafficToUserFirewall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(body)
+	source := managedidentity.Script(string(body))
 	for _, forbidden := range []string{
 		"/ip/service/set",
 		`action=drop protocol=tcp dst-port=$"SB_ROUTEROS_REST_PORT"`,
@@ -67,7 +69,7 @@ func TestRouterOSInstallCreatesFailClosedPublicDropBeforeReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(body)
+	source := managedidentity.Script(string(body))
 	for _, required := range []string{
 		`/ip/firewall/filter/add chain="sb-gateway-forward" action=drop src-address-list="SB_FAIL_CLOSED_CLIENTS" dst-address-list="!SB_INTERNAL_NETWORKS" comment="SB-GATEWAY fail-closed public drop"`,
 		`/ip/firewall/filter/set $failClosedDrop chain="sb-gateway-forward" action=drop src-address-list="SB_FAIL_CLOSED_CLIENTS" dst-address-list="!SB_INTERNAL_NETWORKS" disabled=no`,

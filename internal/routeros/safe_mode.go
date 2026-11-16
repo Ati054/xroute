@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 const maxSafeModeOutputBytes = 256 << 10
@@ -104,7 +106,7 @@ func (session *SafeModeSession) begin(ctx context.Context, scriptName string, ti
 		return errors.New("RouterOS refused to enter Safe Mode")
 	}
 	session.active = true
-	marker := "SB-GATEWAY-" + scriptName[len(scriptName)-12:]
+	marker := managedidentity.Literal("XROUTE-") + scriptName[len(scriptName)-12:]
 	command := `:do { /system script run ` + scriptName + `; :put "OK:` + marker + `" } on-error={ :put "ERROR:` + marker + `" }` + "\r\n"
 	if _, err := io.WriteString(session.channel, command); err != nil {
 		return err

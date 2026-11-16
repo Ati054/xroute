@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 type planChange struct {
@@ -296,7 +298,7 @@ func routerOSPlanSteps() []planStep {
 		{1, "backup", "Create RouterOS export and binary backup.", true},
 		{2, "render", "Render native runtime and RouterOS candidates.", true},
 		{3, "validate", "Validate generated candidates and RouterOS capabilities.", true},
-		{4, "apply", "Apply only SB-GATEWAY managed objects under Safe Mode.", true},
+		{4, "apply", managedidentity.Literal("Apply only XROUTE managed objects under Safe Mode."), true},
 		{5, "probe", "Run health and managed-route safety probes.", true},
 		{6, "commit", "Atomically mark the candidate last-known-good.", true},
 	}

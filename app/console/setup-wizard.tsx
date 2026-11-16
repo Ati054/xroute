@@ -871,7 +871,7 @@ export function SetupWizard({
                 <label className="field">
                    {tr("Отдельный REST-пользователь")} <input
                     ref={routerUsernameRef}
-                    defaultValue="sb-gateway-api"
+                    defaultValue={initialSystem.object_comment_prefix === "XROUTE" ? "xroute-api" : "sb-gateway-api"}
                     autoComplete="username"
                     required
                   />
@@ -1067,7 +1067,7 @@ export function SetupWizard({
                       topologySuggestions.veth_name,
                     )
                       ? tr("Кандидат из offline export · коллизий в файле не найдено, live-проверка обязательна.")
-                      : tr("Имя будет использовано только для контейнера SB-GATEWAY.")}
+                      : tr("Имя будет использовано только для контейнера XRoute.")}
                   </small>
                 </label>
                 <label className="field">

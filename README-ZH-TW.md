@@ -109,20 +109,26 @@ Copyright © 2026 [Ati054](https://github.com/Ati054)。
 
 ## 常見問題
 
-### 如何透過網頁面板，在 MikroTik RouterOS 7 設定選擇性 Xray／VLESS 路由？
+### 可以只讓指定裝置或服務走代理嗎？
 
-安裝 XRoute 容器、新增訂閱、建立路由策略，再將裝置指定給該策略。
-需要讓部分服務維持直接連線時，請選擇「VLESS，例外經由 WAN」；
-若只要指定服務經由代理，則選擇「WAN，例外經由 VLESS」。儲存並套用即可。
-請參閱[安裝指南](docs/INSTALL.md)與[面板指南](docs/WEB-UI.md)。
+可以。為指定的區域網路裝置或 WireGuard 對等端建立路由策略：既可以預設走代理，
+將部分服務設為 WAN 直連，也可以預設直連，只讓選定的服務和網域走代理。
+詳見[安裝指南](docs/INSTALL.md)與[面板指南](docs/WEB-UI.md)。
 
-### XRoute for OpenWrt 與 Podkop 和 PassWall2 有什麼不同？
+##<img src="public/favicon.svg" width="40" height="40" alt="XRoute">
 
-[XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt) 使用 Xray、Go 控制器與 LuCI。
-[Podkop](https://github.com/itdoginfo/podkop) 用來設定 sing-box；
-[PassWall2](https://github.com/Openwrt-Passwall/openwrt-passwall2) 則支援多種代理核心，
-包括 Xray 與 sing-box。各專案的介面與設定方式不同，
-請依您的路由需求，比較它們支援的操作流程。
+# XRoute 儲存在哪裡？會改動現有網路嗎？
+
+容器映像檔、規則資料庫和訂閱目錄儲存在外接 SSD 或 USB 儲存裝置上，避免占滿或
+耗損路由器內建快閃記憶體。XRoute 會建立帶標記的 RouterOS 物件。只有在安裝過程或
+Apply 計畫中明確選取後，才會修改現有網路物件；不會取代 LAN 和 Wi-Fi 設定。
+套用網路變更前會建立備份，並啟用自動復原保護。
+
+### 為什麼不直接手動設定 Xray？
+
+XRoute 在單一容器中整合網頁面板、Xray、TCP/UDP 透明代理 TPROXY、分離的
+DoH/DoT DNS、URLTest 與依優先順序進行的故障切換、具保護機制的容器更新，
+以及行動用戶端訂閱。透過面板即可管理，無須手動編輯 Xray JSON 或維護獨立的路由腳本。
 
 ## 社群
 
