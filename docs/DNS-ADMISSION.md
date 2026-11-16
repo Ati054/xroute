@@ -34,6 +34,9 @@ per second. Cache hits and local answers bypass a saturated worker queue.
 Temporary TCP accept errors, including descriptor exhaustion, retain the
 listener and retry with cancelable exponential backoff from 5 ms to 1 second.
 A successful accept resets the backoff. Shutdown and permanent errors stop it.
+For TCP Accept only, classification deliberately follows Go net/http.Server.Serve
+with net.Error.Temporary, including descriptor exhaustion. A documented local
+SA1019 exception preserves this behavior; general upstream errors do not use it.
 Validated IQUERY and STATUS requests receive a local header-only NOTIMP response;
 they never enter upstream routing or caches. Malformed packets still receive
 FORMERR, and response packets are ignored.

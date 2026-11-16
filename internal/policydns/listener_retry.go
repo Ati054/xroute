@@ -12,6 +12,7 @@ import (
 // the listening socket and existing sessions, with bounded, cancelable backoff.
 func retryDNSAccept(ctx context.Context, err error, delay *time.Duration) bool {
 	var temporary net.Error
+	//lint:ignore SA1019 TCP Accept classification intentionally matches net/http.Server.Serve for descriptor exhaustion.
 	if ctx.Err() != nil || !errors.As(err, &temporary) || !temporary.Temporary() {
 		return false
 	}
