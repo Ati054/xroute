@@ -185,17 +185,19 @@ func TestFreshEncryptedFallbackRespectsItsWorkerLimit(t *testing.T) {
 	}
 }
 
-func TestEncryptedFallbackKeepsShortParentDeadline(t *testing.T) {
+func TestEncryptedFallbackPreservesParentDeadlineAndCancellation(t *testing.T) {
 	var calls, leases atomic.Int32
-	u := delayedFallbackFixture(time.Second, 5*time.Second, &calls)
-	parent, cancel := context.WithTimeout(t.Context(), 90*time.Millisecond)
+	u := delayedFallbackFixture(time.Minute, time.Minute, &calls)
+	parent, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	want, _ := parent.Deadline()
+	entered := make(chan struct{})
 	u.fallback = dohTestFallback{exchangeFunc: func(ctx context.Context, _ []byte) ([]byte, error) {
 		calls.Add(1)
 		if deadline, ok := ctx.Deadline(); !ok || !deadline.Equal(want) {
 			t.Error("fallback extended the parent's deadline")
 		}
+		close(entered)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}}
@@ -203,10 +205,39 @@ func TestEncryptedFallbackKeepsShortParentDeadline(t *testing.T) {
 		leases.Add(1)
 		return func() { leases.Add(-1) }, true
 	}))
-	started := time.Now()
-	_, err := u.exchange(ctx, dnsQuery(78, "short-parent.example"))
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) > 500*time.Millisecond || calls.Load() != 1 || leases.Load() != 0 {
-		t.Fatalf("short deadline was not respected: err=%v calls=%d leases=%d", err, calls.Load(), leases.Load())
+	result := make(chan error, 1)
+	go func() {
+		_, err := u.exchangeWithFallback(ctx, dnsQuery(78, "parent-cancel.example"), 0)
+		result <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fallback did not start")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) || calls.Load() != 1 || leases.Load() != 0 {
+			t.Fatalf("parent cancellation was not respected: err=%v calls=%d leases=%d", err, calls.Load(), leases.Load())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("parent cancellation did not join fallback workers")
+	}
+}
+
+func TestEncryptedFallbackExpiredParentStartsNoFallback(t *testing.T) {
+	var calls, leases atomic.Int32
+	u := delayedFallbackFixture(time.Second, 5*time.Second, &calls)
+	parent, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	ctx := context.WithValue(parent, dnsFallbackBudgetKey{}, dnsFallbackBorrow(func() (func(), bool) {
+		leases.Add(1)
+		return func() { leases.Add(-1) }, true
+	}))
+	_, err := u.exchange(ctx, dnsQuery(81, "expired-parent.example"))
+	if !errors.Is(err, context.DeadlineExceeded) || calls.Load() != 0 || leases.Load() != 0 {
+		t.Fatalf("expired parent started fallback work: err=%v calls=%d leases=%d", err, calls.Load(), leases.Load())
 	}
 }
 
