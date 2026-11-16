@@ -139,42 +139,80 @@ func (transport *SSHTransport) uploadCandidate(ctx context.Context, role, source
 // RemoveManagedImports removes exact inert project files in one SSH round
 // trip. File names are constrained before command construction.
 func (transport *SSHTransport) RemoveManagedImports(ctx context.Context, names ...string) error {
-	if len(names) == 0 {
+	command, receipt, err := managedImportCleanupCommand(names)
+	if err != nil {
+		return err
+	}
+	if command == "" {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(names))
-	commands := make([]string, 0, len(names)*3)
-	for index, name := range names {
-		if !managedImportNamePattern.MatchString(name) {
-			return errors.New("managed RouterOS import name is invalid")
-		}
-		if _, exists := seen[name]; exists {
-			continue
-		}
-		seen[name] = struct{}{}
-		variable := "ids" + strconv.Itoa(index)
-		commands = append(commands,
-			`:local `+variable+` [/file find where name="`+name+`"]`,
-			`:if ([:len $`+variable+`] > 1) do={ :error "ambiguous managed import" }`,
-			`:if ([:len $`+variable+`] = 1) do={ /file remove $`+variable+` }`,
-		)
-	}
+	ctx, cancel := context.WithTimeout(ctx, transport.options.Timeout)
+	defer cancel()
 	client, connection, err := transport.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer connection.Close()
 	defer client.Close()
-	_ = connection.SetDeadline(time.Now().Add(transport.options.Timeout))
+	stop := context.AfterFunc(ctx, func() { _ = connection.Close() })
+	defer stop()
+	deadline, _ := ctx.Deadline()
+	if err := connection.SetDeadline(deadline); err != nil {
+		return err
+	}
 	session, err := client.NewSession()
 	if err != nil {
 		return err
 	}
 	defer session.Close()
-	if err := session.Run(strings.Join(commands, "; ")); err != nil {
+	var output scriptReceiptTail
+	session.Stdout, session.Stderr = &output, &output
+	if err := session.Run(command); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return errors.New("remove RouterOS managed imports failed")
 	}
+	if failure := output.completionFailure(receipt); failure != "" {
+		return errors.New("RouterOS import cleanup was not confirmed (" + failure + ")")
+	}
 	return nil
+}
+
+func managedImportCleanupCommand(names []string) (string, string, error) {
+	seen := make(map[string]bool, len(names))
+	unique := make([]string, 0, len(names))
+	for _, name := range names {
+		if !managedImportNamePattern.MatchString(name) {
+			return "", "", errors.New("managed RouterOS import name is invalid")
+		}
+		if !seen[name] {
+			seen[name] = true
+			unique = append(unique, name)
+		}
+	}
+	if len(unique) == 0 {
+		return "", "", nil
+	}
+	predicates := make([]string, 0, len(unique))
+	initializers := make([]string, 0, len(unique))
+	counts := make([]string, 0, len(unique))
+	checks := make([]string, 0, len(unique))
+	for index, name := range unique {
+		counter := "count" + strconv.Itoa(index)
+		predicates = append(predicates, `name="`+name+`"`)
+		initializers = append(initializers, `:local `+counter+` 0`)
+		counts = append(counts, `:if ($actual = "`+name+`") do={ :set `+counter+` ($`+counter+` + 1) }`)
+		checks = append(checks, `:if ($`+counter+` > 1) do={ :error "ambiguous managed import" }`)
+	}
+	digest := sha256.Sum256([]byte(strings.Join(unique, "\x00")))
+	receipt := "OK:" + managedidentity.Literal("XROUTE-IMPORT-CLEANUP-") + hex.EncodeToString(digest[:])[:12]
+	commands := []string{`:local targets [/file find where (` + strings.Join(predicates, " || ") + `)]`}
+	commands = append(commands, initializers...)
+	commands = append(commands, `:foreach item in=$targets do={ :local actual [/file get $item name]; `+strings.Join(counts, "; ")+` }`)
+	commands = append(commands, checks...)
+	commands = append(commands, `:if ([:len $targets] > 0) do={ /file remove $targets }`, `:put "`+receipt+`"`)
+	return `:do { ` + strings.Join(commands, "; ") + ` } on-error={ :put "ERROR:` + strings.TrimPrefix(receipt, "OK:") + `" }`, receipt, nil
 }
 
 func sendSCPFile(ack *bufio.Reader, destination io.Writer, name string, source io.Reader, size int64) error {
