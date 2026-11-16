@@ -80,7 +80,7 @@ function MikroTik({
       setImportMessage(
         resultMessage(
           result,
-          tr("Экспорт разобран и сохранён как офлайн-снимок. Это ещё не live preflight."),
+          tr("Файл прочитан и сохранён. Для проверки текущих настроек подключитесь к RouterOS."),
         ),
       );
     } catch (error) {
@@ -108,7 +108,7 @@ function MikroTik({
                 setLiveDiscovery(asObject(discovery));
                 const result = await runDraftOperation("check");
                 setImportMessage(
-                  resultMessage(result, tr("Live preflight и проверка candidate завершены.")),
+                  resultMessage(result, tr("Проверка RouterOS и новых настроек завершена.")),
                 );
               } catch (error) {
                 setImportMessage(prefixedErrorMessage(error));
@@ -118,7 +118,7 @@ function MikroTik({
             }}
             disabled={importBusy}
           >
-            {importBusy ? tr("Проверяю…") : tr("Запустить live preflight")}
+            {importBusy ? tr("Проверяю…") : tr("Проверить RouterOS")}
           </button>
         }
       />
@@ -127,7 +127,7 @@ function MikroTik({
         <div className="version-mark">{displayedVersion.split(".")[0] || "7"}</div>
         <div>
           <p className="eyebrow">
-            {liveVersion ? tr("Обнаружено через live REST") : hasImportedSnapshot ? tr("Из безопасного экспорта") : tr("Ожидает обнаружения")}
+            {liveVersion ? tr("Получено от RouterOS") : hasImportedSnapshot ? tr("Из безопасного экспорта") : tr("Ожидает обнаружения")}
           </p>
           <h3>
             {displayedVersion ? `RouterOS ${displayedVersion}` : "RouterOS 7"} · {displayedChannel}
@@ -136,7 +136,7 @@ function MikroTik({
              {tr("Совместимость определяется по возможностям, а не по точному номеру. Long-term, stable, testing и development не блокируются сами по себе: панель показывает уровень проверенности и останавливает только новую операцию при отсутствии конкретной обязательной возможности.")} </p>
         </div>
         <StatusPill tone={liveVersion ? "ok" : hasImportedSnapshot ? "info" : "muted"}>
-          {liveVersion ? tr("Live REST подтверждён") : tr("Нужен live REST")}
+          {liveVersion ? tr("Связь с RouterOS подтверждена") : tr("Требуется связь с RouterOS")}
         </StatusPill>
       </aside>
 
@@ -167,7 +167,7 @@ function MikroTik({
             <strong>
               {exportName || tr("Выберите файл или перетащите его сюда")}
             </strong>
-            <small>{tr("Файл анализируется локальным control plane")}</small>
+            <small>{tr("Файл обрабатывается на роутере")}</small>
           </label>
           <div className="card-actions">
             <button
@@ -199,15 +199,15 @@ function MikroTik({
             <aside className="notice notice-danger">
               <span className="notice-icon">!</span>
               <div>
-                <strong>{tr(".rsc разобран офлайн — это не live preflight")}</strong>
+                <strong>{tr("Загружены сведения из файла .rsc")}</strong>
                 <p>
                   {tr("Файл даёт снимок сохранённой конфигурации, но не подтверждает текущую архитектуру, установленные пакеты, device-mode, доступность REST, kernel TPROXY, auto-restart или scheduler.")} </p>
                 <p>
-                   {tr("Найдено сетевых подсказок:")} {importedNetworks.length}{tr("; кандидатов на доверенный management ingress:")}{" "}
+                   {tr("Найдено сетевых подсказок:")} {importedNetworks.length}{tr("; предложено интерфейсов доступа:")}{" "}
                   {importedIngressSuggestions.length}{tr(". Каждая подсказка должна получить явный статус «принять» или «игнорировать».")} </p>
                 {Object.keys(importedTopologySuggestions).length ? (
                   <p>
-                     {tr("Также рассчитан непересекающийся offline-кандидат для bridge/veth/container/TUN. Он заполняет только пустые поля, не подтверждает адреса и требует вашего review плюс live discovery.")} </p>
+                     {tr("Панель предложила параметры сети контейнера по данным экспорта. Проверьте адреса и имена интерфейсов перед применением.")} </p>
                 ) : null}
                 {importedWarnings.length ? (
                   <p>
@@ -245,19 +245,19 @@ function MikroTik({
                 name === "routeros_major_7" && importedVersion.startsWith("7.");
               const status = liveDiscovery
                 ? liveValue === true
-                  ? tr("Подтверждено live REST")
+                  ? tr("Подтверждено через RouterOS REST")
                   : liveValue === false
-                    ? tr("Live REST: обязательная возможность отсутствует")
-                    : tr("Live REST не вернул однозначный результат")
+                    ? tr("В RouterOS отсутствует необходимая функция")
+                    : tr("RouterOS REST не подтвердил результат проверки")
                 : !hasImportedSnapshot
-                ? tr("Ожидает .rsc, затем обязательный live REST")
+                ? tr("Загрузите .rsc, затем проверьте RouterOS")
                 : importedValue === true
-                  ? tr("Найдено в .rsc · live ещё не подтверждено")
+                  ? tr("Найдено в .rsc; требуется проверка RouterOS")
                   : importedValue === false
-                    ? tr("Не найдено в .rsc · требуется live-проверка")
+                    ? tr("Не найдено в .rsc; требуется проверка RouterOS")
                     : isVersionMetadata
-                      ? tr("Заголовок .rsc: RouterOS {value1} · не live", { value1: importedVersion })
-                      : tr("Неопределённо · требуется live REST");
+                      ? tr("В заголовке .rsc: RouterOS {value1}", { value1: importedVersion })
+                      : tr("Нет данных; требуется проверка RouterOS");
               return (
                 <li key={name}>
                   <span>
@@ -285,7 +285,7 @@ function MikroTik({
               <div>
                 <strong>{tr("Неопределённая capability не считается успешной")}</strong>
                 <p>
-                   {tr("Кнопка live preflight обращается к текущему RouterOS по HTTPS REST. Только её результат может разрешить новый Apply.")} </p>
+                   {tr("Кнопка «Проверить RouterOS» проверяет текущие настройки через HTTPS REST. При ошибке проверки новые настройки не применяются.")} </p>
                 <div>
                    {tr("Review сетей: принято")} {reviewCounts.accepted}{tr(", проигнорировано")}{" "}
                   {reviewCounts.ignored}{tr(", ожидает решения")} {reviewCounts.pending}.
@@ -339,7 +339,7 @@ function MikroTik({
                 }
               }}
             >
-              {importBusy ? tr("Формирую…") : tr("Сформировать точный план")}
+              {importBusy ? tr("Формирую…") : tr("Сформировать план")}
             </button>
           </div>
         </div>
@@ -359,14 +359,14 @@ function MikroTik({
               planResult?.apply_mode === "state_only"
                 ? tr("Без RouterOS и перезапуска")
                 : planResult?.apply_mode === "runtime_fast"
-                ? tr("Без RouterOS и backup")
+                ? tr("Без изменений RouterOS и резервного копирования")
                 : planResult?.apply_mode === "connectivity_safe_mode"
-                  ? tr("Runtime LKG и проверки TUN/DNS")
+                  ? tr("Резервная конфигурация и проверка TUN/DNS")
                 : planResult?.apply_mode === "unchanged"
-                  ? tr("Только live-проверка")
+                  ? tr("Только проверка состояния")
                   : tr("Backup только при изменении RouterOS"),
             ],
-            ["02", tr("Точный diff"), tr("Только XRoute")],
+            ["02", tr("Список изменений"), tr("Только XRoute")],
             ["03", tr("Проверка"), tr("Маршруты и FastTrack")],
             ["04", tr("Применение"), tr("С таймером отката")],
             ["05", "Health-check", tr("Интернет и панель")],
@@ -390,7 +390,7 @@ function MikroTik({
           </div>
         ) : (
           <div className="empty-result">
-             {tr("Нажмите «Сформировать точный план»: control plane покажет реальные шаги и diff текущего черновика без изменения маршрутизатора.")} </div>
+             {tr("Нажмите «Сформировать план», чтобы посмотреть изменения текущего черновика. Настройки роутера останутся прежними.")} </div>
         )}
         <aside className="notice notice-neutral">
           <span className="notice-icon">i</span>
@@ -460,7 +460,7 @@ export function Operations({
   const checkLabels: Record<string, string> = {
     config_validation: tr("Проверка структуры черновика"),
     routeros_discovery: "RouterOS live discovery",
-    candidate_binary_validation: tr("Активное proxy-ядро и nginx candidate"),
+    candidate_binary_validation: tr("Проверка Xray и веб-сервера"),
     runtime_network_probes: tr("Внешние сетевые пробы"),
   };
   const diagnosticReasonLabels: Record<string, string> = {
@@ -823,13 +823,13 @@ export function Operations({
   async function startDiagnostics() {
     setDiagnosticsBusy(true);
     setDiagnosticsMessage(
-      tr("Проверяю черновик, RouterOS discovery, state/LKG и статус watchdog…"),
+      tr("Проверяю настройки, подключение к RouterOS, резервную конфигурацию и защиту от сбоев…"),
     );
     try {
       const result = await runDiagnostics();
       setDiagnosticsResult(asObject(result));
       setDiagnosticsMessage(
-        resultMessage(result, tr("Диагностика завершена локальным control plane.")),
+        resultMessage(result, tr("Диагностика завершена.")),
       );
     } catch (error) {
       setDiagnosticsResult(undefined);
@@ -873,7 +873,7 @@ export function Operations({
           </span>
           <div>
             <strong>
-              {diagnosticsBusy ? tr("Диагностика запущена") : tr("Ответ control plane")}
+              {diagnosticsBusy ? tr("Диагностика запущена") : tr("Результат диагностики")}
             </strong>
             <small>{diagnosticsMessage}</small>
           </div>
@@ -898,7 +898,7 @@ export function Operations({
                     : "muted"
               }
             >
-              {asText(watchdogRuntime.state, tr("Нет runtime-данных"))}
+              {asText(watchdogRuntime.state, tr("Нет данных о работе служб"))}
             </StatusPill>
           </div>
           <p className="eyebrow">{tr("Фактическая настройка черновика")}</p>
@@ -942,7 +942,7 @@ export function Operations({
             </StatusPill>
           </div>
           <p className="eyebrow">{tr("Фактическое состояние")}</p>
-          <h3>{tr("Результат локального control plane")}</h3>
+          <h3>{tr("Результат проверки")}</h3>
           {Object.keys(diagnosticsChecks).length ? (
             <ul className="validation-list">
               {Object.entries(diagnosticsChecks).map(([id, raw]) => {
@@ -983,7 +983,7 @@ export function Operations({
               {tr("В черновике:")} {configuredXrayLogLevel}
             </StatusPill>
           </div>
-          <p>{tr("Xray, control plane, nginx и обновления — без входа в shell контейнера.")}</p>
+          <p>{tr("Журналы Xray, панели, веб-сервера и обновлений.")}</p>
         </div>
         <button className="button button-secondary" type="button" onClick={() => {
           setXrayLogLevel(configuredXrayLogLevel);
@@ -1205,7 +1205,7 @@ export function Operations({
             <form onSubmit={startImageUpdate}>
               <p className="eyebrow">{tr("Образ шлюза")}</p>
               <h2 id="image-update-title">{tr("Безопасное обновление контейнера")}</h2>
-              <p className="modal-lead">{tr("RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт health-check.")}</p>
+              <p className="modal-lead">{tr("RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт проверку работоспособности.")}</p>
               <label className="field browser-image-upload" htmlFor="container-image-archive">
                  {tr("Новый образ XRoute · один .tar")} <input id="container-image-archive" type="file" accept=".tar,application/x-tar,application/octet-stream" aria-describedby="container-image-upload-help" disabled={imageUploadBusy || lifecycleBusy} onChange={(event) => { void uploadImageFromBrowser(event.target.files?.[0]); event.currentTarget.value = ""; }} />
                 <small id="container-image-upload-help">{imageUploadBusy ? tr("Записываю прямо на SSD…") : tr("Панель проверит XRoute, совместимость архитектуры и SHA-256. Второй архив и файл .sha256 не нужны.")}</small>
@@ -1218,7 +1218,7 @@ export function Operations({
                   </div>
                 </div>
               ) : null}
-              {candidateReference ? <div className="notice notice-success lifecycle-candidate-notice"><span className="notice-icon">✓</span><div><strong>{tr("Образ")} {candidateVersion}  {tr("проверен и готов")}</strong><p>SHA-256: {candidateChecksum.slice(0, 16)}{tr("… Проверен за один потоковый проход.")}</p></div></div> : null}
+              {candidateReference ? <div className="notice notice-success lifecycle-candidate-notice"><span className="notice-icon">✓</span><div><strong>{tr("Образ")} {candidateVersion}  {tr("проверен и готов")}</strong><p>SHA-256: {candidateChecksum.slice(0, 16)}{tr("… Архитектура и контрольная сумма проверены.")}</p></div></div> : null}
               {updateDialogOpen && lifecycleMessage ? <div className={`inline-result ${isErrorMessage(lifecycleMessage) ? "inline-result-error" : ""}`} role={isErrorMessage(lifecycleMessage) ? "alert" : "status"}><span>{isErrorMessage(lifecycleMessage) ? "!" : "i"}</span>{lifecycleMessage}</div> : null}
               <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Обновить контейнер с автоматическим откатом")}</strong><small>{tr("Панель временно перезапустится; маршрутизация заранее перейдёт в fail-open.")}</small></span></label>
               <aside className="notice notice-neutral"><span className="notice-icon">i</span><div><strong>{tr("Перед остановкой запускается автоматическая проверка")}</strong><p>{tr("RouterOS проверяет project-owned объекты, отключает diversion и сохраняет прежний контейнер для отката.")}</p></div></aside>
@@ -1295,7 +1295,7 @@ export function Operations({
                   {tr("Процесс и panic")}
                 </button>
                 <button id="gateway-log-tab-system" type="button" role="tab" aria-controls="xray-log-panel" aria-selected={xrayLogSource === "system"} className={xrayLogSource === "system" ? "is-active" : ""} onClick={() => setXrayLogSource("system")}>
-                  {tr("Control plane")}
+                  {tr("Панель")}
                 </button>
                 <button id="gateway-log-tab-routing" type="button" role="tab" aria-controls="xray-log-panel" aria-selected={xrayLogSource === "routing"} className={xrayLogSource === "routing" ? "is-active" : ""} onClick={() => setXrayLogSource("routing")}>
                   {tr("Маршруты")}

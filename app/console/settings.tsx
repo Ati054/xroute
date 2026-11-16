@@ -130,7 +130,7 @@ export function Settings({
   const liveContainer = asObject(routeros.container);
   const usbPath = asText(
     liveContainer.root_dir,
-    asText(currentStorage.root, tr("Live REST недоступен")),
+    asText(currentStorage.root, tr("RouterOS REST недоступен")),
   );
   const panelHosts = Array.from(new Set(asObjectList(connectionSnapshot.local_addresses)
     .filter((row) => managementIngressInterfaces.includes(asText(row.interface, "")) && row.interface !== containerBridgeName)

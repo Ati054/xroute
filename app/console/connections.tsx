@@ -1375,7 +1375,7 @@ export function Connections({
                       setSubscriptionMessage(
                         resultMessage(
                           result,
-                          tr("Candidate подписки проверен локальным control plane."),
+                          tr("Подписка проверена."),
                         ),
                       );
                     } catch (error) {
@@ -1805,7 +1805,7 @@ export function Connections({
               <p className="modal-lead">{tr("Узел используется только для обновления недоступных подписок и не участвует в пользовательском трафике.")}</p>
               <div className="form-grid form-grid-single">
                 <label className="field">{tr("Понятное имя")}<input value={reserveName} maxLength={96} placeholder={tr("Резерв · Польша Reality")} onChange={(event) => setReserveName(event.target.value)} /></label>
-                <label className="field">{tr("Ссылка VLESS")}<input type="password" autoComplete="off" value={reserveLink} placeholder={editingReserveId ? tr("Оставьте пустым, чтобы сохранить текущую") : "vless://…"} onChange={(event) => setReserveLink(event.target.value)} /><small>{tr("UUID хранится только в SecretStore и не возвращается в браузер.")}</small></label>
+                <label className="field">{tr("Ссылка VLESS")}<input type="password" autoComplete="off" value={reserveLink} placeholder={editingReserveId ? tr("Оставьте пустым, чтобы сохранить текущую") : "vless://…"} onChange={(event) => setReserveLink(event.target.value)} /><small>{tr("UUID сохраняется на сервере и не возвращается в браузер.")}</small></label>
               </div>
               {reserveMessage ? <div className={`inline-result ${isErrorMessage(reserveMessage) ? "inline-result-error" : ""}`} role={isErrorMessage(reserveMessage) ? "alert" : "status"}><span>{isErrorMessage(reserveMessage) ? "!" : "✓"}</span>{reserveMessage}</div> : null}
               <div className="modal-actions modal-actions-split">

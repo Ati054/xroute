@@ -2727,7 +2727,7 @@ export function RouterSourcePicker({
         </button>
       </div>
       {busy ? (
-        <div className="subscription-discovery-empty">{tr("Читаю безопасный список с подключённого MikroTik…")}</div>
+        <div className="subscription-discovery-empty">{tr("Получаю список сетей с MikroTik…")}</div>
       ) : error ? (
         <div className="inline-result inline-result-error" role="alert"><span>!</span>{error}</div>
       ) : visibleRows.length ? (
@@ -3523,7 +3523,7 @@ export function DirectServicePackPicker({
                           : tr("официальные endpoints релиза")}`}
                 </small>
                 <small>{tr(pack.description)}</small>
-                {pack.broad ? <small>{tr("Широкое правило — включайте осознанно")}</small> : null}
+                {pack.broad ? <small>{tr("Широкое правило: проверьте состав перед включением")}</small> : null}
               </span>
             </label>
             {onRemovePack && !locked.has(pack.id) ? (

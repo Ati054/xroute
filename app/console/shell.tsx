@@ -786,7 +786,7 @@ export function GatewayConsole({
               disabled={preparingApply || revisionState === "loading" || !hasPendingAction}
               title={
                 runtimeUpdateOnly
-                  ? tr("Проверить, затрагивает ли обновление runtime или управляемые правила RouterOS")
+                  ? tr("Посмотреть изменения настроек контейнера и правил RouterOS")
                   : revisionState === "loading"
                     ? tr("Сначала дождитесь загрузки ревизий")
                     : revisionState === "applied"
@@ -942,7 +942,7 @@ export function GatewayConsole({
                             operation: "applied_after_reconnect",
                             revision: targetRevision,
                             message:
-                              tr("Связь с запросом прерывалась, но control plane подтвердил, что именно эта ревизия успешно применена."),
+                              tr("Связь прерывалась. Панель подтвердила, что эта версия настроек применена."),
                           };
                         }
                       } catch {

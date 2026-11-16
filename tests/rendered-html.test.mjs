@@ -127,7 +127,7 @@ test("builds the Russian static management panel", async () => {
   );
   assert.match(html, /Проверяем локальный сеанс/);
   assert.doesNotMatch(html, /Отказ панели не отключает интернет/);
-  assert.match(html, /HTTPS · management LAN/);
+  assert.match(html, /HTTPS · локальная сеть/);
   assert.doesNotMatch(html, /Интернет работает штатно/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
@@ -329,7 +329,7 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.doesNotMatch(css, /\.client-routing-execution-grid/);
   assert.match(page, /secret_values: \{ certificate, private_key: privateKey \}/);
   assert.match(page, /Добавить TLS-профиль/);
-  assert.match(page, /Связанные транспорты получат изменения после Apply/);
+  assert.match(page, /Связанные подключения обновятся после применения настроек/);
   assert.match(page, /Через CDN \+ TLS/);
   assert.match(page, /Прямые \+ REALITY/);
   assert.match(page, /Hysteria 2/);
@@ -536,12 +536,12 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.match(page, /Есть обновление шлюза/);
   assert.match(page, /доступно обновление компонентов шлюза/);
   assert.match(page, /Применить обновление/);
-  assert.match(page, /Обновить runtime/);
+  assert.match(page, /Обновить настройки контейнера/);
   assert.match(page, /Применить с автооткатом/);
   assert.match(page, /Будет выполнено/);
   assert.doesNotMatch(page, /Для подтверждения введите/);
-  assert.match(page, /\.rsc разобран офлайн — это не live preflight/);
-  assert.match(page, /Неопределённо · требуется live REST/);
+  assert.match(page, /Загружены сведения из файла \.rsc/);
+  assert.match(page, /Нет данных; требуется проверка RouterOS/);
   assert.match(page, /management_ingress_suggestions/);
   assert.match(
     page,
@@ -566,8 +566,8 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.match(page, /topology_suggestions/);
   assert.match(page, /management_network_suggestions/);
   assert.match(page, /if \(!current\.trim\(\) && candidate\)/);
-  assert.match(page, /Заполнены офлайн-кандидаты/);
-  assert.match(page, /Вы подтверждаете офлайн-кандидаты/);
+  assert.match(page, /Предложенные параметры:/);
+  assert.match(page, /Проверьте параметры перед сохранением/);
   assert.match(page, /addresses_confirmed:\s*false/);
   assert.match(page, /address_confirmed:\s*false/);
   assert.match(page, /bridge_name:\s*bridgeName/);

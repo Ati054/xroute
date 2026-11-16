@@ -213,8 +213,8 @@ export function ApplyDialog({
               {resultMessage(
                 result,
                 mode === "check"
-                  ? tr("Control plane завершил проверку candidate. Рабочая конфигурация не менялась.")
-                  : tr("Control plane подтвердил завершение безопасного применения."),
+                  ? tr("Проверка настроек завершена. Рабочая конфигурация не менялась.")
+                  : tr("Проверки завершены."),
               )}
             </p>
             <button className="button button-primary" onClick={onClose}>
@@ -241,25 +241,25 @@ export function ApplyDialog({
                 : isStateOnly
                   ? tr("Сохранить изменения")
                 : isRuntimeFast
-                  ? tr("Обновить runtime")
+                  ? tr("Обновить настройки контейнера")
                   : isConnectivitySafeMode
                     ? tr("Безопасно обновить связность")
                   : tr("Применить проверенный черновик")}
             </h2>
             <p className="modal-lead">
               {mode === "check"
-                ? tr("Панель сгенерирует candidate и запустит все проверки, но ничего не перезапустит.")
+                ? tr("Панель проверит новые настройки. Рабочие службы продолжат работу.")
                 : planBusy
-                  ? tr("Панель сравнивает фактический RouterOS-кандидат с активным и выбирает необходимый уровень защиты.")
+                  ? tr("Панель определяет изменения и выбирает необходимые проверки.")
                   : isStateOnly
-                    ? tr("Рендер уже доказал, что runtime и RouterOS побайтно не меняются. Панель обновит только сохранённые названия и указатели состояния — без сети, backup и перезапуска.")
+                    ? tr("Изменились только названия и другие служебные данные. Панель сохранит их без перезапуска служб и изменения правил RouterOS.")
                   : isRuntimeFast
-                    ? tr("RouterOS не меняется. Панель проверит и атомарно обновит только контейнер, сохранив предыдущий runtime как last-known-good.")
+                    ? tr("Панель проверит и обновит настройки контейнера. Правила RouterOS останутся прежними. При ошибке панель восстановит рабочие настройки.")
                     : isConnectivitySafeMode
-                      ? tr("RouterOS не меняется, но затронуты TUN, DNS, ядро или правила управляемого трафика. Панель вооружит runtime LKG, проверит связность и автоматически вернёт предыдущую версию при ошибке.")
+                      ? tr("Изменения затрагивают TUN, DNS или маршруты контейнера. Панель сохранит рабочие настройки, проверит связь и восстановит их при ошибке.")
                     : isUnchanged
-                      ? tr("RouterOS и контейнер уже соответствуют черновику; останется только повторная live-проверка.")
-                      : tr("Изменения затрагивают RouterOS. Панель создаст backup, вооружит локальный автооткат и сохранит патч только после проверки связи.")}
+                      ? tr("RouterOS и контейнер уже соответствуют черновику. Панель повторно проверит их состояние.")
+                      : tr("Панель создаст резервную копию RouterOS и включит автоматический откат. Новые правила сохранятся после проверки связи.")}
             </p>
             {mode === "apply" ? (
               planBusy ? (
@@ -297,7 +297,7 @@ export function ApplyDialog({
                   <span className="notice-icon">✓</span>
                   <div>
                     <strong>{tr("Только метаданные — трафик не затрагивается")}</strong>
-                    <p>{tr("Live RouterOS, backup, Safe Mode, runtime reload и health-check не требуются.")}</p>
+                    <p>{tr("Перезапуск служб и изменение правил роутера не нужны.")}</p>
                   </div>
                 </aside>
               ) : isRuntimeFast ? (
@@ -305,7 +305,7 @@ export function ApplyDialog({
                   <span className="notice-icon">✓</span>
                   <div>
                     <strong>{tr("Только контейнер — RouterOS не изменяется")}</strong>
-                    <p>{tr("Новый backup и Safe Mode не нужны. При ошибке runtime автоматически вернётся к предыдущей рабочей версии.")}</p>
+                    <p>{tr("При ошибке панель восстановит предыдущие настройки контейнера.")}</p>
                   </div>
                 </aside>
               ) : isConnectivitySafeMode ? (
@@ -313,7 +313,7 @@ export function ApplyDialog({
                   <span className="notice-icon">↺</span>
                   <div>
                     <strong>{tr("RouterOS не меняется — защищаем связность контейнера")}</strong>
-                    <p>{tr("Runtime LKG будет сохранён до проверки TUN, DNS и управляемых маршрутов. RouterOS backup и SSH Safe Mode не требуются.")}</p>
+                    <p>{tr("Перед обновлением сохранятся рабочие настройки. Панель проверит TUN, DNS и маршруты; при ошибке восстановит прежние настройки.")}</p>
                   </div>
                 </aside>
               ) : isUnchanged ? (
@@ -321,7 +321,7 @@ export function ApplyDialog({
                   <span className="notice-icon">i</span>
                   <div>
                     <strong>{tr("Изменений для применения нет")}</strong>
-                    <p>{tr("Backup, Safe Mode и перезапуск контейнера выполняться не будут.")}</p>
+                    <p>{tr("Резервное копирование, изменение правил и перезапуск контейнера не требуются.")}</p>
                   </div>
                 </aside>
               ) : isRouterOsSafeMode ? (
@@ -337,22 +337,22 @@ export function ApplyDialog({
             <ol className="modal-steps">
               <li>
                 <span>1</span>
-                {isStateOnly ? tr("Схема и локальный diff") : tr("Схема и секреты")}
+                {isStateOnly ? tr("Проверка структуры и изменений") : tr("Проверка параметров")}
                 <StatusPill tone="muted">{tr("Будет выполнено")}</StatusPill>
               </li>
               <li>
                 <span>2</span>
-                {isStateOnly ? tr("Побайтовый runtime proof") : tr("Проверка выбранного ядра")}
+                {isStateOnly ? tr("Проверка настроек контейнера") : tr("Проверка выбранного ядра")}
                 <StatusPill tone="muted">{isStateOnly ? tr("Выполнено в плане") : tr("Будет выполнено")}</StatusPill>
               </li>
               <li>
                 <span>3</span>
-                {isStateOnly ? "RouterOS candidate proof" : "nginx -t"}
+                {isStateOnly ? tr("Проверка правил RouterOS") : tr("Проверка веб-сервера")}
                 <StatusPill tone="muted">{isStateOnly ? tr("Выполнено в плане") : tr("Будет выполнено")}</StatusPill>
               </li>
               <li>
                 <span>4</span>
-                {isStateOnly ? tr("Коммит метаданных") : "Live RouterOS preflight"}
+                {isStateOnly ? tr("Сохранение данных") : tr("Проверка RouterOS")}
                 <StatusPill tone="muted">{isStateOnly ? tr("Будет выполнено") : tr("Будет выполнено")}</StatusPill>
               </li>
             </ol>
@@ -362,21 +362,21 @@ export function ApplyDialog({
                 <div>
                   <strong>
                     {mode === "apply"
-                      ? tr("{value1} выполняется · {value2}", { value1: isStateOnly ? tr("Сохранение метаданных") : isRuntimeFast ? tr("Быстрое применение") : isConnectivitySafeMode ? tr("Защита связности") : isUnchanged ? tr("Live-проверка") : "Safe Mode", value2: formatElapsed(elapsedSeconds) })
+                      ? tr("{value1} выполняется · {value2}", { value1: isStateOnly ? tr("Сохранение метаданных") : isRuntimeFast ? tr("Быстрое применение") : isConnectivitySafeMode ? tr("Защита связности") : isUnchanged ? tr("Проверка состояния") : tr("Применение настроек"), value2: formatElapsed(elapsedSeconds) })
                       : tr("Проверка выполняется · {value1}", { value1: formatElapsed(elapsedSeconds) })}
                   </strong>
                   <small>
                     {mode === "apply"
                       ? isStateOnly
-                        ? tr("Панель коммитит только локальное состояние без обращения к RouterOS и без перезапуска контейнера.")
+                        ? tr("Панель сохраняет служебные данные без обращения к RouterOS и перезапуска контейнера.")
                         : isRuntimeFast
-                        ? tr("Панель обновляет только runtime контейнера и проверяет его готовность.")
+                        ? tr("Панель обновляет настройки контейнера и проверяет работу служб.")
                         : isConnectivitySafeMode
-                          ? tr("Панель активирует кандидат под защитой runtime LKG и проверяет TUN, DNS и маршруты.")
+                          ? tr("Панель обновляет настройки контейнера и проверяет DNS, TUN и маршруты.")
                         : isUnchanged
-                          ? tr("Панель подтверждает актуальное состояние без перезапуска и backup.")
-                          : tr("Панель остаётся доступной и ждёт backup, применение, health-check и подтверждение RouterOS.")
-                      : tr("Control plane проверяет RouterOS и сгенерированные конфигурации.")}
+                          ? tr("Панель проверяет текущее состояние без перезапуска и резервного копирования.")
+                          : tr("Дождитесь резервного копирования, применения правил и проверки связи.")
+                      : tr("Панель проверяет RouterOS и новые настройки.")}
                   </small>
                 </div>
               </div>
@@ -426,7 +426,7 @@ export function ApplyDialog({
                   <span>
                     <strong>
                       {isRuntimeFast
-                        ? tr("Разрешаю обновить runtime контейнера")
+                        ? tr("Разрешаю обновить настройки контейнера")
                         : isStateOnly
                           ? tr("Разрешаю сохранить только метаданные")
                         : isConnectivitySafeMode
@@ -435,13 +435,13 @@ export function ApplyDialog({
                     </strong>
                     <small>
                       {isStateOnly
-                        ? tr("Ни RouterOS, ни runtime-файлы изменены не будут.")
+                        ? tr("Правила RouterOS и настройки служб останутся прежними.")
                         : isRuntimeFast
-                        ? tr("Будет изменён только контейнер; при ошибке вернётся предыдущий runtime.")
+                        ? tr("При ошибке обновления контейнера панель восстановит прежние настройки.")
                         : isConnectivitySafeMode
-                          ? tr("Будут проверены TUN, DNS и управляемые маршруты; при ошибке вернётся runtime LKG.")
+                          ? tr("Панель проверит TUN, DNS и маршруты. При ошибке восстановит рабочие настройки.")
                         : isUnchanged
-                          ? tr("Будет выполнена только повторная live-проверка.")
+                          ? tr("Панель только повторно проверит текущее состояние.")
                           : tr("Изменения RouterOS защищены резервной копией и автоматическим откатом.")}  {tr("Галочка действует только для этой попытки Apply.")} </small>
                   </span>
                 </label>
@@ -478,11 +478,11 @@ export function ApplyDialog({
                   : mode === "check"
                     ? tr("Начать проверку")
                     : isRuntimeFast
-                      ? tr("Обновить runtime")
+                      ? tr("Обновить настройки контейнера")
                       : isStateOnly
                         ? tr("Сохранить метаданные")
                       : isConnectivitySafeMode
-                        ? tr("Обновить под защитой LKG")
+                        ? tr("Применить с проверкой связи")
                       : isUnchanged
                         ? tr("Подтвердить состояние")
                         : tr("Применить с автооткатом")}
@@ -556,7 +556,7 @@ export function RollbackDialog({
             <p>
               {resultMessage(
                 result,
-                tr("Control plane восстановил предыдущую проверенную LKG-версию."),
+                tr("Предыдущие рабочие настройки восстановлены."),
               )}
             </p>
             <button className="button button-primary" onClick={onClose}>
@@ -568,7 +568,7 @@ export function RollbackDialog({
             <h2 id="rollback-title">
                {tr("Откатить к предыдущей проверенной версии?")} </h2>
             <p className="modal-lead">
-               {tr("Control plane проверит сохранённую LKG-конфигурацию и выполнит управляемый rollback. Локальный fail-open остаётся отдельной защитой интернета при сбое контейнера.")} </p>
+               {tr("Панель проверит и восстановит предыдущие рабочие настройки. При недоступности контейнера локальные устройства выйдут через WAN, если это разрешено в их настройках.")} </p>
             <label className="field">
                {tr("Текущий пароль администратора")} <input
                 ref={passwordRef}
@@ -587,15 +587,15 @@ export function RollbackDialog({
               />
               <span>
                 <strong>{tr("Подтверждаю откат к предыдущей проверенной версии")}</strong>
-                <small>{tr("Произвольный backup выбран не будет.")}</small>
+                <small>{tr("Откат использует сохранённую рабочую версию.")}</small>
               </span>
             </label>
             <aside className="notice notice-neutral">
               <span className="notice-icon">i</span>
               <div>
-                <strong>{tr("Операция не выбирает произвольный backup")}</strong>
+                <strong>{tr("Восстановление рабочей версии")}</strong>
                 <p>
-                   {tr("Восстанавливается только предыдущая проверенная генерация, известная локальному control plane.")} </p>
+                   {tr("Панель восстановит сохранённую рабочую конфигурацию.")} </p>
               </div>
             </aside>
             {operationError ? (

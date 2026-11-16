@@ -354,7 +354,7 @@ export function AddDialog({
         detail: [
           configuredNetwork
             ? tr("Маршрут уже настроен в MikroTik")
-            : tr("Обнаружен автоматически; полный доступ использует live-набор"),
+            : tr("Обнаружен автоматически; полный доступ учитывает текущие подсети"),
           comment,
         ]
           .filter(Boolean)
@@ -382,7 +382,7 @@ export function AddDialog({
             network.kind === "management"
               ? tr("Сеть управления")
               : tr("Внутренняя подсеть"),
-          detail: tr("Подсеть из группы «{value1}»; live-маршрут временно недоступен", { value1: network.displayName }),
+          detail: tr("Подсеть из группы «{value1}»; текущий маршрут временно недоступен", { value1: network.displayName }),
         })),
   );
   const destinationEntries =
@@ -916,7 +916,7 @@ export function AddDialog({
                            {tr("Читаю сети назначения из таблицы маршрутов MikroTik…")} </div>
                       ) : routerSources.error ? (
                         <div className="lan-access-source-status lan-access-source-status-warn">
-                           {tr("Live RouterOS сейчас недоступен. Показаны только подсети из черновика; транспортные адреса /32 скрыты.")} </div>
+                           {tr("Нет связи с RouterOS. Показаны подсети из черновика; служебные адреса /32 скрыты.")} </div>
                       ) : null}
                       <div className="lan-network-list">
                         {visibleNetworkOptions.length ? (

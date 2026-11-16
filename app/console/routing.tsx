@@ -1228,7 +1228,7 @@ function RoutingInfrastructureSettings({
               ) : routerosInventoryError ? (
                 <div className="inline-result inline-result-error wireguard-inventory-error" role="alert">
                   <span>!</span>
-                  <span>{tr("Не удалось получить live-инвентаризацию RouterOS:")} {routerosInventoryError}</span>
+                  <span>{tr("Не удалось получить текущие настройки RouterOS:")} {routerosInventoryError}</span>
                   <button
                     className="button button-secondary button-compact"
                     type="button"

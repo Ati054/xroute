@@ -2,7 +2,8 @@
 
 import { JsonObject, createCollectionItem, getCurrentDraft, importRouterOsExport, provisionRouterOsCredentials, saveCurrentDraft, updateCollectionItem } from "../api-client";
 import { useLanguage } from "../i18n";
-import { NetworkReviewStatus, StatusPill, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, errorMessage, importedNetworkKind, isExplicitRouterHttpsOrigin, isIpv4Cidr, networkReviewStatus, routerCapabilityLabels, routerImportWarningText, withDeploymentReadiness } from "./shared";
+import { initialWizardInternalCidrs, retainedWizardNetworks, wizardInternalNetworks } from "../wizard-networks";
+import { NetworkReviewStatus, StatusPill, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, errorMessage, importedNetworkKind, isExplicitRouterHttpsOrigin, isIpv4Cidr, networkReviewStatus, routerImportWarningText, withDeploymentReadiness } from "./shared";
 import { useEffect, useRef, useState } from "react";
 
 export function SetupWizard({
@@ -33,15 +34,6 @@ export function SetupWizard({
     initialImportReview.management_network_suggestions,
   );
   const initialReviewNetworks = asObjectList(initialImportReview.networks);
-  const initialConfiguredCidrs = new Set(
-    asObjectList(initialConfig.networks)
-      .filter(
-        (network) =>
-          network.enabled !== false &&
-          ["internal", "management"].includes(asText(network.kind, "internal")),
-      )
-      .flatMap((network) => asStringList(network.cidrs)),
-  );
   const configuredManagementCidr =
     asStringList(initialManagement.allowed_source_cidrs)[0] ?? "";
   const configuredBridgeName = asText(initialNetworking.bridge_name, "");
@@ -102,7 +94,7 @@ export function SetupWizard({
   const [exportName, setExportName] = useState("");
   const [exportFile, setExportFile] = useState<File | null>(null);
   const [channel, setChannel] = useState(
-    asText(initialRouteros.channel, tr("не определён из .rsc")),
+    asText(initialRouteros.channel, tr("Нет данных в экспорте")),
   );
   const [managementCidr, setManagementCidr] = useState(
     configuredManagementCidr ||
@@ -147,14 +139,7 @@ export function SetupWizard({
       asText(initialTopologySuggestions.container_dns, ""),
   );
   const [internalNetworks, setInternalNetworks] = useState<string[]>(
-    initialReviewNetworks
-      .filter(
-        (item) =>
-          networkReviewStatus(item.status) === "accepted" &&
-          !initialConfiguredCidrs.has(asText(item.cidr, "")),
-      )
-      .map((item) => asText(item.cidr, ""))
-      .filter(Boolean),
+    initialWizardInternalCidrs(asObjectList(initialConfig.networks), initialReviewNetworks),
   );
   const [discoveredNetworks, setDiscoveredNetworks] = useState<string[]>(
     initialReviewNetworks
@@ -173,7 +158,6 @@ export function SetupWizard({
         .filter(([cidr]) => Boolean(cidr)),
     ),
   );
-  const [importCapabilities, setImportCapabilities] = useState<JsonObject>({});
   const [importWarnings, setImportWarnings] = useState<string[]>(
     asStringList(initialImportReview.posture_warnings),
   );
@@ -239,7 +223,7 @@ export function SetupWizard({
           await onDraftChanged();
         } catch (error) {
           setWizardMessage(
-            tr("Не удалось сбросить подтверждение offline-кандидатов: {value1}", { value1: errorMessage(error) }),
+            tr("Не удалось сбросить подтверждение адресов: {value1}", { value1: errorMessage(error) }),
           );
         }
       })();
@@ -278,9 +262,6 @@ export function SetupWizard({
       (networkStatusFilter === "all" || status === networkStatusFilter)
     );
   });
-  const unknownImportCapabilities = routerCapabilityLabels.filter(
-    ([name]) => typeof importCapabilities[name] !== "boolean",
-  );
   const isOfflinePrefilled = (
     field: string,
     value: string,
@@ -374,7 +355,7 @@ export function SetupWizard({
         return;
       }
       if (!Number.isInteger(routerSshPort) || routerSshPort < 1 || routerSshPort > 65535) {
-        setWizardMessage(tr("Укажите действующий SSH-порт RouterOS для Safe Mode."));
+        setWizardMessage(tr("Укажите действующий SSH-порт RouterOS."));
         routerSshPortRef.current?.focus();
         return;
       }
@@ -393,7 +374,7 @@ export function SetupWizard({
         if (typeof discovered.channel === "string") {
           setChannel(discovered.channel);
         } else {
-          setChannel(tr("не определён из .rsc"));
+          setChannel(tr("Нет данных в экспорте"));
         }
         const importedInventory = asObjectList(resultObject.network_inventory);
         const fallbackSuggestions = asStringList(
@@ -490,7 +471,9 @@ export function SetupWizard({
           const newlyAccepted = suggestedNetworks.filter(
             (cidr) =>
               networkReviewStatus(importedDecisions[cidr]) === "accepted" &&
-              !initialConfiguredCidrs.has(cidr),
+              !retainedWizardNetworks(asObjectList(initialConfig.networks)).some(
+                (network) => asStringList(network.cidrs).includes(cidr),
+              ),
           );
           return [...new Set([...retained, ...newlyAccepted])];
         });
@@ -502,7 +485,6 @@ export function SetupWizard({
         setOfflinePrefilledFields((current) => [
           ...new Set([...current, ...newlyPrefilled]),
         ]);
-        setImportCapabilities(asObject(discovered.capabilities));
         setImportWarnings(asStringList(resultObject.warnings));
         setImportAnalyzed(true);
         if (
@@ -677,18 +659,8 @@ export function SetupWizard({
       const dns = asObject(config.dns);
 
       const existingNetworks = asObjectList(config.networks);
-      const retainedNetworks = existingNetworks.filter(
-        (network) =>
-          !["wizard-internal-", "management-lan"].some((prefix) =>
-            String(network.id ?? "").startsWith(prefix),
-          ),
-      );
-      const wizardNetworks = internalNetworks.map((cidr, index) => ({
-        id: `wizard-internal-${index + 1}`,
-        enabled: true,
-        kind: "internal",
-        cidrs: [cidr],
-      }));
+      const retainedNetworks = retainedWizardNetworks(existingNetworks);
+      const wizardNetworks = wizardInternalNetworks(existingNetworks, internalNetworks);
       const nextNetworks = [
         ...retainedNetworks,
         ...wizardNetworks,
@@ -799,10 +771,9 @@ export function SetupWizard({
         </button>
         <div className="setup-heading">
           <div>
-            <p className="eyebrow">{tr("Первичная настройка")}</p>
-            <h2 id="setup-title">{tr("Подготовим шлюз без догадок")}</h2>
+            <h2 id="setup-title">{tr("Настройка XRoute")}</h2>
             <p>
-               {tr("Мастер собирает реальные параметры в черновик. Ничего не применяется до preflight, backup и вашего подтверждения.")} </p>
+               {tr("Укажите параметры RouterOS и сети. Изменения применятся после проверки и вашего подтверждения.")} </p>
           </div>
           <StatusPill tone="info">
              {tr("Шаг")} {step + 1}  {tr("из")} {steps.length}
@@ -826,7 +797,7 @@ export function SetupWizard({
             <div>
               <h3>{tr("Сначала разберём офлайн-снимок конфигурации")}</h3>
               <p>
-                 {tr("Загрузите обычный")} <code>{tr("/export file=имя")}</code>  {tr("без флага show-sensitive. Панель прочитает сохранённые интерфейсы, маршруты, VPN и FastTrack. Архитектура, пакеты, device-mode, накопители и доступность REST подтверждаются только последующим live preflight.")} </p>
+                 {tr("Загрузите обычный")} <code>{tr("/export file=имя")}</code>  {tr("без флага show-sensitive. Панель прочитает интерфейсы, маршруты, VPN и FastTrack из файла. Перед применением она проверит текущую архитектуру, пакеты, device-mode, накопители и доступность REST.")} </p>
               <label className="drop-zone">
                 <input
                   type="file"
@@ -857,7 +828,7 @@ export function SetupWizard({
                      {tr("RouterOS REST обслуживается службой www-ssl, не api-ssl. В URL укажите выбранный свободный порт; TCP 443 нельзя считать свободным по умолчанию. В Available From оставьте ровно выбранные management CIDR и container /32, без 0.0.0.0/0. Только HTTPS, проверка сертификата не отключается.")} </small>
                 </label>
                 <label className="field">
-                   {tr("SSH-порт RouterOS для Safe Mode")} <input
+                   {tr("SSH-порт RouterOS")} <input
                     ref={routerSshPortRef}
                     type="number"
                     min={1}
@@ -895,41 +866,38 @@ export function SetupWizard({
                   <small>{tr("Отдельный пароль не требуется")}</small>
                 </div>
                 <label className="field form-span">
-                   {tr("CA certificate PEM для RouterOS (если не публичный CA)")} <textarea
+                   {tr("Сертификат CA для RouterOS (PEM)")} <textarea
                     ref={routerCaRef}
                     rows={5}
                     autoComplete="off"
                     placeholder="-----BEGIN CERTIFICATE-----"
                   />
                   <small>
-                     {tr("Оставьте пустым только для сертификата, уже доверенного системным хранилищем. Режима insecure skip нет.")} </small>
+                     {tr("Для локального сертификата вставьте публичный сертификат CA. Для сертификата из доверенного системного хранилища оставьте поле пустым.")} </small>
                 </label>
               </div>
               <div className="wizard-inline-fields">
                 <label className="field">
-                   {tr("Канал из .rsc · только офлайн-метаданные")} <input
+                   {tr("Канал обновлений из экспорта")} <input
                     value={channel}
                     readOnly
                   />
                   <small>
-                     {tr("Любой канал RouterOS 7 разрешён; Apply проверяет только capabilities и не переключает канал.")} </small>
+                     {tr("Панель проверит необходимые функции RouterOS и сохранит выбранный канал обновлений.")} </small>
                 </label>
                 <div className="locked-field">
                   <span>{tr("Проверка версии")}</span>
-                  <strong>{tr("По возможностям RouterOS 7")}</strong>
-                  <small>{tr("Без точного hardcode номера")}</small>
+                  <strong>{tr("Совместимость с RouterOS 7")}</strong>
+                  <small>{tr("Версию и необходимые функции проверим перед применением.")}</small>
                 </div>
               </div>
               {importAnalyzed ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
-                    <strong>{tr(".rsc импортирован, но live preflight ещё не выполнен")}</strong>
+                    <strong>{tr("Требуется проверка RouterOS")}</strong>
                     <p>
-                       {tr("Неопределённых обязательных capabilities:")}{" "}
-                      {unknownImportCapabilities.length}{tr(". Неизвестное состояние никогда не считается успешной проверкой.")} </p>
-                    <p>
-                       {tr("После настройки мастер сохранит черновик. Перед Apply control plane заново прочитает текущий RouterOS через HTTPS REST и проверит все обязательные возможности.")} </p>
+                       {tr("При применении панель подключится к RouterOS и проверит версию, пакеты и настройки сети.")} </p>
                     {importWarnings.length ? (
                       <ul>
                         {importWarnings.map((warning) => (
@@ -946,9 +914,9 @@ export function SetupWizard({
                 <aside className="notice notice-safe">
                   <span className="notice-icon">✓</span>
                   <div>
-                    <strong>{tr("Сохранённый импорт и HTTPS REST уже готовы")}</strong>
+                    <strong>{tr("Подключение к RouterOS сохранено")}</strong>
                     <p>
-                       {tr("Можно продолжить review без повторной загрузки `.rsc` и без повторного ввода секретов. Live preflight всё равно будет выполнен перед Apply.")} </p>
+                       {tr("Продолжите настройку с сохранёнными параметрами. Панель проверит подключение перед применением.")} </p>
                     <div className="card-actions">
                       <button
                         className="button button-primary"
@@ -965,24 +933,23 @@ export function SetupWizard({
 
           {step === 1 ? (
             <div>
-              <h3>{tr("Какие сети действительно внутренние?")}</h3>
+              <h3>{tr("Внутренние сети")}</h3>
               <p>
-                 {tr("Не выбирайте весь приватный диапазон. Только эти точные сети будут обходить proxy-ядро и идти обычными маршрутами RouterOS.")} </p>
+                 {tr("Добавьте только свои сети LAN и VPN. Для них XRoute сохранит обычные маршруты RouterOS.")} </p>
               {activeOfflinePrefillCount ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
                     <strong>
-                       {tr("Заполнены офлайн-кандидаты:")} {activeOfflinePrefillCount}
+                       {tr("Предложенные параметры:")} {activeOfflinePrefillCount}
                     </strong>
                     <p>
-                       {tr("Они подобраны без пересечения с сетями из `.rsc`, но файл не показывает актуальное состояние RouterOS. Проверьте каждое значение. До финального сохранения мастер держит")}{" "}
-                      <code>addresses_confirmed=false</code>{tr("; затем Apply всё равно потребует live discovery.")} </p>
+                       {tr("Параметры предложены на основе экспорта. Проверьте адреса и имена интерфейсов; при применении панель сверит их с RouterOS.")} </p>
                   </div>
                 </aside>
               ) : null}
               <label className="field">
-                 {tr("Доверенный ingress-интерфейс панели")} <input
+                 {tr("Интерфейс доступа к панели")} <input
                   list="management-ingress-options"
                   value={managementIngressInterface}
                   onChange={(event) =>
@@ -999,15 +966,15 @@ export function SetupWizard({
                   ))}
                 </datalist>
                 <small>
-                   {tr("Панель будет принимать управление только с выбранного локального bridge. Кандидаты из списка — лишь эвристика экспорта; точное ручное имя допустимо и обязательно проверяется live preflight.")} </small>
+                   {tr("Выберите LAN-мост для доступа к панели. Если его нет в списке, введите имя вручную. WAN использовать нельзя.")} </small>
               </label>
               {!managementIngressSuggestions.length ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
-                    <strong>{tr("Экспорт не предложил доверенный bridge")}</strong>
+                    <strong>{tr("Выберите интерфейс доступа")}</strong>
                     <p>
-                       {tr("Эвристика не является источником истины. Введите точное имя фактического LAN/management bridge вручную; не выбирайте WAN. Live preflight проверит интерфейс до Apply.")} </p>
+                       {tr("Введите имя своего LAN-моста. Панель проверит интерфейс перед применением.")} </p>
                   </div>
                 </aside>
               ) : null}
@@ -1020,7 +987,7 @@ export function SetupWizard({
                   <div>
                     <strong>{tr("Интерфейс введён вручную")}</strong>
                     <p>
-                       {tr("Офлайн-экспорт не классифицировал его как management ingress. Значение будет принято только после live-проверки; WAN-интерфейс здесь выбирать нельзя.")} </p>
+                       {tr("Панель проверит введённый интерфейс перед применением. WAN-интерфейс здесь использовать нельзя.")} </p>
                   </div>
                 </aside>
               ) : null}
@@ -1029,7 +996,7 @@ export function SetupWizard({
                 <input
                   value={managementCidr}
                   onChange={(event) => setManagementCidr(event.target.value)}
-                  placeholder={tr("Введите фактическую management сеть")}
+                  placeholder={tr("Подсеть доступа к панели")}
                 />
                 <small>
                   {isOfflinePrefilled(
@@ -1037,13 +1004,13 @@ export function SetupWizard({
                     managementCidr,
                     managementNetworkSuggestions[0],
                   )
-                    ? tr("Кандидат из offline export · проверьте фактическую management-сеть; live-подтверждения ещё нет.")
+                    ? tr("Проверьте подсеть для доступа к панели.")
                     : tr("Отсюда будет доступна панель на порту 9443.")}
                 </small>
               </label>
               <div className="form-grid">
                 <label className="field">
-                   {tr("Имя нового container bridge")} <input
+                   {tr("Мост контейнера")} <input
                     value={bridgeName}
                     onChange={(event) => setBridgeName(event.target.value)}
                     placeholder={tr("Введите свободное имя bridge")}
@@ -1054,7 +1021,7 @@ export function SetupWizard({
                       bridgeName,
                       topologySuggestions.bridge_name,
                     )
-                      ? tr("Кандидат из offline export · коллизий в файле не найдено, live-проверка обязательна.")
+                      ? tr("Перед применением панель проверит это имя интерфейса.")
                       : tr("Имя не должно совпадать с существующим интерфейсом RouterOS.")}
                   </small>
                 </label>
@@ -1070,15 +1037,15 @@ export function SetupWizard({
                       vethName,
                       topologySuggestions.veth_name,
                     )
-                      ? tr("Кандидат из offline export · коллизий в файле не найдено, live-проверка обязательна.")
+                      ? tr("Перед применением панель проверит это имя интерфейса.")
                       : tr("Имя будет использовано только для контейнера XRoute.")}
                   </small>
                 </label>
                 <label className="field">
-                   {tr("RouterOS IP на container bridge")} <input
+                   {tr("Адрес RouterOS в сети контейнера")} <input
                     value={routerGateway}
                     onChange={(event) => setRouterGateway(event.target.value)}
-                    placeholder={tr("Введите адрес из вашего WebFig bootstrap")}
+                    placeholder={tr("Адрес RouterOS, выбранный при установке")}
                   />
                   <small>
                     {isOfflinePrefilled(
@@ -1086,8 +1053,8 @@ export function SetupWizard({
                       routerGateway,
                       topologySuggestions.routeros_gateway,
                     )
-                      ? tr("Непересекающийся кандидат из offline export · не фактический адрес и не live-подтверждение.")
-                      : tr("Должен совпадать с фактическим SB_ROUTER_IP; пример из ТЗ автоматически не подставляется.")}
+                      ? tr("Предложенный адрес. Проверьте, что он подходит вашей сети.")
+                      : tr("Укажите адрес RouterOS в сети контейнера.")}
                   </small>
                 </label>
                 <label className="field">
@@ -1095,7 +1062,7 @@ export function SetupWizard({
                   <input
                     value={containerAddress}
                     onChange={(event) => setContainerAddress(event.target.value)}
-                    placeholder={tr("Фактический SB_CONTAINER_ADDRESS с префиксом")}
+                    placeholder={tr("Адрес контейнера с префиксом подсети")}
                   />
                   <small>
                     {isOfflinePrefilled(
@@ -1103,8 +1070,8 @@ export function SetupWizard({
                       containerAddress,
                       topologySuggestions.container_address,
                     )
-                      ? tr("Непересекающийся кандидат из offline export · проверьте подсеть и свободный адрес live.")
-                      : tr("Должен быть отдельным адресом той же container bridge-подсети; пример из ТЗ автоматически не подставляется.")}
+                      ? tr("Проверьте подсеть и убедитесь, что предложенный адрес свободен.")
+                      : tr("Укажите свободный адрес в той же подсети, что и RouterOS.")}
                   </small>
                 </label>
                 <label className="field">
@@ -1120,7 +1087,7 @@ export function SetupWizard({
                       tunAddress,
                       topologySuggestions.tun_address,
                     )
-                      ? tr("Непересекающийся кандидат из offline export · Apply повторно проверит live LAN/VPN-маршруты.")
+                      ? tr("Панель проверит, что эта подсеть не пересекается с сетями LAN и VPN.")
                       : tr("Apply проверит пересечение с импортированными LAN/VPN сетями.")}
                   </small>
                 </label>
@@ -1136,7 +1103,7 @@ export function SetupWizard({
                       internalDns,
                       topologySuggestions.container_dns,
                     )
-                      ? tr("Кандидат из offline export · должен быть подтверждён как фактический внутренний DNS.")
+                      ? tr("Проверьте адрес DNS-сервера вашей локальной сети.")
                       : tr("Внутренние зоны не отправляются внешнему DNS-провайдеру.")}
                   </small>
                 </label>
@@ -1170,9 +1137,9 @@ export function SetupWizard({
                 <aside className="notice notice-neutral">
                   <span className="notice-icon">i</span>
                   <div>
-                    <strong>{tr("Экспорт не дал сетевых подсказок")}</strong>
+                    <strong>{tr("Сети не найдены в файле")}</strong>
                     <p>
-                       {tr("Список намеренно пуст. Добавьте только проверенные CIDR вручную; демонстрационные адреса не подставляются.")} </p>
+                       {tr("Добавьте свои сети LAN и VPN вручную.")} </p>
                   </div>
                 </aside>
               ) : null}
@@ -1329,7 +1296,7 @@ export function SetupWizard({
                  {tr("Ссылка подписки настраивается отдельно. После мастера включите только нужные транспорты: WebSocket не является обязательным.")} </p>
               <div className="form-grid">
                 <label className="field form-span">
-                   {tr("DNS-имя клиентской подписки")} <input
+                 {tr("DNS-имя клиентской подписки (необязательно)")} <input
                     value={subscriptionHost}
                     onChange={(event) => setSubscriptionHost(event.target.value)}
                     placeholder="sub.example.com"
@@ -1353,7 +1320,7 @@ export function SetupWizard({
             <div>
               <h3>{tr("Добавьте первого исходящего прокси-провайдера")}</h3>
               <p>
-                 {tr("URL проверяется без сохранения в журнал. Рабочая конфигурация не заменяется, пока candidate не пройдёт проверку активного proxy-ядра.")} </p>
+                 {tr("Ссылка не записывается в журнал. Изменения проверяются перед заменой рабочей конфигурации.")} </p>
               <label className="field">
                  {tr("Понятное название")} <input
                   value={providerName}
@@ -1361,10 +1328,10 @@ export function SetupWizard({
                 />
               </label>
               <label className="field">
-                 {tr("URL подписки")} <input
+                 {tr("URL подписки (необязательно)")} <input
                   ref={providerUrlRef}
                   type="password"
-                  placeholder={tr("Будет записан с правами 0600")}
+                  placeholder={tr("Ссылка на подписку провайдера")}
                   autoComplete="off"
                 />
                 <small>
@@ -1373,7 +1340,7 @@ export function SetupWizard({
               <div className="wizard-provider-check">
                 <StatusPill tone="info">{tr("Проверка при сохранении")}</StatusPill>
                 <span>
-                   {tr("URL уйдёт прямо в SecretStore. Импортируются VLESS, REALITY и Hysteria 2 URI, Base64-списки и Xray JSON.")} </span>
+                   {tr("Поддерживаются ссылки VLESS, REALITY и Hysteria 2, списки Base64 и файлы Xray JSON.")} </span>
               </div>
             </div>
           ) : null}
@@ -1382,24 +1349,24 @@ export function SetupWizard({
             <div>
               <h3>{tr("Черновик готов к проверке")}</h3>
               <p>
-                 {tr("Это ещё не применение. Сначала панель покажет точный RouterOS diff и результаты всех проверок.")} </p>
+                 {tr("Сохраните черновик. Перед применением панель покажет список изменений и выполнит проверки.")} </p>
               <dl className="wizard-summary">
                 <div>
                   <dt>RouterOS</dt>
-                  <dd>7 · {channel} · capability-check</dd>
+                  <dd>{tr("Проверим при применении")}</dd>
                 </div>
                 <div>
-                  <dt>Management</dt>
+                  <dt>{tr("Доступ к панели")}</dt>
                   <dd>
-                    {managementCidr} · ingress {managementIngressInterface} →
+                    {managementCidr} · {managementIngressInterface} →
                     HTTPS 9443
                   </dd>
                 </div>
                 <div>
-                  <dt>Container/TUN/DNS</dt>
+                  <dt>{tr("Контейнер")} / TUN / DNS</dt>
                   <dd>
-                    bridge {bridgeName} · veth {vethName} · RouterOS{" "}
-                    {routerGateway} · container {containerAddress} · TUN{" "}
+                    {bridgeName} · {vethName} · RouterOS{" "}
+                    {routerGateway} · {tr("Контейнер")} {containerAddress} · TUN{" "}
                     {tunAddress} · DNS {internalDns}
                   </dd>
                 </div>
@@ -1424,26 +1391,25 @@ export function SetupWizard({
                 </div>
                 <div>
                   <dt>{tr("Отказ контейнера")}</dt>
-                  <dd>{tr("Локальные → WAN; удалённые → block")}</dd>
+                  <dd>{tr("Локальные → WAN; удалённые → блокировка")}</dd>
                 </div>
               </dl>
               {activeOfflinePrefillCount ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
-                    <strong>{tr("Вы подтверждаете офлайн-кандидаты")}</strong>
+                    <strong>{tr("Проверьте параметры перед сохранением")}</strong>
                     <p>
-                       {tr("После «Сохранить черновик» эти")} {activeOfflinePrefillCount}{" "}
-                       {tr("значений будут отмечены как проверенные оператором. Это не заменяет live discovery: Apply повторно проверит адреса, интерфейсы и пересечения.")} </p>
+                       {tr("Сохранение запишет параметры в черновик. Чтобы включить настройки, нажмите «Применить» и подтвердите изменения.")} </p>
                   </div>
                 </aside>
               ) : null}
               <aside className="notice notice-danger">
                 <span className="notice-icon">!</span>
                 <div>
-                  <strong>{tr("Офлайн-импорт не подтверждает capabilities")}</strong>
+                  <strong>{tr("Проверка перед применением")}</strong>
                   <p>
-                     {tr("Сохранение черновика не разрешает Apply. Следующим отдельным действием запустите live preflight; неизвестные или отсутствующие возможности заблокируют новую установку.")} </p>
+                     {tr("При применении панель проверит RouterOS и покажет список изменений. Если проверка не пройдёт, настройки останутся прежними.")} </p>
                 </div>
               </aside>
               <aside className="notice notice-safe">
@@ -1451,7 +1417,7 @@ export function SetupWizard({
                 <div>
                   <strong>{tr("Перед применением автоматически")}</strong>
                   <p>
-                     {tr("RouterOS preflight → точный diff → проверка активного ядра → nginx -t. Export, backup и защита отката нужны только при изменении RouterOS; иначе обновляется только контейнер с runtime-откатом.")} </p>
+                     {tr("Перед применением панель проверит RouterOS, Xray и веб-сервер. При изменении правил роутера создаст резервную копию и включит автоматический откат.")} </p>
                 </div>
               </aside>
             </div>

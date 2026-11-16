@@ -215,7 +215,7 @@ export function Overview({
         title={stateTitle}
         description={
           runtimeError ||
-          tr("Состояние поступает из локального control plane. Настройки действуют только после проверки.")
+          tr("Состояние шлюза и подключённых устройств.")
         }
         action={unconfigured ? (
           <button className="button button-primary" type="button" onClick={onOpenSetup}>

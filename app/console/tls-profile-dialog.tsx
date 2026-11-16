@@ -148,7 +148,7 @@ export function TlsProfileDialog({
           <div className="modal-success" role="status">
             <span>✓</span>
             <h2 id="tls-profile-title">{tr("TLS-профиль сохранён")}</h2>
-            <p>{tr("Пара хранится в SecretStore. Связанные транспорты получат изменения после Apply.")}</p>
+            <p>{tr("Сертификат и ключ сохраняются на роутере. Связанные подключения обновятся после применения настроек.")}</p>
             <button className="button button-primary" type="button" onClick={onClose}>{tr("Готово")}</button>
           </div>
         ) : (

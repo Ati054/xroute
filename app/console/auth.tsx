@@ -116,7 +116,7 @@ function LoginPanel({
   initialMessage: string;
   onRetry: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, tr } = useLanguage();
   const [busy, setBusy] = useState(false);
   const [rememberCredentials, setRememberCredentials] = useState(true);
 
@@ -135,7 +135,7 @@ function LoginPanel({
             <small>{t("login.brand")}</small>
           </div>
         </div>
-        <p className="eyebrow">HTTPS · management LAN</p>
+        <p className="eyebrow">{tr("HTTPS · локальная сеть")}</p>
         <h1 id="login-title">
           {state === "checking"
             ? t("login.checkingTitle")

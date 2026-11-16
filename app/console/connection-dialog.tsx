@@ -2377,7 +2377,7 @@ export function ConnectionDialog({
                         <div className="transport-http-path-heading">
                           <span>
                             <strong>{tr("HTTP-путь транспорта")}</strong>
-                            <small>{existingTransport.path_secret_ref ? tr("Хранится в SecretStore и показывается только по запросу.") : tr("Будет создан автоматически при сохранении.")}</small>
+                            <small>{existingTransport.path_secret_ref ? tr("Значение скрыто; его можно открыть по запросу.") : tr("Будет создан автоматически при сохранении.")}</small>
                           </span>
                           {existingTransport.path_secret_ref ? (
                             <div className="transport-http-path-actions">
@@ -2455,7 +2455,7 @@ export function ConnectionDialog({
                       <div className="form-grid">
                         <label className="checkbox-field form-span">
                           <input name="vless_encryption_enabled" type="checkbox" defaultChecked={existingTransport.vless_encryption_enabled !== false} />
-                          <span><strong>VLESS Encryption + XTLS Vision</strong><small>{tr("Серверный decryption и клиентский encryption генерируются парой через `xray vlessenc` и хранятся в SecretStore.")}</small></span>
+                          <span><strong>VLESS Encryption + XTLS Vision</strong><small>{tr("Панель создаёт параметры decryption для сервера и encryption для клиента. Они сохраняются на роутере.")}</small></span>
                         </label>
                         <label className="field">
                            {tr("Аутентификация VLESS Encryption")} <select name="vless_encryption_authentication" defaultValue={asText(existingTransport.vless_encryption_authentication, "mlkem768")}>
@@ -2841,7 +2841,7 @@ export function ConnectionDialog({
                         </label>
                         <label className="checkbox-field form-span">
                           <input name="reality_mldsa65_enabled" type="checkbox" defaultChecked={existingTransport.reality_mldsa65_enabled === true} />
-                          <span><strong>{tr("ML-DSA-65 для REALITY")}</strong><small>{tr("Seed хранится в SecretStore, verify попадает клиенту. Target должен отдавать достаточно крупный сертификат; сначала проверьте его через `xray tls ping`.")}</small></span>
+                          <span><strong>{tr("ML-DSA-65 для REALITY")}</strong><small>{tr("Секретное значение хранится на сервере; клиент получает только verify. Сайт маскировки должен отдавать достаточно большой сертификат. Проверьте его командой `xray tls ping`.")}</small></span>
                         </label>
                       </div>
                     </details>

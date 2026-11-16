@@ -244,24 +244,28 @@ Open the panel from the management LAN. The default address is:
 https://172.31.255.2:9443
 ```
 
-The first-launch wizard asks you to:
+Create the panel administrator account on first launch. Then use the wizard to:
 
-1. create the panel administrator account;
-2. upload a current RouterOS export without sensitive values;
+1. upload a RouterOS export without sensitive values;
    create it with `/export file=routeros-export` (without `show-sensitive`);
-3. confirm the RouterOS, container, TPROXY, and DNS addresses;
-4. select trusted LAN and VPN interfaces;
-5. store RouterOS REST credentials in the encrypted secret store;
-6. configure routes, nodes, certificates, and client policies;
-7. run Check and review the generated plan before Apply.
+2. enter the RouterOS HTTPS URL, username, password and SSH port;
+3. review container and DNS addresses, select the panel access network and your LAN/VPN networks;
+4. optionally add a provider subscription and a hostname for client subscriptions;
+5. save the draft, select **Apply**, review the changes and confirm them.
+
+The panel runs checks before applying changes. You can configure routes, devices
+and inbound connections later. A provider subscription and a public domain are optional.
 
 For guided installation, download `routeros-export.rsc` and `routeros-ca.crt`
 from the installation folder in **Files**. Upload the export in the wizard;
 open the public `.crt` as text and paste its PEM contents into **CA PEM**.
 Use the REST URL, username, password and SSH port printed by `setup.rsc`.
-The wizard also reads the installer's selected management interface and CIDR
-from the export, even without a RouterOS `LAN` interface list. These are review
-suggestions; live preflight still verifies the current configuration before Apply.
+The wizard reads the installer's selected panel access interface and subnet
+from the export, even without a RouterOS `LAN` interface list. Review the suggested
+values; the panel checks them against the current RouterOS settings before applying changes.
+Reopening the wizard preserves its saved internal networks, including manually
+added CIDRs. Reviewing an import does not remove independently configured networks
+or enable disabled networks.
 
 The RouterOS certificate protects the panel's HTTPS REST connection to the
 router. It is separate from the panel's own local HTTPS certificate and from
