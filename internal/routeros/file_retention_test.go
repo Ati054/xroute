@@ -2,11 +2,56 @@ package routeros
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 )
+
+type retentionRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f retentionRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestPruneInventoryUsesMaintenanceClientAndParentDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	wantDeadline, _ := ctx.Deadline()
+	ordinaryCalls, maintenanceCalls := 0, 0
+	client := &Client{baseURL: "https://router.example:59443", username: "fixture", password: "fixture"}
+	client.http = &http.Client{Transport: retentionRoundTripper(func(*http.Request) (*http.Response, error) {
+		ordinaryCalls++
+		return nil, errors.New("short inventory client must not be used")
+	})}
+	client.actionHTTP = &http.Client{Transport: retentionRoundTripper(func(request *http.Request) (*http.Response, error) {
+		maintenanceCalls++
+		if deadline, ok := request.Context().Deadline(); !ok || !deadline.Equal(wantDeadline) {
+			t.Error("inventory lost the caller's deadline")
+		}
+		if request.Method != http.MethodGet || request.URL.Path != "/rest/file" || request.URL.Query().Get(".proplist") != ".id,name" {
+			t.Error("inventory must request only identifiers and names")
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`[]`)), Request: request}, nil
+	})}
+	if _, err := client.PruneManagedFiles(ctx, "usb1/xroute"); err != nil {
+		t.Fatal(err)
+	}
+	if ordinaryCalls != 0 || maintenanceCalls != 1 {
+		t.Fatalf("unexpected client calls: ordinary=%d maintenance=%d", ordinaryCalls, maintenanceCalls)
+	}
+	cancel()
+	client.actionHTTP.Transport = retentionRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return nil, request.Context().Err()
+	})
+	if _, err := client.PruneManagedFiles(ctx, "usb1/xroute"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("inventory ignored parent cancellation: %v", err)
+	}
+}
 
 func TestPruneManagedFilesRetainsThreeBackupGenerationsAndRemovesInstallArtifacts(t *testing.T) {
 	rows := `[

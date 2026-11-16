@@ -50,7 +50,10 @@ func (client *Client) PruneManagedFiles(ctx context.Context, storageRoot string)
 			return ManagedFilePruneResult{}, errors.New("managed storage root is invalid")
 		}
 	}
-	rows, err := client.List(ctx, "/rest/file?.proplist=.id,name,type")
+	// A populated disk inventory can exceed the short status-request timeout.
+	// Keep the caller's maintenance deadline and request only the fields used
+	// below; inspecting file types is unnecessary for exact-name ownership.
+	rows, err := client.listWithHTTP(ctx, client.actionHTTP, "/rest/file?.proplist=.id,name")
 	if err != nil {
 		return ManagedFilePruneResult{}, err
 	}

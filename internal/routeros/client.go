@@ -144,7 +144,11 @@ func (client *Client) Health(ctx context.Context) error {
 // List reads one fixed RouterOS inventory endpoint. Callers choose the path;
 // response size, authentication, TLS and deadlines remain enforced by Client.
 func (client *Client) List(ctx context.Context, path string) ([]map[string]any, error) {
-	value, err := client.requestValue(ctx, http.MethodGet, path, nil)
+	return client.listWithHTTP(ctx, client.http, path)
+}
+
+func (client *Client) listWithHTTP(ctx context.Context, requester *http.Client, path string) ([]map[string]any, error) {
+	value, err := client.requestValueWithHTTP(ctx, requester, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
