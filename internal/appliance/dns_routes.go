@@ -1,6 +1,6 @@
 package appliance
 
-import "github.com/sb-gateway/sb-gateway/internal/dnsroute"
+import "github.com/Ati054/xroute/internal/dnsroute"
 
 // The monitor agent and separately restartable DNS component share PID1. Bind
 // exactly one registry here; validation and standalone commands never infer it.

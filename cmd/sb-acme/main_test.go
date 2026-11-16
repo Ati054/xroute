@@ -26,7 +26,7 @@ import (
 	"github.com/go-acme/lego/v5/challenge"
 	legolog "github.com/go-acme/lego/v5/log"
 	"github.com/go-acme/lego/v5/providers/dns/yandexcloud"
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
+	"github.com/Ati054/xroute/internal/acmejob"
 )
 
 func workerTestResolver() acmejob.RecursiveResolver {

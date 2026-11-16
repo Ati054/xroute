@@ -193,7 +193,7 @@ func TestReadOnlyStateEndpointsUseCompatibleDocuments(t *testing.T) {
 		t.Fatalf("draft failed: %d %s", draft.Code, draft.Body.String())
 	}
 	draftBody := decodeResponse(t, draft)
-	if draftBody["revision"] != "19eb5e154140bb60178672c8bab51e3724828079cb31e1ba601ffdcdbb2b1a1c" {
+	if draftBody["revision"] != "386e2e7fcc28b501297df1ef0be355e0c4ac8d97876ba3591cfc21d29c724b70" {
 		t.Fatalf("default config revision drifted: %v", draftBody["revision"])
 	}
 	config := draftBody["config"].(map[string]any)
@@ -376,6 +376,7 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	server.testImageArchitecture = "arm64"
 	if err := server.secrets.write("management-api-token", "management-test-token", false); err != nil {
 		t.Fatal(err)
 	}

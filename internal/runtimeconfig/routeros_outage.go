@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 // Emergency DNS remains deliberately bounded to the catalog's maintained
@@ -26,6 +26,7 @@ var outageDomainPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$
 // bounded to reviewed catalog TLDs so a malformed custom single-label value
 // cannot unexpectedly intercept a local DNS zone.
 var reviewedOutageTopLevelDomains = map[string]bool{
+	"ir": true, "xn--mgba3a4f16a": true,
 	"moscow": true, "ru": true, "su": true, "tatar": true,
 	"xn--80adxhks": true, "xn--80asehdb": true, "xn--80aswg": true,
 	"xn--c1avg": true, "xn--d1acj3b": true, "xn--p1acf": true,

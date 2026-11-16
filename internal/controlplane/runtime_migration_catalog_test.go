@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 func startupCatalogProbeFixture(t *testing.T, count, disabled int, mixed bool) (*Server, map[string][]byte, subscriptioncatalog.Ref, *catalogCompatTestREST) {

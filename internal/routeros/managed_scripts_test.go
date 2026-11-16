@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 func TestSyncInstalledScriptsUpdatesOnlyOwnedBodies(t *testing.T) {

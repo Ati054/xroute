@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 type cdnSourceSync func(context.Context, map[string]any, string, []string) error

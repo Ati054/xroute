@@ -835,7 +835,7 @@ export function SetupWizard({
                   }}
                 />
                 <span className="drop-icon">⇧</span>
-                <strong>{exportName || "Выберите экспорт MikroTik"}</strong>
+                <strong>{exportName || tr("Выберите экспорт MikroTik")}</strong>
                 <small>{tr("Секреты в экспорт включать нельзя")}</small>
               </label>
               <div className="form-grid">

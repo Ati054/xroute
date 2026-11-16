@@ -9,9 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/applytiming"
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/applytiming"
+	"github.com/Ati054/xroute/internal/routeros"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 type routerOSApplyOutput struct {
@@ -112,14 +112,6 @@ func (server *Server) applyDraft(response http.ResponseWriter, request *http.Req
 		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_config", "Config must be an object.")
 		return
 	}
-	if !supplied {
-		var err error
-		config, err = server.getDraft()
-		if err != nil {
-			server.internalStateError(response, request, err)
-			return
-		}
-	}
 	if server.runtime == nil {
 		server.writeErrorResponse(response, request, http.StatusServiceUnavailable, "native_runtime_unavailable", "Native runtime process control is unavailable.")
 		return
@@ -132,6 +124,17 @@ func (server *Server) applyDraft(response http.ResponseWriter, request *http.Req
 	}
 	server.configMu.Lock()
 	defer server.configMu.Unlock()
+	// Read the implicit draft in the same serialized section as its Apply.
+	// A save that finishes while this request waits must not be overwritten
+	// by a snapshot captured before acquiring the writer's lock.
+	if !supplied {
+		var err error
+		config, err = server.getDraft()
+		if err != nil {
+			server.internalStateError(response, request, err)
+			return
+		}
+	}
 	actor := fmt.Sprint(payload["sub"])
 	operationContext, cancelOperation := applyOperationContext(request.Context())
 	defer cancelOperation()

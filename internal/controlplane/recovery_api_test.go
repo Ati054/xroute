@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	recoveryboot "github.com/sb-gateway/sb-gateway/internal/recovery"
+	recoveryboot "github.com/Ati054/xroute/internal/recovery"
 )
 
 func TestNativeRecoveryCreateListDownloadStageAndBootApply(t *testing.T) {

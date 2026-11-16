@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 type servicePackRefreshFunc func(rulesets.ServicePack, string) (map[string]any, error)

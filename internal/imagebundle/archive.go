@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
 const maxMetadataBytes = int64(4 << 20)
@@ -220,6 +220,10 @@ func classicLayers(names []string) bool {
 }
 
 func Validate(path, expectedImage, expectedVersion string) (Details, error) {
+	return ValidatePlatform(path, expectedImage, expectedVersion, "arm64")
+}
+
+func ValidatePlatform(path, expectedImage, expectedVersion, expectedArchitecture string) (Details, error) {
 	manifestBody, err := readTarEntry(path, "manifest.json", maxMetadataBytes)
 	if err != nil {
 		return Details{}, err
@@ -243,8 +247,8 @@ func Validate(path, expectedImage, expectedVersion string) (Details, error) {
 	if digest(configBody) != strings.TrimSuffix(entry.Config, ".json") {
 		return Details{}, errors.New("Docker image config digest mismatch")
 	}
-	if config.OS != "linux" || config.Architecture != "arm64" {
-		return Details{}, fmt.Errorf("wrong image platform: %s/%s; expected linux/arm64", config.OS, config.Architecture)
+	if !releasecontract.ImagePlatformMatches(config.OS, config.Architecture, expectedArchitecture) {
+		return Details{}, fmt.Errorf("wrong image platform: %s/%s; expected linux/%s", config.OS, config.Architecture, expectedArchitecture)
 	}
 	foundTag := false
 	for _, tag := range entry.RepoTags {
@@ -255,21 +259,21 @@ func Validate(path, expectedImage, expectedVersion string) (Details, error) {
 	}
 	labels := config.Config.Labels
 	if labels["org.opencontainers.image.version"] != expectedVersion {
-		return Details{}, errors.New("wrong SB Gateway version label")
+		return Details{}, errors.New("wrong XRoute version label")
 	}
 	configSchema, minimumSchema, compatible := releasecontract.Compatible(labels, releasecontract.ConfigSchemaVersion)
 	catalogSchema, catalogCompatible := releasecontract.CatalogSchema(labels)
 	if !compatible || !catalogCompatible {
-		return Details{}, errors.New("wrong SB Gateway release contract")
+		return Details{}, errors.New("wrong XRoute release contract")
 	}
 	if configSchema != releasecontract.ConfigSchemaVersion {
-		return Details{}, errors.New("wrong SB Gateway configuration schema contract")
+		return Details{}, errors.New("wrong XRoute configuration schema contract")
 	}
 	if err := validateClassicLayers(path, entry.Layers, config.RootFS.DiffIDs); err != nil {
 		return Details{}, err
 	}
 	return Details{
-		DockerConfig: entry.Config, RepoTags: entry.RepoTags, Platform: "linux/arm64", Version: expectedVersion,
+		DockerConfig: entry.Config, RepoTags: entry.RepoTags, Platform: "linux/" + releasecontract.ImageArchitecture(config.Architecture), Version: expectedVersion,
 		Revision:                   valueOr(labels["org.opencontainers.image.revision"], "unknown"),
 		Source:                     valueOr(labels["org.opencontainers.image.source"], "unknown"),
 		XrayVersion:                valueOr(labels["io.sb-gateway.dependency.xray.version"], "unknown"),

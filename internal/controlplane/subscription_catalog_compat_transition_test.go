@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/routeros"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 // Authenticated REST with an actual stopped predecessor, not a bypass of the

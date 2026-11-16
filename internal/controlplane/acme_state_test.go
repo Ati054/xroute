@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
+	"github.com/Ati054/xroute/internal/acmejob"
 )
 
 func mustDecodeACMERecord(t *testing.T, raw any) acmeRecord {

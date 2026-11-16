@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
 type registryCatalogFixtureObject struct {
@@ -64,8 +64,12 @@ func registryCatalogFixtureConfig(t *testing.T, schema *string) []byte {
 	return registryCatalogFixtureJSON(t, map[string]any{"architecture": "arm64", "os": "linux", "config": map[string]any{"Labels": labels}})
 }
 
-func newRegistryCatalogFixture(t *testing.T, config []byte, index bool) *registryCatalogFixture {
+func newRegistryCatalogFixture(t *testing.T, config []byte, index bool, architectures ...string) *registryCatalogFixture {
 	t.Helper()
+	architecture, other, variant := "arm64", "amd64", "v8"
+	if len(architectures) != 0 && architectures[0] == "amd64" {
+		architecture, other, variant = "amd64", "arm64", ""
+	}
 	fixture := &registryCatalogFixture{objects: make(map[string]registryCatalogFixtureObject), version: "9.8.7", challengeScope: "repository:team/image:pull"}
 	configDigest := registryCatalogFixtureDigest(config)
 	fixture.configPath = "/v2/team/image/blobs/" + configDigest
@@ -77,8 +81,8 @@ func newRegistryCatalogFixture(t *testing.T, config []byte, index bool) *registr
 	rootDigest := manifestDigest
 	if index {
 		root := registryCatalogFixtureJSON(t, map[string]any{"schemaVersion": 2, "mediaType": registryOCIIndex, "manifests": []any{
-			map[string]any{"mediaType": registryOCIManifest, "digest": "sha256:" + strings.Repeat("1", 64), "size": 1, "platform": map[string]any{"os": "linux", "architecture": "amd64"}},
-			map[string]any{"mediaType": registryOCIManifest, "digest": manifestDigest, "size": len(manifest), "platform": map[string]any{"os": "linux", "architecture": "arm64", "variant": "v8"}},
+			map[string]any{"mediaType": registryOCIManifest, "digest": "sha256:" + strings.Repeat("1", 64), "size": 1, "platform": map[string]any{"os": "linux", "architecture": other}},
+			map[string]any{"mediaType": registryOCIManifest, "digest": manifestDigest, "size": len(manifest), "platform": map[string]any{"os": "linux", "architecture": architecture, "variant": variant}},
 			map[string]any{"mediaType": "application/unknown", "digest": "sha256:" + strings.Repeat("2", 64), "size": 1, "platform": map[string]any{"os": "unknown", "architecture": "unknown"}},
 		}})
 		rootDigest = registryCatalogFixtureDigest(root)

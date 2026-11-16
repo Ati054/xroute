@@ -1,5 +1,14 @@
 # Apply readiness
 
+Apply without an explicit `config` body reads the saved draft after acquiring the
+configuration and mutation locks. A draft save already in progress therefore
+finishes before Apply chooses its input. Requests that include an explicit
+configuration continue to apply that supplied snapshot. Request-body parsing
+and authentication happen before these locks are acquired.
+
+`TestApplyReadsImplicitDraftAfterConcurrentSave` holds a draft writer at a barrier
+and checks the configuration passed to runtime preparation for both request forms.
+
 When Apply changes RouterOS configuration, the transaction activates and checks
 the candidate runtime, disarms its rollback guard, and publishes the active
 configuration and runtime commit. Only after those steps succeed can the live

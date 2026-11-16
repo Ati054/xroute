@@ -1142,6 +1142,29 @@
     "update_mode": "catalog", "broad": false, "always_direct": false, "ip_cidrs": [], "sniffed_protocols": [], "included_pack_ids": [], "tcp_ports": [], "tcp_port_ranges": [], "udp_ports": [], "udp_port_ranges": []
   },
   {
+    "id": "ir-local",
+    "name": "Домены и банки Ирана",
+    "category": "Иран · широкий доступ",
+    "description": "Вся зона .ir и .ایران, а также банковские домены. Направление задаётся маршрутным листом.",
+    "upstream_name": null,
+    "fallback_domains": [
+      "ir",
+      "xn--mgba3a4f16a"
+    ],
+    "update_mode": "builtin",
+    "broad": true,
+    "always_direct": false,
+    "ip_cidrs": [],
+    "sniffed_protocols": [],
+    "included_pack_ids": [
+      "ir-banks"
+    ],
+    "tcp_ports": [],
+    "tcp_port_ranges": [],
+    "udp_ports": [],
+    "udp_port_ranges": []
+  },
+  {
     "id": "ir-banks", "name": "Банки Ирана", "category": "Иран · платежи", "description": "Банковские домены из каталога category-bank-ir.",
     "upstream_name": "category-bank-ir", "fallback_domains": ["bankmellat.ir", "bmi.ir", "bsi.ir", "shaparak.ir"],
     "update_mode": "catalog", "broad": false, "always_direct": false, "ip_cidrs": [], "sniffed_protocols": [], "included_pack_ids": [], "tcp_ports": [], "tcp_port_ranges": [], "udp_ports": [], "udp_port_ranges": []

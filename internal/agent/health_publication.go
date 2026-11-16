@@ -3,7 +3,7 @@ package agent
 import (
 	"path/filepath"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeproof"
+	"github.com/Ati054/xroute/internal/runtimeproof"
 )
 
 func publishHealthState(path string, state healthState) error {

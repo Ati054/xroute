@@ -1,5 +1,5 @@
 ---
-name: SB Gateway
+name: XRoute
 description: Спокойная и компактная панель управления сетевым шлюзом MikroTik.
 colors:
   canvas: "#f4f5f2"
@@ -97,17 +97,17 @@ components:
     minHeight: "72px"
 ---
 
-# Design System: SB Gateway
+# Design System: XRoute
 
 ## Overview
 
 **Creative North Star: "Панель сетевого прибора"**
 
 Документ дополняет продуктовый контракт [PRODUCT.md](PRODUCT.md) и описывает
-интерфейс SB Gateway 1.6.21. При расхождении экранов с этим документом нужно
+интерфейс XRoute 1.6.21. При расхождении экранов с этим документом нужно
 исправить экран или обновить контракт вместе с обоснованием изменения.
 
-SB Gateway выглядит как точный локальный инструмент эксплуатации: спокойный,
+XRoute выглядит как точный локальный инструмент эксплуатации: спокойный,
 плотный и предсказуемый. Визуальная иерархия помогает быстро найти состояние,
 объект и действие, не превращая сетевые параметры в декоративный dashboard.
 Основной характер создают светлые нейтральные поверхности, тёмная навигация и
@@ -117,7 +117,7 @@ SB Gateway выглядит как точный локальный инстру�
 
 - компактные строки и формы с ровным ритмом;
 - короткие русские подписи без повторения очевидного контекста;
-- равноправные русская и английская оболочки с локальным выбором языка;
+- равноправные русская, английская, персидская и две китайские оболочки с локальным выбором языка;
 - зелёный только для подтверждённого здоровья или основного действия;
 - технические данные показаны тогда, когда меняют решение пользователя;
 - раскрытие сложных параметров без дублирующих карточек.
@@ -350,7 +350,7 @@ peers одного интерфейса остаются отдельными с
 
 ### Gateway Log Viewer
 
-- В разделе **Эксплуатация** одна компактная строка **Журналы SB Gateway** ведёт
+- В разделе **Эксплуатация** одна компактная строка **Журналы XRoute** ведёт
   в модальное окно; отдельная диагностическая страница не создаётся.
 - Вкладки Xray, control plane, nginx и обновлений используют тёмную моноширинную
   область с последними 300 строками. Автообновление не перетягивает пользователя
@@ -467,3 +467,23 @@ peers одного интерфейса остаются отдельными с
 - **Don't** представлять параметры полного Xray JSON / Mihomo-профиля как
   опции обычной мобильной ссылки. Формат и ограничения экспорта обозначаются
   кратко рядом с соответствующей группой полей.
+
+## XRoute identity and localization
+
+The crossing-route mark in public/favicon.svg and app/brand.tsx uses a
+40 × 40 view box, a #15282E background, a #4ADEB8 primary route and
+#8FA6AD secondary route. Keep its geometry identical in the favicon,
+sidebar, sign-in and first-run screens. The XRoute wordmark remains LTR
+in every locale. Its X uses primary green on light surfaces and mint
+on the dark sidebar. The sidebar contains only the mark and wordmark, without a
+platform subtitle. The profile puts identity and logout on the first row and the
+language selector on its own full-width row. The overview shows health, restart
+and recovery details without a promotional heading or explanation.
+
+Supported locales: Russian, English, Persian, Simplified Chinese and
+Traditional Chinese. Persian uses logical layout directions and RTL text;
+code, addresses and commands remain LTR. Technical identifiers and user
+names are preserved. README screenshots show the running overview and node
+quality with loaded traffic counters. The main README uses English; each
+localized README uses its matching UI language. Keep application controls
+fully visible and redact private addresses and client identities.

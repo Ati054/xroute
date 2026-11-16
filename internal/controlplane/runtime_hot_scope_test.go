@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 const scopedPreviousPool = `{"health_policies":{"route":{"mode":"priority","candidates":["old"]},"remote":{"mode":"best","candidates":["remote-old"],"nodes":{"remote-old":{"fingerprint":"original","label":"Original label"}}}},"local_policy_ids":["route"]}`

@@ -7,7 +7,7 @@ import { mergeSubscriptionMetadata } from "../subscription-metadata";
 import { disableSubscriptionPublication } from "../subscription-publication";
 import { hostnameAfterTLSProfileChange, hostnameForTLSProfileInitialization, subscriptionEndpointUsesTLSHostname, subscriptionEndpointValueAfterConfigRefresh, tlsConcreteHostnames } from "../tls-hostnames";
 import { TlsTransferDialog } from "../tls-transfer";
-import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, RevisionState, SectionTitle, StatusPill, Toggle, Tone, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, cdnProviderName, configuredItemStatus, configuredItemTone, entityIdFromName, expiryText, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, resultMessage, russianCount, subscriptionIntervalText, tlsProfileExpiry, transportKindLabel, useConnectionHostname, withDeploymentReadiness } from "./shared";
+import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, RevisionState, SectionTitle, StatusPill, Toggle, Tone, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, cdnProviderName, configuredItemStatus, configuredItemTone, entityIdFromName, expiryText, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, resultMessage, localizedCount, subscriptionIntervalText, tlsProfileExpiry, transportKindLabel, useConnectionHostname, withDeploymentReadiness } from "./shared";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -95,7 +95,7 @@ export function Connections({
   );
   const configuredSubscriptionDisplayName = asText(
     asObject(asObject(config.public_exposure).subscription).display_name,
-    "SB Gateway",
+    "XRoute",
   );
   const configuredHappProviderId = asText(
     asObject(asObject(config.public_exposure).subscription).happ_provider_id,
@@ -1294,7 +1294,7 @@ export function Connections({
                   <span className={`signal-dot signal-${profile.ready ? "ok" : "warn"}`} aria-hidden="true" />
                   <span>
                     {profile.usedByLabels.length
-                      ? tr("Используется: {value1}", { value1: russianCount(profile.usedByLabels.length, [tr("подключение"), tr("подключения"), tr("подключений")]) })
+                      ? tr("Используется: {value1}", { value1: localizedCount(profile.usedByLabels.length, [tr("подключение"), tr("подключения"), tr("подключений")], locale) })
                       : tr("Не используется")}
                   </span>
                 </div>
@@ -1326,7 +1326,7 @@ export function Connections({
             <div className="panel-heading-actions">
               <StatusPill tone={configuredSubscriptions.length ? "info" : "muted"}>
                 {configuredSubscriptions.length
-                  ? russianCount(configuredSubscriptions.length, [tr("подписка"), tr("подписки"), tr("подписок")])
+                  ? localizedCount(configuredSubscriptions.length, [tr("подписка"), tr("подписки"), tr("подписок")], locale)
                   : tr("Не настроено")}
               </StatusPill>
               <button
@@ -1614,7 +1614,7 @@ export function Connections({
 
                   <div className="subscription-essential-grid">
                     <label className="field">
-                       {tr("Имя в приложении")} <input value={subscriptionDisplayName} maxLength={96} placeholder="SB Gateway" onChange={(event) => { setSubscriptionDisplayName(event.target.value); setCloudflarePortMessage(""); }} />
+                       {tr("Имя в приложении")} <input dir="auto" value={subscriptionDisplayName} maxLength={96} placeholder="XRoute" onChange={(event) => { setSubscriptionDisplayName(event.target.value); setCloudflarePortMessage(""); }} />
                     </label>
 
                     {subscriptionEndpointMode === "separate" || subscriptionEndpointMode === "reuse-cdn" ? (

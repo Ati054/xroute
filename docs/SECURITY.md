@@ -1,6 +1,6 @@
 # Безопасность
 
-Документ описывает модель безопасности SB Gateway и версии проверенных компонентов.
+Документ описывает модель безопасности XRoute и версии проверенных компонентов.
 
 ## Current Build Baseline
 
@@ -155,7 +155,7 @@ diagnostics, logs, status API и UI diff не содержат значений.
 - RouterOS REST/DNS/ICMP allow от контейнера дополнительно ограничены
   выделенным container bridge как ingress и фактическим gateway как
   destination; остальные пакеты контейнера в input отклоняются.
-- SB Gateway не изменяет `/ip service`, включая `winbox`, `ssh` и `www-ssl`,
+- XRoute не изменяет `/ip service`, включая `winbox`, `ssh` и `www-ssl`,
   и не вводит глобальный deny для их портов. Установщик только читает
   фактические порты SSH и Winbox для собственного разрешения от container IP.
   Их **Available From** и доступ из пользовательских LAN/VPN остаются под
@@ -203,7 +203,7 @@ diagnostics, logs, status API и UI diff не содержат значений.
   из `198.18.0.0/15`. Default route `main` не меняется. Исходный
   `allowed-address` peer хранится только в project-owned recovery state и
   восстанавливается при снятии выбора; интерфейс и ключи не становятся
-  собственностью SB Gateway.
+  собственностью XRoute.
 - Входящий WireGuard-клиент авторизуется сохранённым RouterOS peer `.id`, а не
   именем интерфейса или устаревшим source CIDR. Его точные IPv4 `/32`
   пересчитываются по live inventory перед Check, Plan и Apply. Изменения
@@ -357,21 +357,22 @@ AES-256-GCM защищает целостность/содержимое; scrypt
 ## Зависимости сборки панели
 
 Релизный lockfile использует:
-Next.js / eslint-config-next 16.3.8, React / React DOM / RSC 19.2.8,
-Vite 8.2.2, Vinext 1.0.0-beta.9, RSC plugin 0.5.34,
-Cloudflare Vite plugin 1.62.5 и Wrangler 4.147.0; совместимые транзитивные
+Next.js / eslint-config-next 16.4.6, React / React DOM / RSC 19.3.1,
+Vite 8.3.8, Vinext 1.4.5, RSC plugin 0.5.37,
+Cloudflare Vite plugin 1.69.1 и Wrangler 4.160.0; совместимые транзитивные
 зависимости также обновлены. В частности, обе используемые ветви `sharp`
 закреплены на 0.35.5 с исправлениями
 [GHSA-rgj7-g3m4-5g8c](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c) и
 [GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w).
-После обновления 2026-10-06 `npm audit` сообщает 8 high, без critical
-и moderate: все оставшиеся цепочки ведут к `braces@3.0.3`. Закреплены
-исправленные `brace-expansion` 1.1.21/5.0.12, `fast-uri` 3.1.8 и
-`source-map-js` 1.2.2. Для Next.js устранено предупреждение
-[ImageResponse RCE](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j).
-Ни чистый npm-аудит, ни публичный релиз не заявляются.
-`npm audit --omit=dev` сообщает 0 предупреждений в production-зависимостях
-панели. Это не аудит всего контейнера: npm не покрывает Go/Alpine/Xray-компоненты.
+Закреплены исправленные `brace-expansion` 1.1.21/5.0.12, `fast-uri` 3.1.9,
+`fflate` 0.7.5 и `source-map-js` 1.2.2. Для цепочки TypeScript ESLint отдельно
+закреплён `minimatch` 11.0.1; проверка lint остаётся обязательной после обновления.
+Next.js и RSC обновлены с учётом
+[Next.js SVG Image Optimization](https://github.com/advisories/GHSA-2464-fhr4-w9xw)
+и [React Server Components](https://github.com/advisories/GHSA-xqc2-xf4c-x3h3).
+Релизная проверка `npm run audit:dependencies` должна завершаться без известных
+предупреждений во всём lock-файле, включая dev-зависимости. Это не аудит всего
+контейнера: npm не покрывает Go/Alpine/Xray-компоненты.
 
 ### Ограничение вложенности braces
 
@@ -383,18 +384,33 @@ Cloudflare Vite plugin 1.62.5 и Wrangler 4.147.0; совместимые тра
 Версия, SHA-256 четырёх исходных файлов, число замен и расположение зависимости
 проверяются; неизвестная копия или новый вложенный экземпляр останавливает сборку.
 Это локальная защита инструментов сборки, не исправление опубликованного пакета.
-Npm проверяет версии, а не изменённые байты: все 8 предупреждений остаются видимыми,
-`audit:dependencies` по-прежнему возвращает ошибку. Обхода или allowlist нет.
+Npm проверяет версии, а не изменённые байты. Локальные проверки защитных патчей
+выполняются отдельно от npm-аудита; исключений для предупреждений нет.
 
-`govulncheck@v1.8.0` с Go 1.27.1 на Linux проверил `./cmd/... ./internal/...`:
-0 уязвимых вызовов и 0 предупреждений в импортируемых пакетах.
-Модульное замечание `GO-2026-5932` относится к `golang.org/x/crypto/openpgp`,
-который проект не импортирует. Это source-аудит, не проверка всех компонентов
-готового контейнера или боевого MikroTik.
+В Vinext 1.4.5 встроенный `image-size` 2.0.4 разделён на модули. Проверяются
+версия пакета и SHA-256 входного модуля, ICNS-парсера и общих ISO-box функций.
+Ограничения размеров ICNS и поддержка ISO-box размера 0 сохраняются отдельными
+патчами и проверками повреждённых файлов. Неизвестный модуль останавливает
+проверку до изменения остальных зависимостей.
 
+### Проверка Go и компонентов образа
 
+Проверяйте исходники и фактические исполняемые файлы каждого выпуска с той же
+версией Go, набором build tags и графом модулей, которые использованы в образе.
+Для встроенного Xray включайте `xray_multicall`; отдельный ACME-файл проверяйте
+по его собственному графу зависимостей. Сохраняйте исходный вывод сканеров
+и отдельно оценивайте применимость замечаний к импортируемым пакетам и вызовам.
+Проверяйте также установленные пакеты Alpine и Nginx. Функциональные проверки
+запуска, DNS и передачи данных дополняют проверку зависимостей.
 
-
+The runtime build updates preinstalled APK packages within the Alpine 3.23
+repositories before installing its tools, and requires zlib 1.4-r0 or newer.
+This step uses the release source revision as a cache input so that a new
+revision does not reuse an earlier package-update layer. These updates happen
+when building the image; a running gateway does not upgrade its own packages.
+Audit the installed package database in each architecture's final archive,
+including packages inherited from the base image, against Alpine's security
+database. An audit of only the packages named in `apk add` is incomplete.
 
 ### Multicall Dependency Checks
 
@@ -428,7 +444,7 @@ reference, типы, mounts и адрес veth; неоднозначность �
 ### Встроенные копии image-size
 
 Нулевой npm-аудит не покрывает код, встроенный внутрь чужих пакетов.
-Vinext переносит `image-size@2.0.2` внутрь своего дистрибутива, а Next.js
+Vinext 1.4.5 переносит `image-size@2.0.4` внутрь своего дистрибутива, а Next.js
 также содержит скомпилированную копию. Отдельного исправленного npm-релиза
 `image-size` на дату проверки нет. Ошибки ICNS и JXL/HEIF способны зависать
 на некорректной длине блока:

@@ -1,6 +1,6 @@
-# SB-GATEWAY complete uninstall. Set the exact dedicated external-storage
+# XRoute complete uninstall. Set the exact dedicated project-storage
 # directory used by this installation before importing this file. The script
-# refuses internal flash and a bare disk root.
+# refuses internal flash and a bare disk root. System-disk directories require x86 CHR.
 
 # Service log preflight.
 :if (([:len [/system/logging/find where comment~"^SB-GATEWAY auth-log v1 "]] > 0) || ([:len [/system/logging/find where disabled=no and regex="^(\$|[^u])"]] > 0)) do={
@@ -10,8 +10,13 @@
 
 :global "SB_STORAGE_ROOT"
 :local storageRoot [:tostr $"SB_STORAGE_ROOT"]
-:if (([:len $storageRoot] < 5) || ([:typeof [:find $storageRoot "/"]] = "nil") || ([:typeof [:find $storageRoot ".."]] != "nil") || ([:find $storageRoot "flash"] = 0) || ([:find $storageRoot "Flash"] = 0) || ([:find $storageRoot "FLASH"] = 0) || ($storageRoot = "disk1") || ($storageRoot = "usb1") || ($storageRoot = "usb2") || ($storageRoot = "sata1") || ($storageRoot = "nvme1")) do={
-  :error "SB-GATEWAY: SB_STORAGE_ROOT must be a dedicated external-storage directory"
+:if (([:len $storageRoot] < 3) || ($storageRoot ~ "[^a-zA-Z0-9_./-]") || ([:pick $storageRoot 0 1] = "/") || ([:pick $storageRoot ([:len $storageRoot] - 1) [:len $storageRoot]] = "/") || ([:typeof [:find $storageRoot ".."]] != "nil") || ([:typeof [:find $storageRoot "//"]] != "nil") || ($storageRoot ~ "^[fF][lL][aA][sS][hH]")) do={
+  :error "XRoute: SB_STORAGE_ROOT must be a dedicated project directory"
+}
+:if ([:typeof [:find $storageRoot "/"]] = "nil") do={
+  :local hostArchitecture [/system/resource/get architecture-name]
+  :if (([:pick [/system/resource/get board-name] 0 3] != "CHR") || (($hostArchitecture != "x86") && ($hostArchitecture != "x86_64"))) do={ :error "XRoute: a system-disk project directory is supported only on x86 CHR" }
+  :if (($storageRoot ~ "^(disk|usb|slot|sata|nvme)[0-9]+\$") || ($storageRoot ~ "^(skins|pub|hotspot|web-proxy)\$")) do={ :error "XRoute: select a dedicated project directory, not a disk or system directory" }
 }
 :if ([:len [/file/find where name=$storageRoot]] != 1) do={
   :error "SB-GATEWAY: exact project storage directory is missing or ambiguous"

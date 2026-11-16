@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 var ErrManagedDNSStartupContract = errors.New("startup managed DNS ownership is inconsistent")

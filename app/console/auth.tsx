@@ -1,7 +1,8 @@
 "use client";
 
 import { GatewayApiError, bootstrapAdministrator, session } from "../api-client";
-import { type MessageKey, useLanguage } from "../i18n";
+import { BrandMark, BrandName } from "../brand";
+import { LanguageSelector, type MessageKey, useLanguage } from "../i18n";
 import { errorMessage } from "./shared";
 import { GatewayConsole } from "./shell";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +12,7 @@ function BootstrapPanel({
 }: {
   onAuthenticated: (username: string) => void;
 }) {
-  const { locale, setLocale, t } = useLanguage();
+  const { t } = useLanguage();
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmationRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -49,18 +50,11 @@ function BootstrapPanel({
   return (
     <main className="login-shell">
       <section className="login-card" aria-labelledby="bootstrap-title">
-        <button
-          className="login-language-toggle"
-          type="button"
-          onClick={() => setLocale(locale === "ru" ? "en" : "ru")}
-          aria-label={locale === "ru" ? t("language.switchToEnglish") : t("language.switchToRussian")}
-        >
-          {locale.toUpperCase()}
-        </button>
+        <LanguageSelector className="login-language-toggle" />
         <div className="brand login-brand">
-          <span className="brand-mark">SB</span>
+          <BrandMark />
           <div>
-            <strong>Gateway</strong>
+            <BrandName />
             <small>{t("bootstrap.brand")}</small>
           </div>
         </div>
@@ -122,7 +116,7 @@ function LoginPanel({
   initialMessage: string;
   onRetry: () => void;
 }) {
-  const { locale, setLocale, t } = useLanguage();
+  const { t } = useLanguage();
   const [busy, setBusy] = useState(false);
   const [rememberCredentials, setRememberCredentials] = useState(true);
 
@@ -133,18 +127,11 @@ function LoginPanel({
   return (
     <main className="login-shell">
       <section className="login-card" aria-labelledby="login-title">
-        <button
-          className="login-language-toggle"
-          type="button"
-          onClick={() => setLocale(locale === "ru" ? "en" : "ru")}
-          aria-label={locale === "ru" ? t("language.switchToEnglish") : t("language.switchToRussian")}
-        >
-          {locale.toUpperCase()}
-        </button>
+        <LanguageSelector className="login-language-toggle" />
         <div className="brand login-brand">
-          <span className="brand-mark">SB</span>
+          <BrandMark />
           <div>
-            <strong>Gateway</strong>
+            <BrandName />
             <small>{t("login.brand")}</small>
           </div>
         </div>
@@ -183,7 +170,7 @@ function LoginPanel({
           >
             <label className="field" htmlFor="username">
               {t("login.username")}
-              <input
+              <input dir="auto"
                 id="username"
                 name="username"
                 type="text"

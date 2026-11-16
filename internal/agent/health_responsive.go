@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/applyguard"
+	"github.com/Ati054/xroute/internal/applyguard"
 )
 
 var errHealthYield = errors.New("background probe yielded to active path or runtime change")
@@ -296,7 +296,7 @@ func (runtime *responsiveSelectorRuntime) Probe(candidate string) probeEvidence 
 }
 
 func (runtime *responsiveSelectorRuntime) ProbeWithQualityRequest(candidate string, request qualityProbeRequest) probeEvidence {
-	if !isPairedPlanningMeasurement(request.Measurement) {
+	if !isPairedPlanningMeasurement(request.Measurement) && request.Policy == "" {
 		return runtime.Probe(candidate)
 	}
 	if !runtime.enabled {
@@ -320,17 +320,22 @@ func (runtime *responsiveSelectorRuntime) ProbeConfirmationAvailability(candidat
 }
 
 func (runtime *responsiveSelectorRuntime) probeActiveAvailability(candidate string, confirmation bool) probeEvidence {
+	return runtime.activeAvailabilityOperation(func() probeEvidence {
+		return callScopedAvailability(runtime.selectorRuntime, candidate, availabilityProbeRequest{Confirmation: confirmation})
+	})
+}
+
+func (runtime *responsiveSelectorRuntime) probeBackgroundAvailabilityWithRequest(candidate string, request availabilityProbeRequest) probeEvidence {
+	request.Background = false
+	return runtime.ProbeAvailabilityWithRequest(candidate, request)
+}
+func (runtime *responsiveSelectorRuntime) activeAvailabilityOperation(probe func() probeEvidence) probeEvidence {
 	stamp := generationStamp(runtime.generationPaths)
 	if stamp != runtime.generation || (runtime.ctx != nil && runtime.ctx.Err() != nil) {
 		runtime.interrupted = errHealthYield
 		return probeEvidence{LocalFailure: true}
 	}
-	var evidence probeEvidence
-	if probe, ok := runtime.selectorRuntime.(confirmationAvailabilityRuntime); confirmation && ok {
-		evidence = probe.ProbeConfirmationAvailability(candidate)
-	} else {
-		evidence = runtime.selectorRuntime.ProbeAvailability(candidate)
-	}
+	evidence := probe()
 	if generationStamp(runtime.generationPaths) != stamp || (runtime.ctx != nil && runtime.ctx.Err() != nil) {
 		runtime.interrupted = errHealthYield
 		return probeEvidence{LocalFailure: true}
@@ -392,6 +397,22 @@ func (runtime *responsiveSelectorRuntime) probeParallel(candidates []string, onR
 }
 
 func (runtime *responsiveSelectorRuntime) probeParallelWithMeasurement(candidates []string, onResult func(string, probeEvidence) bool, checkOtherPolicies, quality bool, preferred []string, measurement qualityMeasurement) map[string]probeEvidence {
+	return runtime.probeParallelForPolicy(policyProbeScope{}, candidates, onResult, checkOtherPolicies, quality, preferred, measurement)
+}
+
+func (runtime *responsiveSelectorRuntime) ProbeQualityParallelForPolicy(scope policyProbeScope, candidates []string, measurement qualityMeasurement) map[string]probeEvidence {
+	return runtime.probeParallelForPolicy(scope, candidates, nil, true, true, nil, measurement)
+}
+
+func (runtime *responsiveSelectorRuntime) ProbeAvailabilityParallelForPolicy(scope policyProbeScope, candidates []string, onResult func(string, probeEvidence) bool, emergency bool) map[string]probeEvidence {
+	return runtime.probeParallelForPolicy(scope, candidates, onResult, !emergency, false, nil, qualityMeasurementCold)
+}
+
+func (runtime *responsiveSelectorRuntime) ProbeRankedEmergencyForPolicy(scope policyProbeScope, candidates, preferred []string, onResult func(string, probeEvidence) bool) map[string]probeEvidence {
+	return runtime.probeParallelForPolicy(scope, candidates, onResult, false, false, preferred, qualityMeasurementCold)
+}
+
+func (runtime *responsiveSelectorRuntime) probeParallelForPolicy(scope policyProbeScope, candidates []string, onResult func(string, probeEvidence) bool, checkOtherPolicies, quality bool, preferred []string, measurement qualityMeasurement) map[string]probeEvidence {
 	measured := make(map[string]probeEvidence, len(candidates))
 	lanes := runtime.backgrounds
 	if len(lanes) == 0 && runtime.background != nil {
@@ -413,11 +434,9 @@ func (runtime *responsiveSelectorRuntime) probeParallelWithMeasurement(candidate
 			}
 			var evidence probeEvidence
 			if quality {
-				evidence = runtime.ProbeWithQualityRequest(candidate, qualityProbeRequest{Measurement: measurement})
-			} else if urgent, ok := runtime.selectorRuntime.(emergencyCandidateRuntime); !checkOtherPolicies && ok {
-				evidence = urgent.ProbeEmergencyAvailability(candidate)
+				evidence = runtime.ProbeWithQualityRequest(candidate, qualityProbeRequest{policyProbeScope: scope, Measurement: measurement})
 			} else {
-				evidence = runtime.selectorRuntime.ProbeAvailability(candidate)
+				evidence = callScopedAvailability(runtime.selectorRuntime, candidate, availabilityProbeRequest{policyProbeScope: scope, Emergency: !checkOtherPolicies})
 			}
 			// A single manual lane must reject a replaced runtime before its
 			// emergency callback can select a result from the old contract.
@@ -474,11 +493,9 @@ func (runtime *responsiveSelectorRuntime) probeParallelWithMeasurement(candidate
 				}
 				var evidence probeEvidence
 				if quality {
-					evidence = lane.ProbeWithQualityRequest(candidate, qualityProbeRequest{Measurement: measurement, Start: job.start, WarmStart: job.warmStart})
-				} else if !checkOtherPolicies {
-					evidence = lane.ProbeEmergencyAvailability(candidate)
+					evidence = lane.ProbeWithQualityRequest(candidate, qualityProbeRequest{policyProbeScope: scope, Measurement: measurement, Start: job.start, WarmStart: job.warmStart})
 				} else {
-					evidence = lane.ProbeAvailability(candidate)
+					evidence = lane.ProbeAvailabilityWithRequest(candidate, availabilityProbeRequest{policyProbeScope: scope, Emergency: !checkOtherPolicies})
 				}
 				if evidence.ObservedAt.IsZero() {
 					evidence.ObservedAt = time.Now()

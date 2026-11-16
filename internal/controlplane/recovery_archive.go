@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 const (

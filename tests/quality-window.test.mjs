@@ -138,7 +138,8 @@ test("warm display survives a failed or expired comparison without supplying fre
 });
 
 test("paired display accepts only evidence for the current known measurement", () => {
-  for (const marker of ["gstatic-warm-head-v1", "gstatic-fresh-paired-head-v1"]) {
+  for (const marker of ["gstatic-warm-head-v1", "gstatic-fresh-paired-head-v1",
+    "gstatic-route-paired-head-v1", "gstatic-isolated-paired-head-v1"]) {
     const pair = { measurement: marker, active: "active", active_delay_ms: 600,
       candidate_delay_ms: 350, active_at: 200, candidate_at: 201, expires_at: 320 };
     const health = { runtime_selected: "active", runtime_confirmed: true,

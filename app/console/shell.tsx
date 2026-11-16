@@ -2,7 +2,8 @@
 
 import { GatewayApiError, JsonObject, createCollectionItem, deleteCollectionItem, getBootstrapState, getClientTelemetry, getCurrentDraft, getOverview, getRouterOsContainerStatus, getSelectorStatus, getStatus, getTrafficReadiness, isUncertainOperationError, logout, runDraftOperation, saveCurrentDraft, updateCollectionItem } from "../api-client";
 import { DraftAutosave } from "../draft-autosave";
-import { useLanguage } from "../i18n";
+import { BrandMark, BrandName } from "../brand";
+import { LanguageSelector, useLanguage } from "../i18n";
 import { mergeRuntimeStatus } from "../runtime-status";
 import { mergeOverviewState } from "../overview-state";
 import { recoveredApplyConfirmed } from "../apply-recovery";
@@ -29,7 +30,7 @@ export function GatewayConsole({
   username: string;
   onSessionEnded: () => void;
 }) {
-  const { locale, setLocale, t, tr } = useLanguage();
+  const { locale, t, tr } = useLanguage();
   const [screen, setScreen] = useState<Screen>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [applyMode, setApplyMode] = useState<"check" | "apply" | null>(null);
@@ -543,10 +544,9 @@ export function GatewayConsole({
       </a>
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <span className="brand-mark">SB</span>
+          <BrandMark />
           <div>
-            <strong>Gateway</strong>
-            <small>VLESS · MikroTik</small>
+            <BrandName />
           </div>
           <button
             className="sidebar-close"
@@ -621,29 +621,27 @@ export function GatewayConsole({
           })()}
         </div>
 
+        <a
+          className="project-community-link"
+          href="https://t.me/xroute_dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          referrerPolicy="no-referrer"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+            <path d="M22 2 11 13" />
+          </svg>
+          <bdi>Telegram: @xroute_dev</bdi>
+        </a>
+
         <div className="profile">
           <span className="avatar avatar-small">A</span>
           <div>
             <strong>{username}</strong>
             <small>{t("shell.localNetwork")}</small>
           </div>
-          <button
-            className="language-toggle"
-            type="button"
-            title={
-              locale === "ru"
-                ? t("language.switchToEnglish")
-                : t("language.switchToRussian")
-            }
-            aria-label={
-              locale === "ru"
-                ? t("language.switchToEnglish")
-                : t("language.switchToRussian")
-            }
-            onClick={() => setLocale(locale === "ru" ? "en" : "ru")}
-          >
-            {locale.toUpperCase()}
-          </button>
+          <LanguageSelector />
           <button
             className="icon-button"
             aria-label={t("shell.logout")}
@@ -679,7 +677,7 @@ export function GatewayConsole({
               ☰
             </button>
             <div>
-              <span>SB Gateway</span>
+              <span>XRoute</span>
               <i>/</i>
               <strong>{t(current.label)}</strong>
             </div>

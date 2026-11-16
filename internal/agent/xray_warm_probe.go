@@ -19,12 +19,15 @@ import (
 type qualityMeasurement string
 
 const (
-	qualityMeasurementCold        qualityMeasurement = qualityMeasurement(latencyMeasurement)
-	qualityMeasurementWarm        qualityMeasurement = "gstatic-warm-head-v1"
-	qualityMeasurementFreshPaired qualityMeasurement = "gstatic-fresh-paired-head-v1"
+	qualityMeasurementCold           qualityMeasurement = qualityMeasurement(latencyMeasurement)
+	qualityMeasurementWarm           qualityMeasurement = "gstatic-warm-head-v1"
+	qualityMeasurementFreshPaired    qualityMeasurement = "gstatic-fresh-paired-head-v1"
+	qualityMeasurementRoutePaired    qualityMeasurement = "gstatic-route-paired-head-v1"
+	qualityMeasurementIsolatedPaired qualityMeasurement = "gstatic-isolated-paired-head-v1"
 )
 
 type qualityProbeRequest struct {
+	policyProbeScope
 	Measurement qualityMeasurement
 	Start       *qualityStartTicket
 	WarmStart   *qualityStartTicket
@@ -33,6 +36,7 @@ type qualityProbeRequest struct {
 // The first request remains ordinary cold evidence. This optional observation
 // belongs only to planned URLTest comparisons, never availability or history.
 type planningQualityEvidence struct {
+	Transport   string
 	Measurement qualityMeasurement
 	StartedAt   time.Time
 	ObservedAt  time.Time
@@ -47,7 +51,7 @@ type planningQualityEvidence struct {
 type warmQualityEvidence = planningQualityEvidence
 
 func isPairedPlanningMeasurement(measurement qualityMeasurement) bool {
-	return measurement == qualityMeasurementWarm || measurement == qualityMeasurementFreshPaired
+	return measurement == qualityMeasurementWarm || measurement == qualityMeasurementFreshPaired || measurement == qualityMeasurementRoutePaired || measurement == qualityMeasurementIsolatedPaired
 }
 
 func (evidence probeEvidence) planningQuality() *planningQualityEvidence {
@@ -220,7 +224,24 @@ func executeSessionProbe(client *http.Client, ctx context.Context, target, metho
 }
 
 func (runtime *xraySelectorRuntime) ProbeWithQualityRequest(candidate string, request qualityProbeRequest) (evidence probeEvidence) {
-	trace := beginHealthStage("quality_probe", runtime.stageLane(), "", candidate)
+	// Scope readback can fail before the inner probe starts. Complete both
+	// admission tickets on that path too; otherwise its peer waits for a job
+	// which will never enter the paired phase.
+	defer func() {
+		request.Start.arrive()
+		if !evidence.OK || evidence.LocalFailure || evidence.Deferred {
+			request.WarmStart.abortWarm()
+		}
+		request.WarmStart.arrive()
+	}()
+	if request.Policy != "" {
+		scope := request.policyProbeScope
+		request.policyProbeScope = policyProbeScope{}
+		return runtime.policyProbe(scope, nil, func(scoped *xraySelectorRuntime) probeEvidence {
+			return scoped.ProbeWithQualityRequest(candidate, request)
+		})
+	}
+	trace := beginHealthStage("quality_probe", runtime.stageLane(), runtime.probePolicy, candidate)
 	defer func() { trace.finish(evidence.OK) }()
 	defer func() {
 		request.Start.arrive()
@@ -237,9 +258,9 @@ func (runtime *xraySelectorRuntime) ProbeWithQualityRequest(candidate string, re
 		if request.Measurement == qualityMeasurementWarm && evidence.Warm == nil {
 			evidence.Warm = &warmQualityEvidence{Measurement: qualityMeasurementWarm, Failed: true, ObservedAt: evidence.ObservedAt}
 		}
-		if request.Measurement == qualityMeasurementFreshPaired {
+		if request.Measurement == qualityMeasurementFreshPaired || request.Measurement == qualityMeasurementIsolatedPaired || request.Measurement == qualityMeasurementRoutePaired {
 			if evidence.Planning == nil {
-				evidence.Planning = &planningQualityEvidence{Measurement: qualityMeasurementFreshPaired, Failed: true, ObservedAt: evidence.ObservedAt}
+				evidence.Planning = &planningQualityEvidence{Measurement: request.Measurement, Failed: true, ObservedAt: evidence.ObservedAt}
 			}
 			evidence.Planning.Wave = evidence.QualityWave
 		}

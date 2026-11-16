@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/applytiming"
+	"github.com/Ati054/xroute/internal/applytiming"
 )
 
 func TestApplyTimingEmitsOneTerminalRecordOnValidationError(t *testing.T) {

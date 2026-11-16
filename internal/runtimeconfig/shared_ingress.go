@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
 const RealityCoverPort = 16448

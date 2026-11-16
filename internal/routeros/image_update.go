@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 const (
@@ -28,6 +28,7 @@ type ImageUpdateSpec struct {
 	// CatalogSchema is a verified target-image capability, never inferred from
 	// its version. Zero is legacy/unknown and cannot consume catalog state.
 	CatalogSchema      int
+	Architecture       string
 	Version            string
 	StorageRoot        string
 	CandidateRoot      string
@@ -103,6 +104,12 @@ func (client *Client) ScheduleImageUpdate(ctx context.Context, spec ImageUpdateS
 }
 
 func validateImageUpdateSpec(spec ImageUpdateSpec) (ImageUpdateSpec, error) {
+	if spec.Architecture == "" {
+		spec.Architecture = "arm64"
+	}
+	if spec.Architecture != "arm64" && spec.Architecture != "amd64" {
+		return ImageUpdateSpec{}, errors.New("image architecture is unsupported")
+	}
 	if spec.CatalogSchema < 0 || spec.CatalogSchema > 1 {
 		return ImageUpdateSpec{}, errors.New("image catalog data capability is invalid")
 	}
@@ -182,6 +189,7 @@ func renderImageUpdateWorker(spec ImageUpdateSpec) string {
 	}, "\n")
 	lines := []string{
 		"# SB-GATEWAY autonomous one-image switch",
+		imageHostArchitectureGuard(spec.Architecture),
 		catalogImageWorkerCompatibilitySource(),
 		`:local jobs [/system/script/job/find where script="` + imageUpdateWorker + `"]`,
 		`:if ([:len [/system/script/job/find where script="SB-GATEWAY-container-startup"]] > 0) do={ :return true }`,
@@ -481,5 +489,12 @@ func renderImageUpdateWorker(spec ImageUpdateSpec) string {
 			filtered = append(filtered, line)
 		}
 	}
-	return strings.Join(filtered, "\n")
+	return strings.Join(withStorageRootGuard(spec.StorageRoot, filtered), "\n")
+}
+
+func imageHostArchitectureGuard(architecture string) string {
+	if architecture == "amd64" {
+		return `:local imageHost [/system/resource/get architecture-name]; :if (($imageHost != "x86") && ($imageHost != "x86_64")) do={ :error "XRoute: AMD64 image does not match this router architecture" }`
+	}
+	return `:if ([/system/resource/get architecture-name] != "arm64") do={ :error "XRoute: ARM64 image does not match this router architecture" }`
 }

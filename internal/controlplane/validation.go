@@ -11,9 +11,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/routeros"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 const currentSchemaVersion = releasecontract.ConfigSchemaVersion
@@ -272,8 +273,10 @@ func (result *configValidation) validateSystemSettings(config map[string]any) {
 	if ok {
 		root, _ := storage["root"].(string)
 		if strings.TrimSpace(root) != "" {
-			if _, err := validateLifecycleStorageRoot(root); err != nil {
-				result.add("storage.root", "path", "Storage root must be a dedicated directory on external storage.")
+			architecture := text(nestedValue(config, "routeros", "architecture"))
+			allowSystemDisk := architecture == "x86" || architecture == "x86_64" || architecture == "amd64"
+			if _, err := routeros.ValidateStorageRoot(root, allowSystemDisk); err != nil {
+				result.add("storage.root", "path", "Use a dedicated directory on external storage, or the system disk on x86 CHR.")
 			}
 		}
 	}

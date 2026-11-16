@@ -6,9 +6,9 @@ test("installation guides match the release and include storage-aware startup", 
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   for (const file of ["INSTALL.md", "INSTALL-RU.md"]) {
     const source = await readFile(new URL("../docs/" + file, import.meta.url), "utf8");
-    assert.ok(source.includes("sb-gateway-" + version + "-routeros-bundle.zip"), file);
-    assert.ok(source.includes("sb-gateway-" + version + "-linux-arm64.tar"), file);
-    for (const referenced of source.matchAll(/sb-gateway-([0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?)-(?:routeros-bundle|linux-arm64)/g)) {
+    assert.ok(source.includes("xroute-" + version + "-routeros-bundle.zip"), file);
+    assert.ok(source.includes("xroute-" + version + "-linux-arm64.tar"), file);
+    for (const referenced of source.matchAll(/xroute-([0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?)-(?:routeros-bundle|linux-arm64)/g)) {
       assert.equal(referenced[1], version, file + ": stale release reference");
     }
     assert.match(source, /  bootstrap\.rsc\r?\n  container-startup\.rsc/);
@@ -54,7 +54,7 @@ test("release image declares the in-place update contract", async () => {
   assert.match(dockerfile, /io\.sb-gateway\.config\.minimum-schema="1"/);
 });
 
-test("public changelog preserves the reviewed history rather than exporting the internal journal", async () => {
+test("public changelog starts with XRoute and excludes the legacy development journal", async () => {
   const source = await readFile(new URL("../scripts/export-public-source.ps1", import.meta.url), "utf8");
   const match = source.match(/if \(\$_ -match '([^']+)'\)/);
   assert.ok(match, "Missing changelog boundary guard");
@@ -68,13 +68,11 @@ test("public changelog preserves the reviewed history rather than exporting the 
   const versions = [...history.matchAll(new RegExp(guard.source, "gm"))].map(match => match[1]);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(versions[0], pkg.version);
-  assert.ok(versions.length > 1);
+  assert.ok(versions.length >= 1);
   assert.equal(new Set(versions).size, versions.length);
-  for (const version of [
-    "1.6.17", "1.6.18", "1.6.19", "1.6.20", "1.6.21", "1.6.22",
-    "1.6.24", "1.6.25", "1.6.26", "1.6.27", "1.6.33", "1.6.34",
-    "1.6.35", "1.6.49", "1.6.58",
-  ]) assert.ok(versions.includes(version), `Published history lost ${version}`);
+  assert.ok(versions.includes("1.7.0"), "First XRoute release entry is missing");
+  assert.doesNotMatch(history, /^## 1\.6\./m);
+  assert.equal(await readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8"), history);
   assert.doesNotMatch(history, /### (Verification|Проверка)|acceptance report/i);
   const privateAttachmentName = new RegExp(["codex", "clipboard"].join("-"), "i");
   assert.doesNotMatch(history, privateAttachmentName);

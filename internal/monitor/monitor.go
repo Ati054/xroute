@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/agent"
-	"github.com/sb-gateway/sb-gateway/internal/geoiprefresh"
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
-	"github.com/sb-gateway/sb-gateway/internal/watchdog"
+	"github.com/Ati054/xroute/internal/agent"
+	"github.com/Ati054/xroute/internal/geoiprefresh"
+	"github.com/Ati054/xroute/internal/rulesets"
+	"github.com/Ati054/xroute/internal/watchdog"
 )
 
 type Options struct {

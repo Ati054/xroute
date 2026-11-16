@@ -67,14 +67,14 @@ test("ARM64 image builds pinned Xray and static UI", async () => {
   assert.match(dockerfile, /XRAY_GO_IMAGE=golang:1\.27\.4-alpine3\.23@sha256:146e3b9c7c1e2ec3d3f5348c8a686151a75e1976e50efac9fc022ebe446a9a82/);
   assert.match(dockerfile, /GO_IMAGE=golang:1\.27\.4-alpine3\.23@sha256:146e3b9c7c1e2ec3d3f5348c8a686151a75e1976e50efac9fc022ebe446a9a82/);
   assert.match(dockerfile, /golang\.org\/x\/crypto\/x509roots\/fallback v0\.0\.0-20261020153306-9f2b28d4331a/);
-  assert.match(dockerfile, /arm \/out\/xray version \| grep -F 'go1\.27\.4'/);
+  assert.match(dockerfile, /target \/out\/xray version \| grep -F 'go1\.27\.4'/);
   assert.match(dockerfile, /FROM --platform=\$BUILDPLATFORM \$\{XRAY_GO_IMAGE\} AS xray-build/);
   assert.match(dockerfile, /go test \.\/app\/router -run '\^TestSB'/);
   assert.match(dockerfile, /server can use the current validated core/);
   assert.match(dockerfile, /xray run -test -config \/tmp\/xray-build-validation\.json/);
   assert.match(dockerfile, /FROM --platform=\$BUILDPLATFORM alpine:3\.23 AS multicall-check/);
   assert.match(dockerfile, /apk add --no-cache qemu-aarch64/);
-  assert.match(dockerfile, /arm \/out\/xray run -test -config/);
+  assert.match(dockerfile, /target \/out\/xray run -test -config/);
   assert.doesNotMatch(dockerfile.slice(dockerfile.indexOf(" AS runtime")), /qemu-aarch64/);
   assert.doesNotMatch(dockerfile, /xray\.smoke\.json/);
   assert.match(dockerfile, /npm run build:static/);
@@ -82,7 +82,7 @@ test("ARM64 image builds pinned Xray and static UI", async () => {
   assert.match(dockerfile, /npm run lint/);
   assert.match(dockerfile, /COPY rulesets \.\/rulesets/);
   assert.match(dockerfile, /SB_RULESET_DIR=\/out\/rulesets-seed go run/);
-  assert.match(dockerfile, /COPY --from=sb-gateway-build \/out\/rulesets-seed \/opt\/sb-gateway\/rulesets-seed/);
+  assert.match(dockerfile, /COPY --from=xroute-build \/out\/rulesets-seed \/opt\/sb-gateway\/rulesets-seed/);
   assert.doesNotMatch(dockerfile.slice(dockerfile.indexOf(" AS runtime")), /rulesets --prepare/);
   assert.match(
     dockerfile,
@@ -104,12 +104,12 @@ test("Policy DNS ships as a native Go component", async () => {
     text("Makefile"),
     text("cmd/routeros-image/main.go"),
   ]);
-  assert.match(dockerfile, /AS sb-gateway-build/);
+  assert.match(dockerfile, /AS xroute-build/);
   assert.match(imageTool, /runGoReleaseChecks\(root, runtime\.GOOS\)/);
   assert.match(imageTool, /if goos != "windows"/);
   assert.match(imageTool, /commandOutput\(root, "go", append\(\[\]string\{"list"\}, targets\.\.\.\)\.\.\.\)/);
   assert.match(imageTool, /for attempt := 1; attempt <= 2; attempt\+\+/);
-  assert.match(imageTool, /return \[\]string\{"\.\/cmd\/\.\.\.", "\.\/internal\/\.\.\.", "\.\/tests\/tools"\}/);
+  assert.match(imageTool, /return \[\]string\{"\.\/cmd\/\.\.\.", "\.\/internal\/\.\.\.", "\.\/routeros\/\.\.\.", "\.\/tests\/tools"\}/);
   assert.match(
     dockerfile,
     /COPY --from=multicall-check \/out\/sb-gateway \/usr\/local\/bin\/sb-gateway/,
@@ -123,7 +123,7 @@ test("Policy DNS ships as a native Go component", async () => {
 test("shared executable retains separate gateway and full Xray CLI identities", async () => {
   const [dockerfile, patch, dispatch] = await Promise.all([
     text("Dockerfile"), text("patches/xray-library-main.patch"),
-    text("cmd/sb-gateway/xray_dispatch.go"),
+    text("cmd/xroute/xray_dispatch.go"),
   ]);
   assert.match(dockerfile, /ln -s sb-gateway \/usr\/local\/bin\/xray/);
   assert.doesNotMatch(dockerfile, /COPY[^\n]*\/out\/xray \/usr\/local\/bin\/xray/);
@@ -297,7 +297,7 @@ test("RouterOS bootstrap accepts a local ARM64 archive and waits for extraction"
   assert.match(variables, /:global "SB_IMAGE_SOURCE" "file"/);
   assert.match(
     variables,
-    new RegExp(`sb-gateway-${escapedPackageVersion}-linux-arm64\\.tar`),
+    new RegExp(`xroute-${escapedPackageVersion}-linux-arm64\\.tar`),
   );
   assert.match(preflight, /\/file\/find where name=\$"SB_IMAGE_FILE"/);
   assert.match(
@@ -312,7 +312,8 @@ test("RouterOS bootstrap accepts a local ARM64 archive and waits for extraction"
   assert.match(install, /\$containerCreated = false/);
   assert.match(install, /\$legacyContainerStatus = "stopped"/);
   assert.match(install, /:set shouldStart \[\/container\/get \$containerId stopped\]/);
-  assert.match(install, /\$imageArch != "arm64"/);
+  assert.match(install, /\$imageArch != \$expectedImageArchitecture/);
+  assert.match(install, /:set expectedImageArchitecture "amd64"/);
   assert.match(
     install,
     /timed out waiting for container image extraction/,
@@ -633,11 +634,11 @@ test("release separates the user panel port from RouterOS REST", async () => {
   assert.doesNotMatch(variables, /"SB_ROUTEROS_REST_PORT" 17443/);
   assert.match(
     variables,
-    new RegExp(`sb-gateway-${escapedPackageVersion}-linux-arm64\\.tar`),
+    new RegExp(`xroute-${escapedPackageVersion}-linux-arm64\\.tar`),
   );
   assert.match(
     variables,
-    new RegExp(`"SB_ROOT_DIR" "usb1/sb-gateway/root-${escapedPackageVersion}"`),
+    new RegExp(`"SB_ROOT_DIR" "usb1/xroute/root-${escapedPackageVersion}"`),
   );
   assert.doesNotMatch(variables, /1\.5\.10/);
 });

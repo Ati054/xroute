@@ -58,7 +58,8 @@ and reserve probe budgets.
 ## Paired Planning Modes
 
 The internal `SB_URLTEST_PLANNING_MODE` setting accepts `legacy`, `warm-paired`
-and `fresh-paired`. An explicit value takes precedence over
+`fresh-paired`, `route-paired` and the diagnostic `isolated-paired` mode.
+An explicit value takes precedence over
 `SB_URLTEST_WARM_COMPARE`; when it is absent or empty, the old boolean keeps its
 previous meaning. Unknown explicit values are rejected before the agent starts
 its API connection and workers.
@@ -131,6 +132,33 @@ For a healthy full sweep over `N` nodes, fresh paired mode can require
 primary requests. Different policies and availability fallbacks add work.
 Concurrency and per-job counts do not establish a global requests-per-minute
 limit or a CPU improvement. Measure those outcomes separately.
+
+### Route-owned comparison experiment
+
+`route-paired` preserves the actual live-route request as cold history and
+availability evidence, then measures a separate fresh HEAD for planned ranking.
+Ordinary outbound transports use a fresh lane-owned handler. Reverse portals,
+RouterOS WireGuard exits and referenced detours retain their real shared route;
+they are not replaced with direct WAN or independently cloned remote sessions.
+Preparation and the second-phase rendezvous precede the full five-second HEAD
+deadline. Owned diagnostic handlers are retired with a separate bounded cleanup
+context, including after cancellation. A failed cleanup retains ownership and
+prevents unbounded creation of further generations.
+
+Each probe captures the policy, logical node and verified runtime member.
+Results from a replaced member are deferred, and composite live-route evidence
+cannot be shared across policies. Per-policy logical bindings survive a
+definition refresh even when several policies use the same endpoint. New
+streams move to the new generation only after verified selection; existing
+streams retain the previous handler under the existing bounded retirement rule.
+
+The marker is `gstatic-route-paired-head-v1`. Changing measurement or transport
+capability discards incompatible planning samples and confirmations, preserving
+cold historical statistics. Delta accepts only the exact current marker.
+This experiment adds a second primary request per healthy job. It does not prove
+lower CPU, immunity to WAN congestion or detection of a slow existing session
+whose fresh diagnostic handler remains healthy. The default image mode remains
+`fresh-paired` until the alternative is qualified separately.
 
 ## Experimental Same-Connection Comparison
 

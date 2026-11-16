@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/domainset"
+	"github.com/Ati054/xroute/internal/domainset"
 )
 
 func TestLegacyInlineConfigSharesMembershipAfterStreamingDecode(t *testing.T) {

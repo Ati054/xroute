@@ -324,7 +324,7 @@ ingress:
 
 public_exposure:
   subscription:
-    display_name: SB Gateway
+    display_name: XRoute
     # Required by Happ before subscription-managed iOS TUN settings are accepted.
     # Obtain it from the provider account at https://happ-proxy.com/.
     happ_provider_id: ""

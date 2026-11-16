@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 const (
@@ -764,11 +764,11 @@ func buildMihomoClientRules(plan clientProfileRoutePlan) []any {
 			kind = "IP-CIDR6"
 		}
 		if len(plan.AllowedLANPorts) == 0 {
-			rules = append(rules, kind+","+cidr+",SB Gateway,no-resolve")
+			rules = append(rules, kind+","+cidr+",XRoute,no-resolve")
 			continue
 		}
 		for _, port := range plan.AllowedLANPorts {
-			rules = append(rules, "AND,(("+kind+","+cidr+"),(DST-PORT,"+strconv.Itoa(port)+")),SB Gateway")
+			rules = append(rules, "AND,(("+kind+","+cidr+"),(DST-PORT,"+strconv.Itoa(port)+")),XRoute")
 		}
 	}
 	for _, cidr := range clientDirectPrivateCIDRs(plan.AllowedLANCIDRs) {
@@ -806,7 +806,7 @@ func buildMihomoClientDNS(plan clientProfileRoutePlan) map[string]any {
 		policy["="+domain] = "https://1.1.1.1/dns-query#DIRECT"
 	}
 	if plan.InternalDNSServer != "" && len(plan.InternalZones) != 0 {
-		endpoint := "udp://" + net.JoinHostPort(plan.InternalDNSServer, "53") + "#SB Gateway"
+		endpoint := "udp://" + net.JoinHostPort(plan.InternalDNSServer, "53") + "#XRoute"
 		for _, domain := range plan.InternalZones {
 			policy["+."+domain] = endpoint
 		}
@@ -834,5 +834,5 @@ func mihomoTarget(target string) string {
 	if target == clientRouteDirect {
 		return "DIRECT"
 	}
-	return "SB Gateway"
+	return "XRoute"
 }

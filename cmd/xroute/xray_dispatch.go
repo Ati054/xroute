@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/memorybudget"
 )
 
 func isXrayAlias(executable string) bool {

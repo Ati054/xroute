@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/netpolicy"
+	"github.com/Ati054/xroute/internal/netpolicy"
 	"golang.org/x/net/netutil"
 )
 

@@ -29,7 +29,7 @@ try {
     } else {
         [System.IO.Path]::GetFullPath((Join-Path $projectRoot $OutputDirectory))
     }
-    $repositoryRoot = Join-Path $outputRoot "sb-gateway-$version-source"
+    $repositoryRoot = Join-Path $outputRoot "xroute-$version-source"
 
     $userName = (& git config user.name).Trim()
     $userEmail = (& git config user.email).Trim()
@@ -41,9 +41,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "git init failed for the public repository." }
     & git -C $repositoryRoot add --all
     if ($LASTEXITCODE -ne 0) { throw "git add failed for the public repository." }
-    & git -C $repositoryRoot commit -m "release: SB Gateway $version"
+    & git -C $repositoryRoot commit -m "release: XRoute $version"
     if ($LASTEXITCODE -ne 0) { throw "git commit failed for the public repository." }
-    & git -C $repositoryRoot tag -a "v$version" -m "SB Gateway $version"
+    & git -C $repositoryRoot tag -a "v$version" -m "XRoute $version"
     if ($LASTEXITCODE -ne 0) { throw "git tag failed for the public repository." }
 
     $commit = (& git -C $repositoryRoot rev-parse HEAD).Trim()

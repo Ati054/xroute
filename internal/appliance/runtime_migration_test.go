@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/controlplane"
+	"github.com/Ati054/xroute/internal/controlplane"
 )
 
 func TestRunStopsBeforeCoreOnProbeContractMigrationFailure(t *testing.T) {

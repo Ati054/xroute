@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	singBoxProxyTag  = "SB Gateway"
+	singBoxProxyTag  = "XRoute"
 	singBoxAutoTag   = "Автоматический выбор"
 	singBoxDirectTag = "direct"
 )

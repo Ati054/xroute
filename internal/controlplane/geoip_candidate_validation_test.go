@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 func TestPinnedXrayGeoIPCandidateValidation(t *testing.T) {

@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
-	"github.com/sb-gateway/sb-gateway/internal/policydns"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/policydns"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 type RuntimeController interface {

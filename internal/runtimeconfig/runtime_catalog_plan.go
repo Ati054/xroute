@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"runtime/debug"
 
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 // One shared typed node index is serialized once in a v5 pool. Policy records

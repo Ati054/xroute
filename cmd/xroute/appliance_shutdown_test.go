@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/appliance"
+	"github.com/Ati054/xroute/internal/appliance"
 )
 
 type blockedApplianceLogger struct{}

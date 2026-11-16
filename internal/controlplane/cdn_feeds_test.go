@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
+	"github.com/Ati054/xroute/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 func TestCDNFeedLastKnownGoodAndRestart(t *testing.T) {

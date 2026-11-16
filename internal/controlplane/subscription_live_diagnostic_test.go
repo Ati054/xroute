@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 // Opt-in read-only replay of a local lab model without secret values.

@@ -26,7 +26,12 @@ func TestPruneManagedFilesRetainsThreeBackupGenerationsAndRemovesInstallArtifact
 		{".id":"*14","name":"usb1/sb-gateway/routeros-ca.crt"},
 		{".id":"*15","name":"autosupout.rif"},
 		{".id":"*16","name":"foreign.backup"},
-		{".id":"*17","name":"usb1/sb-gateway/container-startup.rsc"}
+		{".id":"*17","name":"usb1/sb-gateway/container-startup.rsc"},
+		{".id":"*18","name":"usb1/sb-gateway/xroute-1.7.0-rc.1-linux-arm64.tar"},
+		{".id":"*19","name":"usb1/sb-gateway/xroute-1.7.0-rc.1-linux-arm64.tar.sha256"},
+		{".id":"*20","name":"usb1/foreign/xroute-1.7.0-rc.1-linux-arm64.tar"},
+		{".id":"*21","name":"usb1/sb-gateway/data/lifecycle-uploads/xroute-1.7.0-rc.1-linux-arm64.tar"},
+		{".id":"*22","name":"usb1/sb-gateway/xroute-latest-linux-arm64.tar"}
 	]`
 	deleted := []string{}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -50,11 +55,11 @@ func TestPruneManagedFilesRetainsThreeBackupGenerationsAndRemovesInstallArtifact
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Backups != 4 || result.Install != 5 {
+	if result.Backups != 4 || result.Install != 7 {
 		t.Fatalf("prune result = %#v", result)
 	}
 	sort.Strings(deleted)
-	want := []string{"/rest/file/*1", "/rest/file/*10", "/rest/file/*11", "/rest/file/*17", "/rest/file/*2", "/rest/file/*3", "/rest/file/*4", "/rest/file/*8", "/rest/file/*9"}
+	want := []string{"/rest/file/*1", "/rest/file/*10", "/rest/file/*11", "/rest/file/*17", "/rest/file/*18", "/rest/file/*19", "/rest/file/*2", "/rest/file/*3", "/rest/file/*4", "/rest/file/*8", "/rest/file/*9"}
 	sort.Strings(want)
 	if len(deleted) != len(want) {
 		t.Fatalf("deleted = %#v", deleted)

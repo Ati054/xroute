@@ -22,11 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmedns"
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
-	"github.com/sb-gateway/sb-gateway/internal/policydns"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/acmedns"
+	"github.com/Ati054/xroute/internal/acmejob"
+	"github.com/Ati054/xroute/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/policydns"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 type acmeRecord struct {

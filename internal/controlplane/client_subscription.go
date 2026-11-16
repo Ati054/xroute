@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 const defaultClientFingerprint = "chrome"
@@ -172,7 +172,7 @@ func (server *Server) buildPublicProfileForRequest(token, requestedFormat, userA
 	if len(nodes) == 0 {
 		return nil, errors.New("client profile is unavailable")
 	}
-	title := "SB Gateway"
+	title := "XRoute"
 	happProviderID := ""
 	if exposure, ok := active["public_exposure"].(map[string]any); ok {
 		if subscription, ok := exposure["subscription"].(map[string]any); ok {
@@ -793,7 +793,7 @@ func buildMihomoProfile(config, user map[string]any, nodes []clientProfileNode) 
 		}
 		proxies[index], names[index] = proxy, node.name
 	}
-	group := map[string]any{"name": "SB Gateway", "type": "select", "proxies": names}
+	group := map[string]any{"name": "XRoute", "type": "select", "proxies": names}
 	if boolDefault(user, "client_auto_fallback", false) && len(nodes) > 1 {
 		group["type"] = "fallback"
 		group["url"] = "https://www.gstatic.com/generate_204"

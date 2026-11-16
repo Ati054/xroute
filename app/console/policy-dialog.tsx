@@ -27,7 +27,7 @@ function CustomRouteEditor({ rules, onChange }: { rules: JsonObject[]; onChange:
           </select>
         </label>
         <label className="field custom-route-value">{tr("Значение")}
-          <input value={asText(rule.value, "")} onChange={(event) => update(index, "value", event.target.value)} placeholder={asText(rule.kind, "domain") === "ip" ? "203.0.113.0/24" : asText(rule.kind, "domain") === "port" ? "443 или 1000-2000" : "example.com"} />
+          <input value={asText(rule.value, "")} onChange={(event) => update(index, "value", event.target.value)} placeholder={asText(rule.kind, "domain") === "ip" ? "203.0.113.0/24" : asText(rule.kind, "domain") === "port" ? tr("443 или 1000-2000") : "example.com"} />
         </label>
         {rule.kind === "port" ? <label className="field">{tr("Сеть")}
           <select value={asText(rule.network, "tcp")} onChange={(event) => update(index, "network", event.target.value)}><option value="tcp">TCP</option><option value="udp">UDP</option></select>
@@ -430,7 +430,7 @@ export function PolicyDialog({
                  {tr("Здесь выбираются расположения подписки, основной путь трафика и сервисы-исключения. Устройство только подключается к готовому листу.")} </p>
               <div className="form-grid policy-editor-grid">
               <label className="field">
-                 {tr("Название маршрута")} <input
+                 {tr("Название маршрута")} <input dir="auto"
                   name="display_name"
                   required
                   defaultValue={asText(existingPolicy.display_name, "")}

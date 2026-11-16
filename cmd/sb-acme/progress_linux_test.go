@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
+	"github.com/Ati054/xroute/internal/acmejob"
 )
 
 func TestWorkerProgressReporterRequiresExplicitFD3AndNeverBlocks(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 const (
@@ -472,7 +472,7 @@ func RefreshAll(options Options, packs []ServicePack) (map[string]any, error) {
 		if pack.UpdateMode != "catalog" && pack.UpdateMode != "geoip" {
 			results[pack.ID] = map[string]any{
 				"status": "bundled", "checked_at": time.Now().UTC().Format(time.RFC3339Nano),
-				"message": "Built-in service rules are shipped with this SB Gateway release.",
+				"message": "Built-in service rules are shipped with this XRoute release.",
 				"rules":   reviewedRuleCount(pack, index),
 			}
 			continue

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 func TestFileSHA256(t *testing.T) {

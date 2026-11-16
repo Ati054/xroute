@@ -3,7 +3,7 @@ SHELL := /bin/sh
 GO ?= go
 NPM ?= npm
 DOCKER ?= docker
-IMAGE ?= sb-gateway:local
+IMAGE ?= xroute:local
 PLATFORM ?= linux/arm64
 BUILDER ?=
 

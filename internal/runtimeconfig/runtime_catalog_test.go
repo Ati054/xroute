@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 type syntheticRuntimeCatalog struct {

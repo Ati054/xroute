@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	recoveryboot "github.com/sb-gateway/sb-gateway/internal/recovery"
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	recoveryboot "github.com/Ati054/xroute/internal/recovery"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 func recoveryCatalogFixture(t *testing.T, server *Server, count, padding int) subscriptioncatalog.Ref {

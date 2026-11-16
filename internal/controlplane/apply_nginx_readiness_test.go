@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/applyguard"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/applyguard"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 func TestNativeNginxPublicationKeepsHealthyForwarding(t *testing.T) {

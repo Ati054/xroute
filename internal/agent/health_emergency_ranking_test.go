@@ -228,7 +228,9 @@ func rankedEmergencyFixture(t *testing.T, responses []emergencyProbeResponse) (*
 		candidates = append(candidates, candidate)
 		byCandidate[candidate] = responses[index]
 	}
-	pool.BaseOutboundTags = candidates
+	// Policy-level cases include a failed but still installed active handler.
+	// Its HTTP failure must not be confused with a missing local outbound.
+	pool.BaseOutboundTags = append(append([]string(nil), candidates...), "active")
 	path := filepath.Join(t.TempDir(), "pool.json")
 	if err := writeJSONAtomic(path, pool); err != nil {
 		t.Fatal(err)
@@ -254,6 +256,10 @@ func rankedEmergencyFixture(t *testing.T, responses []emergencyProbeResponse) (*
 		lane := newXraySelectorRuntime(Options{HealthPoolFile: path, ProbeURL: proxy.URL})
 		lane.probeSelector = "outbound-health-background"
 		lane.command = func(_ context.Context, _ time.Duration, _ string, args ...string) ([]byte, error) {
+			// Keep the production readback independent of the diagnostic lane.
+			if len(args) > 1 && args[1] == "bi" && args[len(args)-1] != lane.probeSelectorName() {
+				return selectorInfo("block"), nil
+			}
 			if len(args) > 1 && args[1] == "bo" {
 				selected.Store(args[len(args)-1])
 				return nil, nil

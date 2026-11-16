@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 func TestPolicyDNSIPPresenceMatchesStringSliceValidation(t *testing.T) {

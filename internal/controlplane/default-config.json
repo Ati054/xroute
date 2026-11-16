@@ -53,7 +53,7 @@
       "quarantine_seconds": 600
     },
     "subscription": {
-      "display_name": "SB Gateway",
+      "display_name": "XRoute",
       "happ_provider_id": ""
     }
   },

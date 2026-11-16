@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
 func TestImageCatalogCapabilityRequiresCheckedArchiveLabel(t *testing.T) {
@@ -19,7 +19,7 @@ func TestImageCatalogCapabilityRequiresCheckedArchiveLabel(t *testing.T) {
 			// The shared archive fixture deletes labels whose override is empty.
 			body := dockerImageArchive(t, "arm64", "99.0.0", "layer", map[string]string{releasecontract.SubscriptionCatalogSchemaLabel: entry.label})
 			observation := dockerImageCapability{CatalogSchema: 99}
-			_, _, _, err := inspectDockerImageStream(bytes.NewReader(body), io.Discard, &observation)
+			_, _, _, err := inspectDockerImageStream(bytes.NewReader(body), io.Discard, "arm64", &observation)
 			if entry.valid {
 				if err != nil || observation.CatalogSchema != entry.schema {
 					t.Fatalf("schema=%d error=%v", observation.CatalogSchema, err)
@@ -31,7 +31,7 @@ func TestImageCatalogCapabilityRequiresCheckedArchiveLabel(t *testing.T) {
 	}
 	body := dockerImageArchive(t, "amd64", "99.0.0", "layer", map[string]string{releasecontract.SubscriptionCatalogSchemaLabel: "1"})
 	observation := dockerImageCapability{CatalogSchema: 99}
-	if _, _, _, err := inspectDockerImageStream(bytes.NewReader(body), io.Discard, &observation); err == nil || observation.CatalogSchema != 99 {
+	if _, _, _, err := inspectDockerImageStream(bytes.NewReader(body), io.Discard, "arm64", &observation); err == nil || observation.CatalogSchema != 99 {
 		t.Fatal("wrong platform published a capability")
 	}
 }

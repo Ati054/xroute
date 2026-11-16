@@ -2,7 +2,8 @@
 
 import { GatewayApiError, JsonObject, discoverRouterOs, getCurrentDraft, resolveServicePack, saveCurrentDraft } from "../api-client";
 import { type Locale, type MessageKey, useLanguage } from "../i18n";
-import { localizedText } from "../i18n-text";
+import { formatLocalizedText, localizedText } from "../i18n-text";
+import { isLocale, localeFormat, SUPPORTED_LOCALES } from "../locales";
 import { LTE_PINPOINT_DOMAINS, LTE_PINPOINT_DOMAINS_BY_PACK } from "../lte-pinpoint-domains";
 import { nodeDisplayLabel, nodeLocationDetail, nodePresentation } from "../node-presentation";
 import { subscriptionFeedGroups } from "../subscription-feed";
@@ -296,6 +297,7 @@ const DIRECT_SERVICE_PACKS = [
   { id: "cn-douyin", name: "Douyin", category: "Китай · видео", description: "Видео Douyin и CDN.", updateMode: "daily", broad: false },
   { id: "cn-iqiyi", name: "iQIYI", category: "Китай · видео", description: "Видео iQIYI и медиадомены.", updateMode: "daily", broad: false },
   { id: "cn-kuaishou", name: "Kuaishou", category: "Китай · видео", description: "Видео Kuaishou и CDN.", updateMode: "daily", broad: false },
+  { id: "ir-local", name: "Домены и банки Ирана", category: "Иран · широкий доступ", description: "Вся зона .ir и .ایران, а также банковские домены. Направление задаётся маршрутным листом.", updateMode: "builtin", broad: true },
   { id: "ir-banks", name: "Банки Ирана", category: "Иран · платежи", description: "Банковские домены из каталога category-bank-ir.", updateMode: "daily", broad: false },
   { id: "ir-snapp", name: "Snapp", category: "Иран · сервисы", description: "Поездки, доставка и другие сервисы Snapp.", updateMode: "daily", broad: false },
   { id: "ir-aparat", name: "Aparat", category: "Иран · видео", description: "Видеосервис Aparat и связанные домены.", updateMode: "daily", broad: false },
@@ -358,18 +360,13 @@ export function mergePinpointDomains(current: string, recommended: string[]): st
 }
 
 function currentUiLocale(): Locale {
-  return typeof document !== "undefined" && document.documentElement.lang === "en"
-    ? "en"
-    : "ru";
+  const current = typeof document !== "undefined" ? document.documentElement.lang : "ru";
+  return isLocale(current) ? current : "ru";
 }
 
 export function errorMessage(error: unknown, locale: Locale = currentUiLocale()): string {
   if (error instanceof GatewayApiError) {
-    const request = error.requestId
-      ? locale === "en"
-        ? ` · request ${error.requestId}`
-        : ` · запрос ${error.requestId}`
-      : "";
+    const request = error.requestId ? formatLocalizedText(" · запрос {id}", locale, { id: error.requestId }) : "";
     const details = Array.isArray(error.details)
       ? error.details.filter(
           (value): value is JsonObject => Boolean(value && typeof value === "object"),
@@ -396,11 +393,13 @@ export function errorMessage(error: unknown, locale: Locale = currentUiLocale())
       : error.code === "persistent_storage_full"
         ? "Недостаточно свободного места или его объём не удалось проверить. Архив не сохранён."
       : error.code === "storage_root_required"
-        ? "Сначала укажите в Настройки → Контейнер и хранилище → Каталог проекта на внешнем SSD. Архив не загружался."
+        ? "Сначала укажите папку в Настройки → Контейнер и хранилище → Каталог проекта. Архив не загружался."
       : error.code === "invalid_image_filename"
         ? "Выберите один архив .tar с простым именем файла."
       : error.code === "invalid_image_size"
         ? "Размер выбранного архива контейнера выходит за допустимые пределы."
+      : error.code === "image_architecture_mismatch"
+        ? "Архитектура образа не подходит этому роутеру. Выберите TAR для его архитектуры: ARM64 или AMD64. Обновление не запущено."
       : error.code === "persistent_storage_read_only"
         ? "Внешнее хранилище недоступно для записи. Загрузка образа не началась."
       : error.code === "invalid_id" || path.endsWith(".id")
@@ -502,10 +501,11 @@ export function resultMessage(
 }
 
 export function prefixedErrorMessage(error: unknown, locale: Locale = currentUiLocale()): string {
-  return `${locale === "en" ? "Error" : "Ошибка"}: ${errorMessage(error, locale)}`;
+  return `${localizedText("Ошибка", locale)}: ${errorMessage(error, locale)}`;
 }
 
 export function isErrorMessage(message: string): boolean {
+  if (SUPPORTED_LOCALES.some((locale) => locale !== "ru" && locale !== "en" && message.startsWith(`${localizedText("Ошибка", locale)}:`))) return true;
   return message.startsWith("Ошибка:") || message.startsWith("Error:");
 }
 
@@ -657,17 +657,17 @@ function occupiedClientIpv4Ranges(
     for (const row of asObjectList(source)) add(row.cidr, localizedText("адрес подключённого устройства", locale));
   }
   for (const network of asObjectList(config.networks)) {
-    for (const value of asStringList(network.cidrs)) add(value, locale === "en" ? `network “${itemName(network)}”` : `сеть «${itemName(network)}»`);
+    for (const value of asStringList(network.cidrs)) add(value, formatLocalizedText("сеть «{name}»", locale, { name: itemName(network) }));
   }
   for (const network of importReviewNetworks(config)) add(network.cidr, localizedText("сеть MikroTik", locale));
   for (const client of asObjectList(config.local_clients)) {
     for (const value of asStringList(client.source_cidrs)) {
-      add(value, locale === "en" ? `device “${itemName(client)}”` : `устройство «${itemName(client)}»`);
+      add(value, formatLocalizedText("устройство «{name}»", locale, { name: itemName(client) }));
     }
   }
   for (const user of asObjectList(config.remote_users)) {
     if (asText(user.id, "") !== currentRemoteId) {
-      add(user.client_tun_address, locale === "en" ? `connection “${itemName(user)}”` : `подключение «${itemName(user)}»`);
+      add(user.client_tun_address, formatLocalizedText("подключение «{name}»", locale, { name: itemName(user) }));
     }
   }
   const systemNetworking = asObject(asObject(config.system).networking);
@@ -678,7 +678,7 @@ function occupiedClientIpv4Ranges(
     "container_dns",
     "tun_address",
   ]) {
-    add(systemNetworking[field], localizedText("служебная сеть SB Gateway", locale));
+    add(systemNetworking[field], localizedText("служебная сеть XRoute", locale));
   }
   for (const value of asStringList(asObject(config.routeros).router_addresses)) {
     add(value, localizedText("адрес MikroTik", locale));
@@ -728,9 +728,7 @@ export function clientTunAddressError(
     locale,
   ).find(({ start, end }) => range[0] <= end && range[1] >= start);
   return conflict
-    ? locale === "en"
-      ? `The address is already in use; it overlaps ${conflict.label}.`
-      : `Адрес уже занят: найдено пересечение — ${conflict.label}.`
+    ? formatLocalizedText("Адрес уже занят: найдено пересечение — {value1}.", locale, { value1: conflict.label })
     : "";
 }
 
@@ -748,9 +746,7 @@ export function remoteConnectionNameError(
       asText(user.display_name, "").trim().toLocaleLowerCase("ru") === normalized,
   );
   return conflict
-    ? locale === "en"
-      ? `The name is already used by connection “${itemName(conflict)}”.`
-      : `Имя уже используется подключением «${itemName(conflict)}».`
+    ? formatLocalizedText("Имя уже используется подключением «{value1}».", locale, { value1: itemName(conflict) })
     : "";
 }
 
@@ -874,23 +870,27 @@ export function cdnOriginNameNote(kind: string): string {
   return "SNI/Host соединения CDN → origin шлюза.";
 }
 
+function formatUiNumber(value: number, locale: Locale, digits: number): string {
+  if (locale === "ru" || locale === "en") return value.toFixed(digits);
+  return new Intl.NumberFormat(localeFormat(locale), { useGrouping: false, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
 export function formatBytes(value: unknown, locale: Locale = "ru"): string {
   const bytes = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
-  const units = locale === "en"
-    ? ["B", "KB", "MB", "GB", "TB"]
-    : ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"].map((unit) => localizedText(unit, locale));
   let amount = bytes;
   let unit = 0;
   while (amount >= 1024 && unit < units.length - 1) {
     amount /= 1024;
     unit += 1;
   }
-  return `${amount >= 10 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+  return `${formatUiNumber(amount, locale, amount >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 export function formatNodeCount(value: number, locale: Locale = "ru"): string {
   if (locale === "en") return `${value} ${value === 1 ? "node" : "nodes"}`;
+  if (locale !== "ru") return formatLocalizedText("{count} узлов", locale, { count: formatUiNumber(value, locale, 0) });
   const remainder100 = value % 100;
   const remainder10 = value % 10;
   const noun =
@@ -909,38 +909,34 @@ export function formatBitRate(value: unknown, locale: Locale = "ru"): string {
   const bytesPerSecond = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(bytesPerSecond) || bytesPerSecond < 0) return "—";
   const bitsPerSecond = bytesPerSecond * 8;
-  const units = locale === "en"
-    ? ["bit/s", "Kbit/s", "Mbit/s", "Gbit/s"]
-    : ["бит/с", "Кбит/с", "Мбит/с", "Гбит/с"];
+  const units = ["бит/с", "Кбит/с", "Мбит/с", "Гбит/с"].map((unit) => localizedText(unit, locale));
   let amount = bitsPerSecond;
   let unit = 0;
   while (amount >= 1000 && unit < units.length - 1) {
     amount /= 1000;
     unit += 1;
   }
-  return `${amount >= 10 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+  return `${formatUiNumber(amount, locale, amount >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 export function expiryText(value: unknown, locale: Locale = "ru"): string {
   if (typeof value !== "string" || !value) {
-    return locale === "en" ? "Expiry not provided" : "Срок действия не указан";
+    return localizedText("Срок действия не указан", locale);
   }
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) {
-    return locale === "en" ? "Expiry not provided" : "Срок действия не указан";
+    return localizedText("Срок действия не указан", locale);
   }
   const remaining = timestamp - Date.now();
-  const absolute = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
+  const absolute = new Intl.DateTimeFormat(localeFormat(locale), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(timestamp));
-  if (remaining <= 0) return locale === "en" ? `Expired ${absolute}` : `Истекла ${absolute}`;
+  if (remaining <= 0) return formatLocalizedText("Истекла {value1}", locale, { value1: absolute });
   const days = Math.floor(remaining / 86_400_000);
   const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
-  if (locale === "en") {
-    return `Valid until ${absolute} · ${days > 0 ? `${days} d` : `${hours} h`} remaining`;
-  }
-  return `Действует до ${absolute} · осталось ${days > 0 ? `${days} дн.` : `${hours} ч.`}`;
+  const duration = formatLocalizedText(days > 0 ? "{count} дн." : "{count} ч.", locale, { count: formatUiNumber(days > 0 ? days : hours, locale, 0) });
+  return formatLocalizedText("Действует до {date} · осталось {duration}", locale, { date: absolute, duration });
 }
 
 export function subscriptionIntervalText(subscription: JsonObject, locale: Locale = "ru"): string {
@@ -948,15 +944,9 @@ export function subscriptionIntervalText(subscription: JsonObject, locale: Local
     subscription.refresh_minutes ?? Number(subscription.refresh_hours ?? 24) * 60,
   );
   if (!Number.isFinite(minutes) || minutes < 1) {
-    return locale === "en" ? "interval not set" : "интервал не задан";
+    return localizedText("интервал не задан", locale);
   }
-  if (locale === "en") {
-    return minutes % 60 === 0
-      ? `every ${minutes / 60} h`
-      : `every ${minutes} min`;
-  }
-  if (minutes % 60 === 0) return `каждые ${minutes / 60} ч`;
-  return `каждые ${minutes} мин`;
+  return formatLocalizedText(minutes % 60 === 0 ? "каждые {count} ч" : "каждые {count} мин", locale, { count: formatUiNumber(minutes % 60 === 0 ? minutes / 60 : minutes, locale, 0) });
 }
 
 type SubscriptionCityGroup = {
@@ -1012,15 +1002,18 @@ const REGION_META = [
 const countryDisplayNames = {
   ru: new Intl.DisplayNames(["ru"], { type: "region" }),
   en: new Intl.DisplayNames(["en"], { type: "region" }),
+  fa: new Intl.DisplayNames(["fa"], { type: "region" }),
+  "zh-Hans": new Intl.DisplayNames(["zh-Hans"], { type: "region" }),
+  "zh-Hant": new Intl.DisplayNames(["zh-Hant"], { type: "region" }),
 };
 
 export function countryName(code: string, locale: Locale = "ru"): string {
   if (code === "ZZ") {
-    return locale === "en" ? "Country not identified" : "Страна не определена";
+    return localizedText("Страна не определена", locale);
   }
   const name = countryDisplayNames[locale].of(code);
   if (name && name !== code) return name;
-  return locale === "en" ? `Country ${code}` : `Страна ${code}`;
+  return formatLocalizedText("Страна {value1}", locale, { value1: code });
 }
 
 function stableShortHex(value: string): string {
@@ -1278,9 +1271,7 @@ export function selectorDescription(
         ? asText(exit.display_name, id)
         : localizedText("Недоступный обратный VLESS", locale),
       detail: exit
-        ? locale === "en"
-          ? `Reverse VLESS client · ${asStringList(exit.transport_ids).length || 1} connections`
-          : `Reverse VLESS клиент · ${asStringList(exit.transport_ids).length || 1} подключ.`
+        ? formatLocalizedText("Reverse VLESS клиент · {value1} подключ.", locale, { value1: asStringList(exit.transport_ids).length || 1 })
         : localizedText("Обратный выход удалён или выключен", locale),
     };
   }
@@ -1291,9 +1282,7 @@ export function selectorDescription(
     return {
       title: regionName ?? localizedText("Недоступная группа", locale),
       detail: region
-        ? locale === "en"
-          ? `${region.nodes} nodes in group`
-          : `${region.nodes} узл. в группе`
+        ? formatLocalizedText("{value1} узл. в группе", locale, { value1: region.nodes })
         : localizedText("Группа исчезла из подписки", locale),
     };
   }
@@ -1303,9 +1292,7 @@ export function selectorDescription(
     return {
       title: country ? `${countryFlag(code)} ${country.name}` : countryName(code, locale),
       detail: country
-        ? locale === "en"
-          ? `${country.nodes} nodes in country`
-          : `${country.nodes} узл. в стране`
+        ? formatLocalizedText("{value1} узл. в стране", locale, { value1: country.nodes })
         : localizedText("Страна исчезла из подписки", locale),
     };
   }
@@ -1320,9 +1307,7 @@ export function selectorDescription(
     return {
       title: cityToken.city,
       detail: city
-        ? locale === "en"
-          ? `${countryFlag(country!.code)} ${country!.name} · ${city.protocols.join(" / ")} · ${city.nodes} nodes`
-          : `${countryFlag(country!.code)} ${country!.name} · ${city.protocols.join(" / ")} · ${city.nodes} узл.`
+        ? formatLocalizedText("{value1} {value2} · {value3} · {value4} узл.", locale, { value1: countryFlag(country!.code), value2: country!.name, value3: city.protocols.join(" / "), value4: city.nodes })
         : localizedText("Город исчез из подписки", locale),
     };
   }
@@ -2409,7 +2394,7 @@ export function resultRows(value: unknown, locale: Locale = "ru"): Array<[string
         const label =
           (typeof row.label === "string" && row.label) ||
           (typeof row.type === "string" && row.type) ||
-          locale === "en" ? `Step ${index + 1}` : `Шаг ${index + 1}`;
+          formatLocalizedText("Шаг {count}", locale, { count: index + 1 });
         const value =
           (typeof row.value === "string" && row.value) ||
           (typeof row.description === "string" && row.description) ||
@@ -2418,7 +2403,7 @@ export function resultRows(value: unknown, locale: Locale = "ru"): Array<[string
           JSON.stringify(row);
         return [label, value];
       }
-      return [locale === "en" ? `Step ${index + 1}` : `Шаг ${index + 1}`, String(step)];
+      return [formatLocalizedText("Шаг {value1}", locale, { value1: index + 1 }), String(step)];
     });
   }
   return Object.entries(object)
@@ -2868,6 +2853,7 @@ export type NetworkReviewStatus = "pending" | "accepted" | "ignored";
 export const routerCapabilityLabels: Array<[string, string]> = [
   ["routeros_major_7", "RouterOS major 7"],
   ["arm64", "Архитектура ARM64"],
+  ["amd64", "Архитектура x86_64 (AMD64)"],
   ["container_package", "Пакет container"],
   ["container_envs", "Переменные окружения container"],
   ["container_mounts", "Mounts контейнера"],
@@ -2948,7 +2934,7 @@ export function formatTimestamp(value: unknown, locale: Locale = "ru"): string {
   if (typeof value !== "string" || !value) return localizedText("время не записано", locale);
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
+  return new Intl.DateTimeFormat(localeFormat(locale), {
     dateStyle: "short",
     timeStyle: "medium",
   }).format(parsed);
@@ -2968,6 +2954,7 @@ export function activityTitle(action: unknown, outcome: unknown, locale: Locale 
   if (actionName === "rollback") return localizedText("Выполнен откат конфигурации", locale);
   if (actionName === "draft.reset") return localizedText("Черновик сброшен", locale);
   if (actionName === "draft.save") return localizedText("Черновик сохранён", locale);
+  if (actionName === "cdn-feeds.refresh") return localizedText("Обновление IP-списков CDN", locale);
   if (actionName === "subscriptions.refresh") return localizedText("Подписки обновлены", locale);
   if (actionName === "routeros.import") return localizedText("Состояние RouterOS импортировано", locale);
   if (actionName === "recovery.mirror_reconciled") {
@@ -3011,9 +2998,9 @@ export function activityMetadata(event: JsonObject, locale: Locale = "ru"): stri
   const actor = asText(event.actor, "");
   if (actor) parts.push(actor);
   const revision = shortRevision(details.revision ?? details.candidate_revision);
-  if (revision) parts.push(locale === "en" ? `revision ${revision}` : `ревизия ${revision}`);
+  if (revision) parts.push(formatLocalizedText("ревизия {value1}", locale, { value1: revision }));
   const entityId = asText(details.id, "");
-  if (entityId) parts.push(locale === "en" ? `object: ${entityId}` : `объект: ${entityId}`);
+  if (entityId) parts.push(formatLocalizedText("объект: {value1}", locale, { value1: entityId }));
   return parts.join(" · ") || localizedText("Системное событие", locale);
 }
 
@@ -3189,22 +3176,8 @@ export function pendingChangeText(change: JsonObject, locale: Locale = "ru"): st
         : operation === "remove"
           ? entity.remove
           : entity.replace;
-    if (locale === "en") {
-      const englishEntities: Record<string, { noun: string; add: string; remove: string; replace: string }> = {
-        subscriptions: { noun: "subscription", add: "Added", remove: "Removed", replace: "Updated" },
-        subscription_reserves: { noun: "backup subscription", add: "Added", remove: "Removed", replace: "Updated" },
-        tls_profiles: { noun: "TLS profile", add: "Added", remove: "Removed", replace: "Updated" },
-        transports: { noun: "transport", add: "Added", remove: "Removed", replace: "Updated" },
-        policies: { noun: "route", add: "Added", remove: "Removed", replace: "Updated" },
-        local_users: { noun: "local client", add: "Added", remove: "Removed", replace: "Updated" },
-        remote_users: { noun: "remote client", add: "Added", remove: "Removed", replace: "Updated" },
-        reverse_vless_exits: { noun: "Reverse VLESS client", add: "Added", remove: "Removed", replace: "Updated" },
-      };
-      const english = englishEntities[collection];
-      const englishVerb = operation === "add" ? english.add : operation === "remove" ? english.remove : english.replace;
-      return `${englishVerb} ${english.noun}${name ? ` “${name}”` : ""}`;
-    }
-    return `${verb} ${entity.noun}${name ? ` «${name}»` : ""}`;
+    const quotes = locale === "zh-Hant" ? ["「", "」"] : locale === "en" || locale === "zh-Hans" ? ["“", "”"] : ["«", "»"];
+    return formatLocalizedText(`${verb} ${entity.noun}{name}`, locale, { name: name ? ` ${quotes[0]}${name}${quotes[1]}` : "" });
   }
   const sections: Record<string, string> = {
     ingress: "публичные подключения",
@@ -3213,17 +3186,7 @@ export function pendingChangeText(change: JsonObject, locale: Locale = "ru"): st
     routing: "маршрутизация",
     system: "настройки шлюза",
   };
-  if (locale === "en") {
-    const englishSections: Record<string, string> = {
-      ingress: "public connections",
-      public_exposure: "public access",
-      routeros: "RouterOS integration",
-      routing: "routing",
-      system: "gateway settings",
-    };
-    return `Updated ${englishSections[collection] ?? "configuration settings"}`;
-  }
-  return `Изменены ${sections[collection] ?? "настройки конфигурации"}`;
+  return localizedText(`Изменены ${sections[collection] ?? "настройки конфигурации"}`, locale);
 }
 
 export type RevisionState = "loading" | "applied" | "draft";
@@ -3240,10 +3203,15 @@ export function configuredItemStatus(
   return localizedText("Настроено", locale);
 }
 
-export function russianCount(
+export function localizedCount(
   count: number,
   forms: [string, string, string],
+  locale: Locale = "ru",
 ): string {
+  if (locale !== "ru") {
+    const form = new Intl.PluralRules(localeFormat(locale)).select(count) === "one" ? forms[0] : forms[2];
+    return `${new Intl.NumberFormat(localeFormat(locale), { useGrouping: false }).format(count)} ${form}`;
+  }
   const absolute = Math.abs(count) % 100;
   const last = absolute % 10;
   const form = absolute > 10 && absolute < 20
@@ -3382,7 +3350,7 @@ export function Toggle({
         <strong>{label}</strong>
         {description ? <small>{description}</small> : null}
       </span>
-      <input
+      <input dir="auto"
         name={name}
         type="checkbox"
         checked={effectiveChecked}
@@ -3551,7 +3519,7 @@ export function DirectServicePackPicker({
                       : pack.updateMode === "protocol"
                         ? tr("распознавание протокола")
                         : pack.updateMode === "builtin"
-                          ? tr("правила FaceTime в релизе")
+                          ? tr("Встроенные правила")
                           : tr("официальные endpoints релиза")}`}
                 </small>
                 <small>{tr(pack.description)}</small>
@@ -3578,7 +3546,7 @@ export function DirectServicePackPicker({
       ) : null}
       <small>
         {description ??
-          "Можно выбрать сразу несколько категорий. Каталожные пакеты обновляются раз в сутки; при ошибке остаётся последняя рабочая копия."}
+          tr("Можно выбрать сразу несколько категорий. Каталожные пакеты обновляются раз в сутки; при ошибке остаётся последняя рабочая копия.")}
       </small>
     </fieldset>
   );

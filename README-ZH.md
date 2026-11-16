@@ -1,0 +1,140 @@
+[English](README.md) | [Русский](README-RU.md) | [فارسی](README-FA.md) | [简体中文](README-ZH.md) | [繁體中文](README-ZH-TW.md)
+
+> 使用 OpenWrt？请查看面向该平台的 [XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt)。
+
+# XRoute · RouterOS 7 原生容器分流，无需旁路由
+
+我开发 XRoute，是为了在 MikroTik 上管理代理路由时，不必再手动编辑 JSON。
+它把网页面板、Xray 和路由工具整合进同一个容器，提供适用于 ARM64 路由器的镜像。
+你可以为每台设备选择路由，让指定服务走普通 WAN，也可以按需添加备用服务器。
+
+当前版本提供 ARM64 镜像；x86-64 CHR 镜像将在完成独立测试后另行发布。
+
+[安装指南](docs/INSTALL.md) · [下载](https://github.com/Ati054/xroute/releases/latest)
+
+![运行中的 XRoute 面板概览](docs/images/panel-overview-zh-Hans.png)
+
+<details>
+<summary>路由与节点质量</summary>
+
+![运行中的 XRoute 节点质量面板](docs/images/panel-routing-zh-Hans.png)
+
+</details>
+
+截图来自实际运行的面板，网络地址已隐藏。
+
+## 需要准备什么
+
+- 支持容器并运行 RouterOS 7 的 ARM64 MikroTik（例如 hAP ax³）。
+- 外置 SSD/USB 磁盘，并为容器及其数据预留足够空间。
+- 互联网连接，以及受支持的代理订阅或其他出口。
+- 如果入站连接需要，则准备域名和证书。仅使用出站路由时不需要域名。
+
+## 可以做什么
+
+- 为 LAN、Wi-Fi 及受支持的 VPN 客户端分配路由。
+- 使用 VLESS、Hysteria 2、Reverse VLESS，或选定的 RouterOS WireGuard 隧道作为出口。
+- 通过 URLTest 选择延迟最低的服务器，或按固定优先级使用主用及备用节点。
+- 让指定国家、域名和服务继续走普通 WAN。
+- 管理入站连接、TLS 证书、订阅和客户端配置。
+- 应用前预览更改，并在面板中查看日志、创建备份和更新容器。
+
+VLESS 入站支持通过 TLS 使用 WebSocket、gRPC、HTTPUpgrade 和 XHTTP，
+也支持直接使用 REALITY。Hysteria 2 使用 QUIC/UDP。
+[架构指南](docs/ARCHITECTURE.md) 介绍了受支持的组合及项目使用的 Xray 补丁。
+
+XRoute 会创建带有专属标记的 RouterOS 对象。对现有对象的修改仅限于你明确选择的设置。
+安装前请阅读 [RouterOS 集成说明](docs/ROUTEROS.md)。
+
+## 安装
+
+1. 从 [Releases](https://github.com/Ati054/xroute/releases/latest) 下载 RouterOS 安装包，并校验 SHA-256。
+2. 将容器归档和 `routeros` 目录放到外置 SSD 上。
+3. 将 `routeros/variables.example.rsc` 复制为私有的 `variables.rsc`，填写地址和初始安装所需的凭据。
+4. 在 MikroTik 终端中导入 `bootstrap.rsc`。
+5. 打开面板，创建管理员密码，然后配置设备和路由。
+
+具体命令、要求及恢复步骤请参阅[安装指南](docs/INSTALL.md)。
+不要将私有 `variables.rsc`、订阅链接或导出的配置放进公开仓库。
+
+## 日常使用
+
+编辑后先保存，检查拟议的更改，再选择“应用”（Apply）。
+仅涉及容器的更改使用较短的应用流程；涉及 RouterOS 网络的更改则会创建备份并启用回滚保护。
+仅保存成功并不代表更改已经生效。
+
+在**运维**中可以查看日志、管理备份、执行恢复及更新镜像。
+更新会保留已保存的配置。面板会区分已经完成的操作，以及仍在等待恢复或确认的操作。
+
+[运维指南](docs/OPERATIONS.md) 介绍了故障切换、DNS、更新恢复，以及按延迟选择服务器的局限。
+
+## CN Direct：国内域名与 IP 直连
+
+在路由策略中选择“VLESS，例外通过 WAN”模式，然后在 WAN 例外规则区域选择
+CN（中国）分类，勾选需要直连的服务卡片。
+
+如需让中国 IP 网段也通过 WAN 直连，需另外勾选 GeoIP CN。
+保存并点击“应用”（Apply）后，所选规则才会生效。
+
+服务卡片与 GeoIP CN 是两项独立选择。切换界面语言不会自动启用直连规则。
+
+## 开发
+
+控制器和 RouterOS 工具使用 Go 编写。面板源码位于 `app/`，
+容器提供 Next.js 静态导出页面。Vinext/Vite 还用于本地开发和 Sites 预览，
+因此 `next.config.ts` 和 `vite.config.ts` 分别服务于不同的构建目标。
+Vite 配置并非 Vitest 测试配置。
+
+```sh
+make validate
+go test ./cmd/... ./internal/... ./tests/tools
+npm ci --ignore-scripts
+npm run lint
+npm test
+npm run build:static
+```
+
+发布构建和其他测试请参阅[开发检查](docs/DEVELOPMENT-CHECKS.md)。
+CI 无法复现所有 MikroTik 型号或外部代理服务器，
+因此请先在独立路由器上验证更改，再将其用于实际环境。
+
+## 文档
+
+配置和使用问题请到 [Discussions Q&A](https://github.com/Ati054/xroute/discussions/categories/q-a) 提问。
+报告错误请使用[简短模板](.github/ISSUE_TEMPLATE/bug_report.md)，并从日志中删除订阅链接、令牌、密钥和个人信息。
+
+- [安装](docs/INSTALL.md) · [俄语安装指南](docs/INSTALL-RU.md)
+- [面板与设置](docs/WEB-UI.md)
+- [区域 WAN 直连规则](docs/REGIONAL-DIRECT.md)
+- [设备、路由与订阅](docs/CLIENTS.md)
+- [运维与恢复](docs/OPERATIONS.md)
+- [故障排查](docs/TROUBLESHOOTING.md)
+- [安全](docs/SECURITY.md)
+- [更新日志](CHANGELOG.md)
+
+维护说明：[产品范围](docs/internal/PRODUCT.md)和[界面设计](docs/internal/DESIGN.md)。
+
+## 许可证
+
+版权所有 © 2026 [Ati054](https://github.com/Ati054)。
+本项目采用 [AGPL-3.0-or-later](LICENSE) 许可证。
+
+## 常见问题
+
+### 如何通过网页面板在 MikroTik RouterOS 7 上设置 Xray / VLESS 选择性路由？
+
+安装 XRoute 容器，添加订阅，创建路由策略并将设备分配给该策略。
+对于需要保持直连的服务，选择“VLESS，例外通过 WAN”；
+如果只有指定服务需要代理，则选择“WAN，例外通过 VLESS”。保存并应用更改。
+具体步骤请参阅[安装指南](docs/INSTALL.md)和[面板指南](docs/WEB-UI.md)。
+
+### XRoute for OpenWrt 与 Podkop、PassWall2 有什么区别？
+
+[XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt) 使用 Xray、Go 控制器和 LuCI。
+[Podkop](https://github.com/itdoginfo/podkop) 配置的是 sing-box；
+[PassWall2](https://github.com/Openwrt-Passwall/openwrt-passwall2) 支持多种代理内核，包括 Xray 和 sing-box。
+它们的界面和配置方式不同，请结合自己的路由需求比较各自支持的使用流程。
+
+## 社区
+
+Telegram：[@xroute_dev](https://t.me/xroute_dev)

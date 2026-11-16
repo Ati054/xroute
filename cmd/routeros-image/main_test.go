@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -31,7 +32,7 @@ func TestWindowsTempDirCleanupOnly(t *testing.T) {
 }
 
 func TestGoReleaseChecksKeepTheFullPackageBoundary(t *testing.T) {
-	want := []string{"./cmd/...", "./internal/...", "./tests/tools"}
+	want := []string{"./cmd/...", "./internal/...", "./routeros/...", "./tests/tools"}
 	got := releaseGoTargets()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -60,6 +61,29 @@ func TestImageBuildCommonPinsReleaseProvenance(t *testing.T) {
 	got := imageBuildCommon("1.6.0", "abc123", "https://github.com/example/project", "sb-gateway:1.6.0-arm64")
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestAMD64BundleUsesMatchingImageAndCHRDirectory(t *testing.T) {
+	got := imageBuildCommon("1.7.0", "abc123", "local", "xroute:test-amd64", "amd64")
+	if got[1] != "linux/amd64" {
+		t.Fatalf("platform=%q", got[1])
+	}
+	variables := []byte(":global SB_IMAGE_FILE usb1/sb-gateway/xroute-1.7.0-linux-arm64.tar\n:global SB_STORAGE_ROOT usb1/sb-gateway\n")
+	output := string(bundleScriptContents("variables.example.rsc", variables, "amd64"))
+	if !strings.Contains(output, "xroute/xroute-1.7.0-linux-amd64.tar") || strings.Contains(output, "usb1/") || strings.Contains(output, "-linux-arm64.tar") {
+		t.Fatalf("AMD64 variables: %s", output)
+	}
+	if string(bundleScriptContents("variables.example.rsc", variables, "arm64")) != string(variables) {
+		t.Fatal("ARM64 defaults changed")
+	}
+	actual, err := os.ReadFile("../../routeros/variables.example.rsc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualAMD64 := string(bundleScriptContents("variables.example.rsc", actual, "amd64"))
+	if strings.Contains(actualAMD64, "usb1/") || strings.Contains(actualAMD64, "-linux-arm64.tar") || !strings.Contains(actualAMD64, `:global "SB_STORAGE_ROOT" "xroute"`) {
+		t.Fatal("actual AMD64 variables retain ARM64 paths or architecture")
 	}
 }
 

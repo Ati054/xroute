@@ -14,7 +14,7 @@ const managedRouterOSBackupRetention = 3
 var (
 	managedBackupFilePattern  = regexp.MustCompile(`^(SB-GATEWAY-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12})(?:-export\.rsc|\.backup)$`)
 	managedStorageRootPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$`)
-	managedImageArchiveName   = regexp.MustCompile(`^sb-gateway-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?-linux-arm64\.tar(?:\.sha256)?$`)
+	managedImageArchiveName   = regexp.MustCompile(`^(?:sb-gateway|xroute)-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?-linux-(?:arm64|amd64)\.tar(?:\.sha256)?$`)
 )
 
 var managedBootstrapArtifacts = map[string]bool{
@@ -33,7 +33,7 @@ type ManagedFilePruneResult struct {
 	Install int
 }
 
-// PruneManagedFiles removes only exact SB Gateway-owned files. The newest
+// PruneManagedFiles removes only exact XRoute-owned files. The newest
 // three RouterOS backup/export generations are retained, while one-shot
 // bootstrap scripts and extracted local image archives are removed from the
 // confirmed external-storage project root. Unknown files and nested runtime

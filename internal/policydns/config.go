@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/domainset"
+	"github.com/Ati054/xroute/internal/domainset"
 )
 
 const maxDNSMessage = 65535

@@ -1,4 +1,4 @@
-# SB-GATEWAY idempotent install for RouterOS 7 ARM64.
+# XRoute idempotent install for RouterOS 7 ARM64 and x86 CHR.
 # Import variables, preflight, and fasttrack-patch first. The new diversion gate
 # is created disabled and is enabled only by watchdog hysteresis.
 
@@ -42,7 +42,10 @@
 :local bootScheduler [/system/scheduler/find where name="SB-GATEWAY-container-startup" and comment="SB-GATEWAY storage-aware startup scheduler"]
 :if (([:len $bootScript] != 1) || ([:len $storageProbe] != 1) || ([:len $bootScheduler] != 1)) do={ :error "SB-GATEWAY: import container-startup.rsc before install.rsc" }
 
-# Only explicit installation may create missing mount folders, on mounted disks.
+# Only explicit installation may create missing mount folders. CHR may use a
+# dedicated directory on its persistent system disk; physical routers require a disk.
+:local hostArchitecture [/system/resource/get architecture-name]
+:local systemDiskAllowed (([:pick [/system/resource/get board-name] 0 3] = "CHR") && (($hostArchitecture = "x86") || ($hostArchitecture = "x86_64")))
 :foreach folder in={$"SB_CONFIG_DIR";$"SB_DATA_DIR";$"SB_LOGS_DIR";$"SB_STATE_DIR"} do={
   :local path [:tostr $folder]
   :if ([:pick $path 0 1] = "/") do={ :set path [:pick $path 1 [:len $path]] }
@@ -50,7 +53,9 @@
   :if (([:typeof $separator] != "num") || ($separator = 0) || ([:typeof [:find $path ".."]] != "nil")) do={ :error "SB-GATEWAY: mount source path is invalid" }
   :local disk [/file/find where name=[:pick $path 0 $separator]]
   :if ([:len $disk] != 1) do={ :error "SB-GATEWAY: mount source disk is missing or ambiguous" }
-  :if ([/file/get $disk type] != "disk") do={ :error "SB-GATEWAY: mount source disk is not mounted" }
+  :if ([/file/get $disk type] != "disk") do={
+    :if (($systemDiskAllowed != true) || ([/file/get $disk type] != "directory")) do={ :error "SB-GATEWAY: mount source disk is not mounted" }
+  }
   :local entry [/file/find where name=$path]
   :if ([:len $entry] > 1) do={ :error "SB-GATEWAY: mount source is ambiguous" }
   :if ([:len $entry] = 0) do={ /file/add name=$path type=directory } else={
@@ -257,8 +262,10 @@
   :log error "SB-GATEWAY: unable to inspect extracted container platform; diversion remains disabled and existing Internet is unchanged"
   :error "SB-GATEWAY: container platform inspection failed"
 }
-:if (($imageOs != "linux") || ($imageArch != "arm64")) do={
-  :log error ("SB-GATEWAY: refusing container platform " . $imageOs . "/" . $imageArch . "; expected linux/arm64; diversion remains disabled")
+:local expectedImageArchitecture "arm64"
+:if (($hostArchitecture = "x86") || ($hostArchitecture = "x86_64")) do={ :set expectedImageArchitecture "amd64" }
+:if (($imageOs != "linux") || ($imageArch != $expectedImageArchitecture)) do={
+  :log error ("SB-GATEWAY: refusing container platform " . $imageOs . "/" . $imageArch . "; expected linux/" . $expectedImageArchitecture . "; diversion remains disabled")
   :error "SB-GATEWAY: wrong container platform"
 }
 

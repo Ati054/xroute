@@ -1,6 +1,6 @@
 # RouterOS 7
 
-Документ соответствует SB Gateway 1.6.21 и capability-based поддержке ARM64
+Документ соответствует XRoute 1.6.21 и capability-based поддержке ARM64
 RouterOS 7. Preflight проверяет требуемые возможности вместо точного номера
 версии RouterOS.
 
@@ -51,7 +51,7 @@ firewall/mangle и scheduler primitives. Пакет `container` обязан и�
 preflight выполняется до создания project-owned объектов.
 
 При сверке address-list удаляются только записи с точным owner-комментарием
-SB Gateway. Уже существующая пользовательская запись с теми же `list + address`
+XRoute. Уже существующая пользовательская запись с теми же `list + address`
 считается действующим членством: система не создаёт дубликат, не меняет её
 комментарий и не получает право удалить её позже. Это правило одинаково для
 IPv4 и IPv6.
@@ -465,7 +465,7 @@ management LAN (например, `192.168.88.0/24`) и его bridge. Для Wi
 которая одновременно входит в `SB_INTERNAL_NETWORKS`, попадала под container LAN
 deny: входящий SYN разрешался, но TLS-ответ отбрасывался и браузер видел timeout.
 
-Этот список управляет только HTTPS-панелью контейнера `:9443`. SB Gateway не
+Этот список управляет только HTTPS-панелью контейнера `:9443`. XRoute не
 меняет `available-from`, состояние или порт RouterOS-сервисов WinBox, SSH,
 WebFig/API и не закрывает их глобальным input-правилом. После обработки
 project-owned трафика из container bridge цепочка выполняет `return`; доступ к
@@ -682,7 +682,7 @@ mangle/routes, firewall, DNS и тесты утечек.
 
 ## MTU/MSS
 
-Начальное TUN MTU — 1400. MSS clamp применяется только к пути SB Gateway и
+Начальное TUN MTU — 1400. MSS clamp применяется только к пути XRoute и
 только после обнаружения PMTU-проблемы. Глобальный clamp запрещён. Проверяйте
 WS, gRPC, WG, SSTP, OpenVPN и двойной VLESS отдельно.
 

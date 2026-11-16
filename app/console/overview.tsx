@@ -215,7 +215,7 @@ export function Overview({
         title={stateTitle}
         description={
           runtimeError ||
-          "Состояние поступает из локального control plane. Настройки действуют только после проверки."
+          tr("Состояние поступает из локального control plane. Настройки действуют только после проверки.")
         }
         action={unconfigured ? (
           <button className="button button-primary" type="button" onClick={onOpenSetup}>
@@ -236,12 +236,9 @@ export function Overview({
                   : tr("Проверяется")}
             </span>
             <span className={`overview-watchdog-state ${healthy ? "is-healthy" : ""}`}>
-              {watchdogState.enabled === true ? "✓ Watchdog healthy" : tr("Watchdog проверяется")}
+              {watchdogState.enabled === true ? `✓ ${tr("Watchdog включён")}` : tr("Watchdog проверяется")}
             </span>
           </div>
-          <h3>{tr("Интернет защищён от падения контейнера")}</h3>
-          <p>
-             {tr("При сбое sb-gateway локальные устройства автоматически перейдут на прямой WAN.")} </p>
           <dl className="overview-resilience-details">
             <div>
               <dt>{tr("Количество перезапусков:")}</dt>

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 // Retain only identical per-policy forwarding inputs under the same core. The

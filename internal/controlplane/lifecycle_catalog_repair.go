@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 // The lifecycle caller owns mutationMu. This repairs an actual unpublished

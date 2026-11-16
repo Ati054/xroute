@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	"github.com/sb-gateway/sb-gateway/internal/netpolicy"
+	"github.com/Ati054/xroute/internal/netpolicy"
 )
 
 // FreshResolverConfig describes one encrypted recursive upstream. It is kept

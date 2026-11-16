@@ -520,7 +520,8 @@ export function Settings({
             </label>
           </div>
           <label className="field">
-             {tr("Каталог проекта на внешнем SSD")} <input value={storageRoot} onChange={(event) => setStorageRoot(event.target.value)} placeholder="usb1/sb-gateway" />
+             {tr("Каталог проекта")} <input dir="ltr" value={storageRoot} onChange={(event) => setStorageRoot(event.target.value)} placeholder="usb1/xroute" />
+             <small>{tr("На CHR: xroute, slot1/xroute или disk1/xroute. На аппаратном роутере используйте внешний диск.")}</small>
           </label>
         </article>
       </section>

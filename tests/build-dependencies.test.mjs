@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { hardenImageSize, patchedSource, sha256, targets } from "../build/harden-image-size.mjs";
@@ -58,6 +59,35 @@ test("hardening is idempotent and rejects unknown bundled source", () => {
     const source = readFileSync(target.file, "utf8");
     assert.equal(sha256(source), target.patched);
     assert.throws(() => patchedSource(target, source + "changed"), /Unexpected/);
+  }
+});
+
+test("modular bundled parser changes fail closed before modifying dependencies", () => {
+  const root = mkdtempSync(join(tmpdir(), "xroute-parser-guard-"));
+  try {
+    const before = new Map();
+    for (const target of targets) {
+      const metadata = resolve(root, "node_modules", target.package, "package.json");
+      mkdirSync(dirname(metadata), { recursive: true });
+      writeFileSync(metadata, JSON.stringify({ version: target.version }));
+      for (const entry of [target, ...(target.files ?? [])]) {
+        const file = resolve(root, entry.file);
+        mkdirSync(dirname(file), { recursive: true });
+        const source = readFileSync(entry.file, "utf8");
+        writeFileSync(file, source);
+        before.set(file, source);
+      }
+    }
+    const victim = targets.find(target => target.files?.length)?.files[0];
+    assert.ok(victim, "modular parser fixture is required");
+    const file = resolve(root, victim.file);
+    const modified = before.get(file) + "\n// unexpected upstream change\n";
+    writeFileSync(file, modified);
+    before.set(file, modified);
+    assert.throws(() => hardenImageSize(root), /Unexpected.*image-size source/);
+    for (const [path, expected] of before) assert.equal(readFileSync(path, "utf8"), expected);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

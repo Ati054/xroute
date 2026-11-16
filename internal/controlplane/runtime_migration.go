@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/rulesets"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 const maxRuntimeMigrationArtifactBytes = 32 << 20

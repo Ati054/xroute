@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 // Public REST/WS hosts from the exchanges' official documentation, reviewed

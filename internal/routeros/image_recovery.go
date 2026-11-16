@@ -32,6 +32,7 @@ func RenderOfflineImageRecovery(spec ImageUpdateSpec, archiveSize int64, identit
 	rootPrefix := "/" + spec.StorageRoot + "/root-"
 	lines := []string{
 		"# SB-GATEWAY offline image recovery; persistent directories are preserved.",
+		imageHostArchitectureGuard(spec.Architecture),
 		"{",
 		`:if ([/system/identity/get name] != ` + quote(identity) + `) do={ :error "SB-GATEWAY recovery router identity mismatch" }`,
 		`:local current [/container/find where comment="SB-GATEWAY container"]`,
@@ -66,5 +67,5 @@ func RenderOfflineImageRecovery(spec ImageUpdateSpec, archiveSize int64, identit
 		`:put "SB-GATEWAY offline recovery scheduled; inspect container health and image-update log"`,
 		"}",
 	}
-	return strings.Join(lines, "\n") + "\n", nil
+	return strings.Join(withStorageRootGuard(spec.StorageRoot, lines), "\n") + "\n", nil
 }

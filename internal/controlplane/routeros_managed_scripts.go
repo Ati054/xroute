@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/routeros"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 var errRouterOSScriptSyncDeferred = errors.New("RouterOS script sync deferred until active configuration is available")

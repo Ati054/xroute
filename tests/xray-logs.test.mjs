@@ -9,7 +9,7 @@ const config = JSON.parse(
 );
 
 test("operations offers one bounded gateway log viewer with fixed sources", () => {
-  assert.match(page, /Журналы SB Gateway/);
+  assert.match(page, /Журналы XRoute/);
   assert.match(page, /type RuntimeLogSource = "error" \| "process" \| "system" \| "routing" \| "nginx" \| "lifecycle"/);
   assert.match(page, /id="gateway-log-tab-routing"[\s\S]*?tr\("Маршруты"\)/);
   assert.match(page, /getXrayLogs<JsonObject>\(xrayLogSource, 300\)/);

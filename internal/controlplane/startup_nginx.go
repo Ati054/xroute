@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 const (

@@ -73,6 +73,9 @@ func (controller *healthController) transitionRemovedActive(now time.Time, polic
 	targets := append([]string(nil), transition.remaining[:count]...)
 	selected := ""
 	accept := func(candidate string, evidence probeEvidence) bool {
+		if evidence.Deferred {
+			return false
+		}
 		item.LastProbeAt[candidate] = float64(now.Unix())
 		usable := evidence.OK
 		// A reserve which just failed must not be resurrected by the ordinary
@@ -87,11 +90,15 @@ func (controller *healthController) transitionRemovedActive(now time.Time, polic
 		selected = candidate
 		return true
 	}
-	if parallel, ok := controller.runtime.(parallelAvailabilityRuntime); ok && len(targets) > 1 {
+	if scoped, ok := controller.runtime.(interface {
+		ProbeAvailabilityParallelForPolicy(policyProbeScope, []string, func(string, probeEvidence) bool, bool) map[string]probeEvidence
+	}); ok && len(targets) > 1 {
+		scoped.ProbeAvailabilityParallelForPolicy(controller.probeScope(policyID), targets, accept, false)
+	} else if parallel, ok := controller.runtime.(parallelAvailabilityRuntime); ok && len(targets) > 1 {
 		parallel.ProbeAvailabilityParallel(targets, accept)
 	} else {
 		for _, candidate := range targets {
-			evidence := controller.runtime.ProbeAvailability(candidate)
+			evidence := controller.probeAvailability(policyID, candidate, availabilityProbeRequest{})
 			if evidence.LocalFailure {
 				return "", false, errProbeSelectorUnavailable
 			}

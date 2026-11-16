@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 func TestManagedScriptSyncMigratesWithoutBrowserAndRecoversJournal(t *testing.T) {

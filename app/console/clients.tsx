@@ -202,7 +202,7 @@ export function Clients({
             <div className="data-toolbar">
               <label className="search-field">
                 <span className="sr-only">{tr("Найти устройство")}</span>
-                <input
+                <input dir="auto"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={tr("Найти устройство или IP")}

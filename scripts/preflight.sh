@@ -19,8 +19,10 @@ tls_pair_matches() {
   [ -n "$cert_digest" ] && [ "$cert_digest" = "$key_digest" ]
 }
 
-[ "$(uname -m)" = "aarch64" ] || [ "${SB_ALLOW_NON_ARM64:-0}" = "1" ] \
-  || fatal "the production image must run on ARM64/aarch64"
+case "$(uname -m)" in
+  aarch64|x86_64) ;;
+  *) fatal "the production image requires ARM64/aarch64 or AMD64/x86_64" ;;
+esac
 for file in \
   /config/certs/bootstrap.pem \
   /config/certs/bootstrap.key \

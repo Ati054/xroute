@@ -6,13 +6,11 @@ ARG NODE_IMAGE=node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62d
 ARG RUNTIME_IMAGE=alpine:3.23
 
 FROM --platform=$BUILDPLATFORM ${XRAY_GO_IMAGE} AS xray-build
-ARG TARGETARCH
 # The server can use the current validated core. Xray's simplified Reverse
 # regression is bridge-side; exported reverse clients are pinned separately.
 ARG XRAY_VERSION=26.11.9
 ARG XRAY_COMMIT=676eaf66f8f05d4d558ee7a74b4736623d3feeb9
 ARG XRAY_REALITY_COMMIT=4bb46b2afd8b4f1f082fbaccae34fd3c7a3f8973
-RUN test "${TARGETARCH}" = "arm64"
 RUN apk add --no-cache git patch
 WORKDIR /src
 COPY patches/xray-reality-x25519-compat.patch /tmp/xray-reality-x25519-compat.patch
@@ -72,10 +70,11 @@ RUN set -eux; \
     patch -d /src/reality -p1 --fuzz=0 < /tmp/xray-reality-x25519-compat.patch; \
     grep -F 'if peerPub2 == nil && peerPub == nil {' /src/reality/tls.go; \
     go mod edit -replace github.com/xtls/reality=/src/reality
-FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS sb-gateway-build
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS xroute-build
 ARG TARGETARCH
+RUN case "${TARGETARCH}" in arm64|amd64) ;; *) exit 1 ;; esac
 ARG XRAY_COMMIT=676eaf66f8f05d4d558ee7a74b4736623d3feeb9
-ARG SB_GATEWAY_VERSION=1.6.97
+ARG SB_GATEWAY_VERSION=1.7.0
 ARG SB_GATEWAY_REVISION=uncommitted
 ARG SB_GATEWAY_GO_TAGS=xray_multicall
 WORKDIR /src
@@ -92,12 +91,12 @@ RUN set -eux; \
     case "${SB_GATEWAY_GO_TAGS}" in xray_multicall|xray_multicall,sb_cpu_lab) ;; *) exit 1 ;; esac; \
     sh scripts/prepare-xray-multicall.sh /opt/xray-source /opt/xray-source/reality /src/multicall.mod; \
     test "$(go list -modfile=/src/multicall.mod -m -f '{{.Version}}' golang.org/x/crypto/x509roots/fallback)" = v0.0.0-20261020153306-9f2b28d4331a; \
-    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" go list -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" -deps ./cmd/sb-gateway >/tmp/sb-gateway-imports.txt; \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" go list -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" -deps ./cmd/xroute >/tmp/sb-gateway-imports.txt; \
     if grep -E '^golang.org/x/crypto/openpgp($|/)' /tmp/sb-gateway-imports.txt; then echo 'Unsupported legacy OpenPGP import in shared build' >&2; exit 1; fi; \
-    for package in ./cmd/sb-gateway ./internal/agent ./internal/domainset ./internal/netpolicy ./internal/policydns ./internal/runtimeconfig; do \
+    for package in ./cmd/xroute ./internal/agent ./internal/domainset ./internal/netpolicy ./internal/policydns ./internal/runtimeconfig; do \
       test "$(go list -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" -f '{{if or .TestGoFiles .XTestGoFiles}}yes{{end}}' "$package")" = yes; \
     done; \
-    go test -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" ./cmd/sb-gateway; \
+    go test -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" ./cmd/xroute; \
     go test -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" ./internal/agent; \
     go test -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" ./internal/domainset ./internal/netpolicy ./internal/policydns ./internal/runtimeconfig; \
     go test -modfile=/src/multicall.mod github.com/xtls/xray-core/app/router -run '^TestSB'; \
@@ -120,29 +119,32 @@ RUN set -eux; \
       -modfile=/src/multicall.mod -tags="${SB_GATEWAY_GO_TAGS}" \
       -trimpath -buildvcs=false -gcflags="all=-l=4" \
       -ldflags="-s -w -buildid= -X main.version=${SB_GATEWAY_VERSION} -X main.revision=${SB_GATEWAY_REVISION} -X github.com/xtls/xray-core/core.build=${XRAY_COMMIT}" \
-      -o /out/sb-gateway ./cmd/sb-gateway
+      -o /out/sb-gateway ./cmd/xroute
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
       -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o /out/sb-acme ./cmd/sb-acme
 RUN SB_RULESET_DIR=/out/rulesets-seed go run \
-      -modfile=/src/multicall.mod -tags=xray_multicall ./cmd/sb-gateway rulesets --prepare
+      -modfile=/src/multicall.mod -tags=xray_multicall ./cmd/xroute rulesets --prepare
 
 FROM --platform=$BUILDPLATFORM alpine:3.23 AS multicall-check
 ARG BUILDARCH
+ARG TARGETARCH
 ARG XRAY_VERSION=26.11.9
-ARG SB_GATEWAY_VERSION=1.6.97
-RUN if [ "${BUILDARCH}" != "arm64" ]; then apk add --no-cache qemu-aarch64; fi
-COPY --from=sb-gateway-build /out/sb-gateway /out/sb-gateway
+ARG SB_GATEWAY_VERSION=1.7.0
+RUN if [ "${BUILDARCH}" != "${TARGETARCH}" ]; then \
+      case "${TARGETARCH}" in arm64) apk add --no-cache qemu-aarch64 ;; amd64) apk add --no-cache qemu-x86_64 ;; *) exit 1 ;; esac; \
+    fi
+COPY --from=xroute-build /out/sb-gateway /out/sb-gateway
 RUN set -eux; \
-    arm() { if [ "${BUILDARCH}" = "arm64" ]; then "$@"; else qemu-aarch64 "$@"; fi; }; \
+    target() { if [ "${BUILDARCH}" = "${TARGETARCH}" ]; then "$@"; else case "${TARGETARCH}" in arm64) qemu-aarch64 "$@" ;; amd64) qemu-x86_64 "$@" ;; *) return 1 ;; esac; fi; }; \
     ln -s sb-gateway /out/xray; \
-    arm /out/sb-gateway version | grep -F "sb-gateway ${SB_GATEWAY_VERSION}"; \
-    arm /out/xray version | grep -F "Xray ${XRAY_VERSION}"; \
-    arm /out/xray version | grep -F 'go1.27.4'; \
-    arm /out/xray help api | grep -F api; \
+    target /out/sb-gateway version | grep -F "sb-gateway ${SB_GATEWAY_VERSION}"; \
+    target /out/xray version | grep -F "Xray ${XRAY_VERSION}"; \
+    target /out/xray version | grep -F 'go1.27.4'; \
+    target /out/xray help api | grep -F api; \
     printf '%s\n' \
       '{"log":{"loglevel":"warning"},"inbounds":[{"tag":"build-validation","listen":"127.0.0.1","port":19099,"protocol":"http"}],"outbounds":[{"tag":"direct","protocol":"freedom"}]}' \
       >/tmp/xray-build-validation.json; \
-    arm /out/xray run -test -config /tmp/xray-build-validation.json; \
+    target /out/xray run -test -config /tmp/xray-build-validation.json; \
     rm -f /tmp/xray-build-validation.json
 
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS web-build
@@ -162,21 +164,25 @@ RUN test -n "${SB_GATEWAY_REVISION}" \
     && test -f /src/out/index.html
 
 FROM ${RUNTIME_IMAGE} AS runtime
+ARG SB_GATEWAY_REVISION=uncommitted
 RUN set -eux; \
-    apk add --no-cache ca-certificates curl gettext iproute2 nginx nginx-mod-stream nftables openssl; \
+    test -n "${SB_GATEWAY_REVISION}"; \
+    apk upgrade --no-cache; \
+    apk add --no-cache ca-certificates curl gettext iproute2 nginx nginx-mod-stream nftables openssl 'zlib>=1.4-r0'; \
     if ! grep -q '^www-data:' /etc/group; then addgroup -S www-data; fi; \
     if ! grep -q '^www-data:' /etc/passwd; then adduser -S -D -H -s /sbin/nologin -G www-data www-data; fi; \
     rm -f /etc/nginx/http.d/default.conf
 ARG XRAY_VERSION=26.11.9
 ARG XRAY_COMMIT=676eaf66f8f05d4d558ee7a74b4736623d3feeb9
 ARG XRAY_REALITY_COMMIT=4bb46b2afd8b4f1f082fbaccae34fd3c7a3f8973
-ARG SB_GATEWAY_VERSION=1.6.97
-ARG SB_GATEWAY_REVISION=uncommitted
+ARG SB_GATEWAY_VERSION=1.7.0
 ARG SB_GATEWAY_SOURCE=local
 ARG SB_URLTEST_WARM_COMPARE=0
 ARG SB_URLTEST_PLANNING_MODE=fresh-paired
+# The legacy title and io.sb-gateway labels are the update wire contract.
 LABEL org.opencontainers.image.title="sb-gateway" \
-      org.opencontainers.image.description="ARM64 Xray proxy gateway and local Web UI for MikroTik RouterOS 7" \
+      io.xroute.product.name="XRoute" \
+      org.opencontainers.image.description="ARM64 and AMD64 Xray proxy gateway and local Web UI for MikroTik RouterOS 7" \
       org.opencontainers.image.source="${SB_GATEWAY_SOURCE}" \
       org.opencontainers.image.version="${SB_GATEWAY_VERSION}" \
       org.opencontainers.image.revision="${SB_GATEWAY_REVISION}" \
@@ -214,8 +220,8 @@ ENV SB_GATEWAY_VERSION=${SB_GATEWAY_VERSION} \
     SB_XRAY_CONFIG=/config/generated/xray.json
 WORKDIR /opt/sb-gateway
 COPY --from=multicall-check /out/sb-gateway /usr/local/bin/sb-gateway
-COPY --from=sb-gateway-build /out/sb-acme /usr/local/bin/sb-acme
-COPY --from=sb-gateway-build /out/rulesets-seed /opt/sb-gateway/rulesets-seed
+COPY --from=xroute-build /out/sb-acme /usr/local/bin/sb-acme
+COPY --from=xroute-build /out/rulesets-seed /opt/sb-gateway/rulesets-seed
 COPY --from=web-build /src/out /opt/sb-gateway/web/out
 COPY LICENSES ./licenses
 COPY rulesets ./rulesets
@@ -223,10 +229,12 @@ COPY templates/client-profile.json.j2 templates/nginx-api-decoy.inc templates/ng
 COPY templates/decoy ./templates/decoy
 COPY scripts/configure-transparent-routing.sh scripts/configure-wireguard-egress.sh scripts/healthcheck.sh scripts/preflight.sh scripts/render-runtime.sh scripts/run-xray.sh scripts/validate-xray.sh ./scripts/
 COPY entrypoint.sh ./
-RUN ln -s sb-gateway /usr/local/bin/xray \
+RUN ln -s sb-gateway /usr/local/bin/xroute \
+    && ln -s sb-gateway /usr/local/bin/xray \
     && chmod 0755 entrypoint.sh scripts/*.sh \
     && mkdir -p /config /data /logs /state /run/sb-gateway \
     && sb-gateway version | grep -F "sb-gateway ${SB_GATEWAY_VERSION}" \
+    && xroute version | grep -F "xroute ${SB_GATEWAY_VERSION}" \
     && xray version | grep -F "Xray ${XRAY_VERSION}" \
     && test -x scripts/validate-xray.sh \
     && validation_dir="$(mktemp -d)" \

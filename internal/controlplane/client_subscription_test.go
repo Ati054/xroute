@@ -148,7 +148,7 @@ func TestPublicSubscriptionServesLinksXraySingBoxAndMihomoFromActiveGeneration(t
 		t.Fatalf("mihomo response: %d %s", mihomoResponse.Code, mihomoResponse.Body.String())
 	}
 	mihomo := mihomoResponse.Body.String()
-	if !strings.Contains(mihomo, `"type": "vless"`) || !strings.Contains(mihomo, `"packet-encoding": "xudp"`) || !strings.Contains(mihomo, `"stack": "mixed"`) || !strings.Contains(mihomo, `"MATCH,SB Gateway"`) || !strings.Contains(mihomo, `"auto-route": true`) {
+	if !strings.Contains(mihomo, `"type": "vless"`) || !strings.Contains(mihomo, `"packet-encoding": "xudp"`) || !strings.Contains(mihomo, `"stack": "mixed"`) || !strings.Contains(mihomo, `"MATCH,XRoute"`) || !strings.Contains(mihomo, `"auto-route": true`) {
 		t.Fatalf("invalid Mihomo profile:\n%s", mihomo)
 	}
 }
@@ -649,8 +649,8 @@ func TestFullClientProfilesApplyEveryClientPolicyControl(t *testing.T) {
 		`"DOMAIN-SUFFIX,manual.example,DIRECT"`,
 		`"DOMAIN-SUFFIX,ozon.ru,DIRECT"`,
 		`"DOMAIN-SUFFIX,doubleclick.net,REJECT"`,
-		`"AND,((IP-CIDR,192.168.3.0/24),(DST-PORT,443)),SB Gateway"`,
-		`"MATCH,SB Gateway"`,
+		`"AND,((IP-CIDR,192.168.3.0/24),(DST-PORT,443)),XRoute"`,
+		`"MATCH,XRoute"`,
 	} {
 		if !strings.Contains(text, wanted) {
 			t.Fatalf("Mihomo setting %q is missing:\n%s", wanted, text)

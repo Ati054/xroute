@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/storagebudget"
+	"github.com/Ati054/xroute/internal/storagebudget"
 )
 
 func (server *Server) recoveryBackups(response http.ResponseWriter, request *http.Request) {
@@ -94,7 +94,7 @@ func (server *Server) uploadRecoveryBackup(response http.ResponseWriter, request
 	}
 	name := request.Header.Get("X-SB-Recovery-Filename")
 	if !recoveryArchiveName.MatchString(name) || filepath.Base(name) != name {
-		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_filename", "Choose an SB Gateway .sbgw recovery archive.")
+		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_filename", "Choose an XRoute .sbgw recovery archive.")
 		return
 	}
 	server.recoveryMu.Lock()
@@ -162,7 +162,7 @@ func (server *Server) uploadRecoveryBackup(response http.ResponseWriter, request
 	}
 	metadata, err := server.recoveryArchiveMetadata(temporaryPath, false)
 	if err != nil || metadata.Name == "" {
-		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_archive", "The uploaded file is not a valid SB Gateway recovery archive.")
+		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_archive", "The uploaded file is not a valid XRoute recovery archive.")
 		return
 	}
 	created, parseErr := time.Parse(time.RFC3339, metadata.CreatedAt)

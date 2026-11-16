@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 var subscriptionTokenPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43,128}$`)

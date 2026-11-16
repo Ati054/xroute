@@ -40,8 +40,8 @@ try {
     } else {
         [System.IO.Path]::GetFullPath((Join-Path $projectRoot $OutputDirectory))
     }
-    $sourceRoot = Join-Path $outputRoot "sb-gateway-$version-source"
-    $archivePath = Join-Path $outputRoot "sb-gateway-$version-source.zip"
+    $sourceRoot = Join-Path $outputRoot "xroute-$version-source"
+    $archivePath = Join-Path $outputRoot "xroute-$version-source.zip"
     New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
     if ((Test-Path -LiteralPath $sourceRoot) -or (Test-Path -LiteralPath $archivePath)) {
         if (-not $Force) { throw "Public source output already exists; use -Force to replace it." }
@@ -49,7 +49,7 @@ try {
         Remove-ExportPath $archivePath $outputRoot
     }
 
-    $temporaryArchive = Join-Path $outputRoot ".sb-gateway-$version-source.tmp.zip"
+    $temporaryArchive = Join-Path $outputRoot ".xroute-$version-source.tmp.zip"
     if (Test-Path -LiteralPath $temporaryArchive) { Remove-Item -LiteralPath $temporaryArchive -Force }
     & git archive --format=zip --output=$temporaryArchive HEAD
     if ($LASTEXITCODE -ne 0) { throw "git archive failed." }
@@ -58,14 +58,15 @@ try {
 
     $publicReleasePath = Join-Path $sourceRoot "docs/releases/$version.md"
     $releaseLines = @(Get-Content -Encoding UTF8 -LiteralPath $publicReleasePath)
-    if ($releaseLines.Count -eq 0 -or $releaseLines[0] -ne "# SB Gateway $version") {
+    if ($releaseLines.Count -eq 0 -or $releaseLines[0] -ne "# XRoute $version") {
         throw "Release document $version is missing or has an unexpected title."
     }
     if (@($releaseLines | Where-Object { $_ -match '^### (Проверка|Verification)(\s|$)' }).Count -ne 0) {
         throw "Public release notes must contain user-facing changes, not test reports."
     }
     # This maintained history contains public product changes only. Never copy
-    # the complete internal changelog into an export or truncate older entries.
+    # the legacy development journal into an export. Retain XRoute entries
+    # beginning with the first public release under that name, version 1.7.0.
     $publicChangelogPath = Join-Path $sourceRoot "docs/PUBLIC-CHANGELOG.md"
     $publicChangelog = @(Get-Content -Encoding UTF8 -LiteralPath $publicChangelogPath)
     $publicVersions = @($publicChangelog | ForEach-Object {

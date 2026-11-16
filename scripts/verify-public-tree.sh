@@ -81,14 +81,14 @@ if [ "$release_files" != "$expected_release_files" ]; then
   exit 1
 fi
 
-if git grep -In -- '1.6.15' -- README.md README-RU.md PRODUCT.md CHANGELOG.md docs 2>/dev/null | grep -q .; then
+if git grep -In -- '1.6.15' -- README.md README-RU.md CHANGELOG.md docs 2>/dev/null | grep -q .; then
   printf '%s\n' "superseded pre-public release reference detected in public documentation" >&2
   exit 1
 fi
 
 if git grep -InE -- \
   'обход.{0,24}блокиров|разблокиров.{0,24}сайт|censorship.{0,24}(bypass|circumvention)|bypass.{0,24}(block|censor)|unblock.{0,24}(site|web)' \
-  -- README.md README-RU.md PRODUCT.md CHANGELOG.md docs '*.md' 2>/dev/null | grep -q .; then
+  -- README.md README-RU.md CHANGELOG.md docs '*.md' 2>/dev/null | grep -q .; then
   printf '%s\n' "prohibited public positioning detected in release documentation" >&2
   exit 1
 fi

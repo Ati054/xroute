@@ -17,12 +17,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/imagebundle"
+	"github.com/Ati054/xroute/internal/imagebundle"
+	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
 type options struct {
-	engine, builder, image, outputDir, inputArchive string
-	force                                           bool
+	engine, builder, image, outputDir, inputArchive, architecture string
+	force                                                         bool
 }
 
 func main() {
@@ -47,16 +48,23 @@ func run() error {
 	if json.Unmarshal(packageBody, &packageDocument) != nil || packageDocument.Version == "" {
 		return errors.New("package.json has no version")
 	}
-	defaults := options{engine: "auto", image: "sb-gateway:" + packageDocument.Version + "-arm64", outputDir: "dist/routeros"}
+	defaults := options{engine: "auto", outputDir: "dist/routeros", architecture: "arm64"}
 	flag.StringVar(&defaults.engine, "engine", defaults.engine, "auto, docker or podman")
 	flag.StringVar(&defaults.builder, "builder", "", "project-specific Docker Buildx builder")
 	flag.StringVar(&defaults.image, "image", defaults.image, "image tag")
+	flag.StringVar(&defaults.architecture, "arch", defaults.architecture, "target image architecture: arm64 or amd64")
 	flag.StringVar(&defaults.outputDir, "output-dir", defaults.outputDir, "bundle output directory")
 	flag.StringVar(&defaults.inputArchive, "input-archive", "", "validate and package an existing Docker archive instead of building it")
 	flag.BoolVar(&defaults.force, "force", false, "replace a different archive with the same version")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if defaults.architecture != "arm64" && defaults.architecture != "amd64" {
+		return errors.New("--arch must be arm64 or amd64")
+	}
+	if defaults.image == "" {
+		defaults.image = "xroute:" + packageDocument.Version + "-" + defaults.architecture
 	}
 	stagedInput, cleanupInput, err := stageInputArchive(root, defaults.inputArchive)
 	if err != nil {
@@ -90,7 +98,7 @@ func run() error {
 	if err := os.MkdirAll(output, 0o755); err != nil {
 		return err
 	}
-	archiveName := "sb-gateway-" + packageDocument.Version + "-linux-arm64.tar"
+	archiveName := "xroute-" + packageDocument.Version + "-linux-" + defaults.architecture + ".tar"
 	temporary, err := os.CreateTemp(output, "."+archiveName+".*.tmp")
 	if err != nil {
 		return err
@@ -110,7 +118,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		common := imageBuildCommon(packageDocument.Version, revision, source, defaults.image)
+		common := imageBuildCommon(packageDocument.Version, revision, source, defaults.image, defaults.architecture)
 		arguments := []string{"buildx", "build", "--builder", defaults.builder, "--provenance=false", "--output", "type=docker,dest=" + temporaryPath}
 		arguments = append(arguments, common...)
 		arguments = append(arguments, ".")
@@ -122,7 +130,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		common := imageBuildCommon(packageDocument.Version, revision, source, defaults.image)
+		common := imageBuildCommon(packageDocument.Version, revision, source, defaults.image, defaults.architecture)
 		arguments := imageBuildArguments(engine)
 		arguments = append(arguments, common...)
 		arguments = append(arguments, ".")
@@ -133,8 +141,8 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if platform != "linux/arm64" {
-			return fmt.Errorf("refusing to export %s; expected linux/arm64", platform)
+		if platform != "linux/"+defaults.architecture {
+			return fmt.Errorf("refusing to export %s; expected linux/%s", platform, defaults.architecture)
 		}
 		save := []string{"save"}
 		if engine == "podman" {
@@ -148,7 +156,7 @@ func run() error {
 	if err := imagebundle.Normalize(temporaryPath); err != nil {
 		return err
 	}
-	details, err := imagebundle.Validate(temporaryPath, defaults.image, packageDocument.Version)
+	details, err := imagebundle.ValidatePlatform(temporaryPath, defaults.image, packageDocument.Version, defaults.architecture)
 	if err != nil {
 		return err
 	}
@@ -187,7 +195,7 @@ func run() error {
 	if err := atomicWrite(filepath.Join(output, archiveName+".sha256"), []byte(archiveHash+"  "+archiveName+"\n")); err != nil {
 		return err
 	}
-	if err := atomicWrite(filepath.Join(output, "sb-gateway-"+packageDocument.Version+"-linux-arm64.manifest.json"), append(manifestBody, '\n')); err != nil {
+	if err := atomicWrite(filepath.Join(output, strings.TrimSuffix(archiveName, ".tar")+".manifest.json"), append(manifestBody, '\n')); err != nil {
 		return err
 	}
 	scriptsOutput := filepath.Join(output, "routeros")
@@ -200,7 +208,11 @@ func run() error {
 	}
 	sort.Strings(scripts)
 	for _, script := range scripts {
-		if err := copyFile(script, filepath.Join(scriptsOutput, filepath.Base(script))); err != nil {
+		body, err := os.ReadFile(script)
+		if err != nil {
+			return err
+		}
+		if err := atomicWrite(filepath.Join(scriptsOutput, filepath.Base(script)), bundleScriptContents(filepath.Base(script), body, defaults.architecture)); err != nil {
 			return err
 		}
 	}
@@ -208,6 +220,15 @@ func run() error {
 	fmt.Println("Archive:", archiveName)
 	fmt.Println("SHA256:", archiveHash)
 	return nil
+}
+
+func bundleScriptContents(name string, body []byte, architecture string) []byte {
+	if name != "variables.example.rsc" || architecture != "amd64" {
+		return body
+	}
+	body = bytes.ReplaceAll(body, []byte("-linux-arm64.tar"), []byte("-linux-amd64.tar"))
+	body = bytes.ReplaceAll(body, []byte("usb1/sb-gateway"), []byte("xroute"))
+	return bytes.ReplaceAll(body, []byte("usb1/xroute"), []byte("xroute"))
 }
 
 func stageInputArchive(root, input string) (string, func(), error) {
@@ -255,9 +276,13 @@ func releaseProvenance(root string) (string, string, error) {
 	return revision, source, nil
 }
 
-func imageBuildCommon(version, revision, source, image string) []string {
+func imageBuildCommon(version, revision, source, image string, architectures ...string) []string {
+	architecture := "arm64"
+	if len(architectures) != 0 {
+		architecture = releasecontract.ImageArchitecture(architectures[0])
+	}
 	return []string{
-		"--platform", "linux/arm64",
+		"--platform", "linux/" + architecture,
 		"--build-arg", "SB_GATEWAY_VERSION=" + version,
 		"--build-arg", "SB_GATEWAY_REVISION=" + revision,
 		"--build-arg", "SB_GATEWAY_SOURCE=" + source,
@@ -399,7 +424,7 @@ func windowsTempDirCleanupOnly(body []byte) bool {
 }
 
 func releaseGoTargets() []string {
-	return []string{"./cmd/...", "./internal/...", "./tests/tools"}
+	return []string{"./cmd/...", "./internal/...", "./routeros/...", "./tests/tools"}
 }
 
 func selectEngine(value string) (string, error) {

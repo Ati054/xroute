@@ -1,4 +1,4 @@
-module github.com/sb-gateway/sb-gateway
+module github.com/Ati054/xroute
 
 go 1.26.0
 

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/diagnosticlog"
+	"github.com/Ati054/xroute/internal/diagnosticlog"
 )
 
 const externalLogMaximum = 4 << 20

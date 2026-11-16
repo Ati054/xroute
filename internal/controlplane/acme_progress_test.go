@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
+	"github.com/Ati054/xroute/internal/acmejob"
 )
 
 func TestACMEProgressAcceptsOnlyActiveOperationTuple(t *testing.T) {

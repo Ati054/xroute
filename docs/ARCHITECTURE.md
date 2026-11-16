@@ -1,6 +1,6 @@
-# Архитектура SB Gateway
+# Архитектура XRoute
 
-Документ соответствует SB Gateway 1.6.35, серверному Xray-core 26.9.30 и runtime renderer
+Документ соответствует XRoute 1.6.35, серверному Xray-core 26.9.30 и runtime renderer
 schema 38.
 
 ## Границы системы
@@ -1175,7 +1175,7 @@ UClient закрывает исходный сокет; health-аутентиф�
 `xray -test` не дублирует служебный вывод перед запуском ядра; при отказе
 её полный вывод и исходный код завершения сохраняются. Ошибки конфигурации
 и соединений не подавляются.
-Без client-side routing весь публичный трафик приходит на SB Gateway и
+Без client-side routing весь публичный трафик приходит на XRoute и
 серверный маршрутный лист остаётся единственной точкой принятия решения.
 
 Control plane раскрывает составную карточку через
@@ -1857,7 +1857,7 @@ Mode. Данные сначала проверяются, записываютс
 Web UI принимает один Docker archive `.tar` и без proxy buffering потоково
 пишет его сразу в `/data/lifecycle-uploads` на внешнем SSD. Go control plane в
 том же единственном проходе вычисляет SHA-256 и читает не больше 4 МиБ Docker
-metadata для проверки SB Gateway, `linux/arm64` и версии. После `fsync`
+metadata для проверки XRoute, `linux/arm64` и версии. После `fsync`
 content-addressed private file перед запуском не хешируется повторно. RouterOS сначала полностью распаковывает
 candidate на изолированном veth без persistent mount-list, не останавливая
 рабочий контейнер. После этого кратко отключает diversion, полностью
@@ -1868,7 +1868,7 @@ probation, включая реальные mount flags, а не только Rou
 ошибке тома сначала снимаются с кандидата и возвращаются прежнему контейнеру;
 затем прежняя версия запускается без второго tar. После успеха
 удаляются прежняя container record/root, временный veth, worker, export и
-upload; остаётся один SB Gateway container.
+upload; остаётся один XRoute container.
 
 Перед scheduler Go API обязательно создаёт `.sbgw` recovery archive и сверяет
 ровно один live-контейнер, его root и контейнерный IPv4 с черновиком. Архив

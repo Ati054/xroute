@@ -13,7 +13,7 @@ import (
 	"os"
 	"unicode/utf8"
 
-	"github.com/sb-gateway/sb-gateway/internal/storagebudget"
+	"github.com/Ati054/xroute/internal/storagebudget"
 )
 
 // Builder is single-owner, not concurrent. Abort releases its own staging files

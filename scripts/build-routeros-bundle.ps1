@@ -4,6 +4,8 @@ param(
     [string]$Engine = "auto",
     [string]$Builder = "",
     [string]$ImageTag = "",
+    [ValidateSet("arm64", "amd64")]
+    [string]$Architecture = "arm64",
     [string]$OutputDirectory = "dist/routeros",
     [switch]$Force
 )
@@ -20,7 +22,8 @@ if (-not $goCommand) {
 $arguments = @(
     "run", "./cmd/routeros-image",
     "--engine", $Engine,
-    "--output-dir", $OutputDirectory
+    "--output-dir", $OutputDirectory,
+    "--arch", $Architecture
 )
 if (-not [string]::IsNullOrWhiteSpace($ImageTag)) {
     $arguments += @("--image", $ImageTag)

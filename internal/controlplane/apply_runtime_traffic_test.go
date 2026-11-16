@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 func TestRuntimeOnlyApplyWaitsForTrafficAfterCommit(t *testing.T) {

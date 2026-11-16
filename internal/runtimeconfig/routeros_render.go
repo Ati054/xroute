@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 const routerOSCandidateHeader = "# SB-GATEWAY generated candidate; managed objects only"

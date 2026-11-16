@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
 // SyncCDNSources updates only one provider-owned static IPv4 list. The caller

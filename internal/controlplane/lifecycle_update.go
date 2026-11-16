@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
+	"github.com/Ati054/xroute/internal/releasecontract"
+
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 const lifecycleImageUpdateResponseTimeout = 5 * time.Minute
@@ -111,7 +113,7 @@ func (server *Server) scheduleLifecycleImageUpdate(response http.ResponseWriter,
 		if !lifecycleVersionPattern.MatchString(version) {
 			err = errors.New("a valid candidate version is required for a registry image")
 		} else {
-			catalogSchema, err = inspectRegistryImageCatalogSchema(request.Context(), reference, version)
+			catalogSchema, err = inspectRegistryImageCatalogSchema(request.Context(), reference, version, server.imageArchitecture())
 		}
 	default:
 		err = errors.New("image update source must be local-file or registry")
@@ -155,6 +157,7 @@ func (server *Server) scheduleLifecycleImageUpdate(response http.ResponseWriter,
 	scheduleContext, scheduleCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer scheduleCancel()
 	result, err := stack.REST.ScheduleImageUpdate(scheduleContext, routeros.ImageUpdateSpec{
+		Architecture:  server.imageArchitecture(),
 		CatalogSchema: catalogSchema,
 		Version:       version, StorageRoot: configuredRoot, CandidateRoot: candidateRoot,
 		CandidateSource: source, CandidateReference: reference, ContainerAddress: containerAddress,
@@ -413,6 +416,15 @@ func (server *Server) validateVerifiedLocalImage(storageRoot, reference string) 
 		return "", err
 	}
 	record := objectAt(objectAt(verification, "images"), reference)
+	architecture := text(record["architecture"])
+	// Archives verified by releases predating multi-architecture support were
+	// ARM64-only. Keep those receipts usable only on an ARM64 installation.
+	if architecture == "" {
+		architecture = "arm64"
+	}
+	if !releasecontract.ImagePlatformMatches("linux", architecture, server.imageArchitecture()) {
+		return "", errImageArchitectureMismatch
+	}
 	version := text(record["version"])
 	size, ok := numberToInt64(record["size_bytes"])
 	if !ok || size < 1024 || !lifecycleVersionPattern.MatchString(version) || len(text(record["sha256"])) != 64 {

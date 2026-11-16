@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 func legacyManagedDNSFixture(t *testing.T, expected map[string][]byte) ([]byte, []byte) {

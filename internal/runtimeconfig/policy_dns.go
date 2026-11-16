@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/domainset"
+	"github.com/Ati054/xroute/internal/domainset"
 )
 
 // LegacyPolicyDNSIdle detects persisted forwarding lanes needing regeneration.

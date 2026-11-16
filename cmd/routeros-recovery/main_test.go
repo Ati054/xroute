@@ -31,7 +31,7 @@ func recoveryArchive(t *testing.T, platform string) (string, string) {
 		t.Fatal(err)
 	}
 	configName, layerName := hash(config)+".json", hash(layer.Bytes())+"/layer.tar"
-	manifest, err := json.Marshal([]map[string]any{{"Config": configName, "RepoTags": []string{"sb-gateway:1.6.45-rc.2-arm64"}, "Layers": []string{layerName}}})
+	manifest, err := json.Marshal([]map[string]any{{"Config": configName, "RepoTags": []string{"sb-gateway:1.6.45-rc.2-" + platform}, "Layers": []string{layerName}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,5 +95,25 @@ func TestRecoveryCLIRejectsWrongPlatform(t *testing.T) {
 	}
 	if _, err := os.Stat(destination); !os.IsNotExist(err) {
 		t.Fatal("failed validation created output")
+	}
+}
+
+func TestRecoveryCLIAMD64SupportsCHRDirectoryAndChecksRouterArchitecture(t *testing.T) {
+	archive, checksum := recoveryArchive(t, "amd64")
+	destination := filepath.Join(t.TempDir(), "recovery.rsc")
+	args := []string{"--arch", "amd64", "--archive", archive, "--sha256", checksum, "--version", "1.6.45-rc.2", "--storage-root", "xroute", "--container-ip", "192.0.2.2", "--router-identity", "TestCHR", "--output", destination}
+	if err := run(args, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if !strings.Contains(source, "AMD64 image does not match") || !strings.Contains(source, "board-name") {
+		t.Fatal("recovery omitted host platform checks")
+	}
+	if strings.Index(source, "AMD64 image does not match") > strings.Index(source, "/container/add") {
+		t.Fatal("image platform checked after mutation")
 	}
 }

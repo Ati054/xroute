@@ -157,7 +157,7 @@ export function TlsProfileDialog({
             <h2 id="tls-profile-title">{editing ? tr("Настроить · {value1}", { value1: itemName(existing) }) : tr("Добавить TLS-профиль")}</h2>
             <div className="form-grid">
               <label className="field">
-                 {tr("Имя профиля")} <input name="display_name" defaultValue={asText(existing.display_name, "")} placeholder={tr("Основной")} maxLength={96} required />
+                 {tr("Имя профиля")} <input dir="auto" name="display_name" defaultValue={asText(existing.display_name, "")} placeholder={tr("Основной")} maxLength={96} required />
               </label>
               <label className="field">{tr("Сертификат")} <select value={acme.mode} disabled={!acme.loaded} onChange={(event) => acme.setMode(event.target.value)}>
                   <option value="manual">{tr("Загрузить файлы")}</option>

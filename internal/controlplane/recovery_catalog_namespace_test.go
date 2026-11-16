@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	recoveryboot "github.com/sb-gateway/sb-gateway/internal/recovery"
+	recoveryboot "github.com/Ati054/xroute/internal/recovery"
 )
 
 func recoveryPrivateSecretsFixture(t *testing.T, server *Server) {

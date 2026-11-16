@@ -1,4 +1,6 @@
-# Установка SB Gateway 1.6.97
+# Установка XRoute 1.7.0
+
+В этом выпуске доступен образ ARM64. Сборка для x86-64 CHR проходит отдельные проверки и в эти файлы не входит.
 
 Инструкция описывает первую установку на MikroTik ARM64 с RouterOS 7. Английская
 версия находится в [INSTALL.md](INSTALL.md).
@@ -6,7 +8,7 @@
 ## Требования
 
 - MikroTik ARM64 с RouterOS 7 и пакетом `container` той же версии.
-- USB SSD для образа, root-dir, данных, журналов и архивов восстановления.
+- Внешний SSD/USB-диск с местом для образа, root-dir, данных, журналов и восстановления.
   Внутреннюю flash-память для контейнера не используйте.
 - Проводное подключение компьютера администратора к доверенной management LAN.
 - Сертификат RouterOS для `www-ssl` и один свободный management TCP-порт.
@@ -22,16 +24,16 @@ bootstrap импортирует его перед `install.rsc` для запу
 готовности хранилища. Не смешивайте установочные файлы разных релизов;
 старые опубликованные комплекты сохраняют прежний порядок запуска.
 
-Скачайте файлы из [релиза 1.6.97](https://github.com/Ati054/sb-gateway/releases/tag/v1.6.97):
+Скачайте файлы из [релиза 1.7.0](https://github.com/Ati054/xroute/releases/tag/v1.7.0):
 
-- `sb-gateway-1.6.97-routeros-bundle.zip`
-- `sb-gateway-1.6.97-routeros-bundle.zip.sha256`
+- `xroute-1.7.0-routeros-bundle.zip`
+- `xroute-1.7.0-routeros-bundle.zip.sha256`
 
 В комплект входят:
 
-- `sb-gateway-1.6.97-linux-arm64.tar`
-- `sb-gateway-1.6.97-linux-arm64.tar.sha256`
-- `sb-gateway-1.6.97-linux-arm64.manifest.json`
+- `xroute-1.7.0-linux-arm64.tar`
+- `xroute-1.7.0-linux-arm64.tar.sha256`
+- `xroute-1.7.0-linux-arm64.manifest.json`
 - установочные скрипты в каталоге `routeros/`
 - инструкции на русском и английском языках
 
@@ -40,20 +42,20 @@ bootstrap импортирует его перед `install.rsc` для запу
 PowerShell:
 
 ```powershell
-(Get-FileHash .\sb-gateway-1.6.97-routeros-bundle.zip -Algorithm SHA256).Hash
-Get-Content .\sb-gateway-1.6.97-routeros-bundle.zip.sha256
+(Get-FileHash .\xroute-1.7.0-routeros-bundle.zip -Algorithm SHA256).Hash
+Get-Content .\xroute-1.7.0-routeros-bundle.zip.sha256
 ```
 
 Linux или macOS:
 
 ```sh
-sha256sum -c sb-gateway-1.6.97-routeros-bundle.zip.sha256
+sha256sum -c xroute-1.7.0-routeros-bundle.zip.sha256
 ```
 
 После распаковки проверьте контейнер:
 
 ```sh
-sha256sum -c sb-gateway-1.6.97-linux-arm64.tar.sha256
+sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
 ```
 
 Ожидаемый SHA-256 берите из `.sha256` и manifest того же архива в этом релизе.
@@ -80,7 +82,7 @@ sha256sum -c sb-gateway-1.6.97-linux-arm64.tar.sha256
    ```
 
 5. Подключите и отформатируйте USB SSD по инструкции RouterOS. Создайте каталог
-   `usb1/sb-gateway` или другой отдельный каталог проекта.
+   `usb1/xroute` или другой отдельный каталог проекта.
 6. Настройте `www-ssl`: выберите сертификат и свободный management-порт. В поле
    **Available From** оставьте management-сеть и адрес контейнера. Не открывайте
    службы управления RouterOS в Интернет.
@@ -102,8 +104,8 @@ sha256sum -c sb-gateway-1.6.97-linux-arm64.tar.sha256
 после сверки адресов с конфигурацией роутера. Стандартные пути этого релиза:
 
 ```routeros
-:global "SB_IMAGE_FILE" "usb1/sb-gateway/sb-gateway-1.6.97-linux-arm64.tar"
-:global "SB_ROOT_DIR" "usb1/sb-gateway/root-1.6.97"
+:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.0-linux-arm64.tar"
+:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.0"
 ```
 
 ## Загрузка и установка
@@ -111,7 +113,7 @@ sha256sum -c sb-gateway-1.6.97-linux-arm64.tar.sha256
 Загрузите в один каталог RouterOS следующие файлы:
 
 ```text
-usb1/sb-gateway/
+usb1/xroute/
   bootstrap.rsc
   container-startup.rsc
   cloudflare-update.rsc
@@ -121,7 +123,7 @@ usb1/sb-gateway/
   variables.rsc
   watchdog.rsc
   webfig-bootstrap.rsc
-  sb-gateway-1.6.97-linux-arm64.tar
+  xroute-1.7.0-linux-arm64.tar
 ```
 
 Копируйте содержимое каталога `routeros/`, а не сам каталог. Файлы
@@ -130,7 +132,7 @@ usb1/sb-gateway/
 Выполните одну команду в WebFig Terminal:
 
 ```routeros
-/import file-name=usb1/sb-gateway/bootstrap.rsc
+/import file-name=usb1/xroute/bootstrap.rsc
 ```
 
 Bootstrap проверит комплектность файлов, выполнит preflight, создаст отдельную

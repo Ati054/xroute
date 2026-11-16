@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/sb-gateway/sb-gateway/internal/applytiming"
+	"github.com/Ati054/xroute/internal/applytiming"
 )
 
 var managedBackupBasePattern = regexp.MustCompile(`^SB-GATEWAY-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$`)

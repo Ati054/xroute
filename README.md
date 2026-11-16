@@ -1,281 +1,89 @@
-# SB Gateway for MikroTik RouterOS 7
+[English](README.md) | [Русский](README-RU.md) | [فارسی](README-FA.md) | [简体中文](README-ZH.md) | [繁體中文](README-ZH-TW.md)
 
-SB Gateway lets you choose how devices on your MikroTik reach the internet,
-using a browser panel instead of editing proxy configuration files.
-Assign a route to a device, choose which services use the normal connection,
-and keep reserve routes ready. It is intended for home and small-office admins.
+# XRoute for MikroTik RouterOS 7
 
-[Русский](README-RU.md) · [Install](docs/INSTALL.md) · [Latest release](https://github.com/Ati054/sb-gateway/releases/latest)
+> **Looking for OpenWrt? → [XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt)**
 
-## What You Need
+I built XRoute so I could manage proxy routing on a MikroTik without editing
+JSON by hand. It puts a web panel, Xray and the routing tools in one container,
+for ARM64 routers. Choose a route for each
+device, send selected services through the
+normal WAN, and add backup servers when you need them.
 
-- A MikroTik with ARM64 RouterOS 7 and container support, such as hAP ax3.
-- An external USB SSD for the container and persistent data.
-- A working internet connection and an upstream subscription or another supported exit.
-- A domain and certificate only for incoming connections that require them; outbound-only routing does not require a domain.
+This release provides ARM64 images. The x86-64 CHR build will follow after separate testing.
 
-![Routing panel with an example configuration](docs/images/panel-routing.png)
+[Installation](docs/INSTALL.md) · [Downloads](https://github.com/Ati054/xroute/releases/latest)
 
-The screenshot uses synthetic example data, not a live installation.
+![XRoute overview in English](docs/images/panel-overview-en.png)
 
-## Technical Overview
+<details>
+<summary>Routing and node quality</summary>
 
-SB Gateway is a bilingual Web-managed traffic-policy gateway packaged as
-one Linux ARM64 RouterOS container. The current source pins Xray-core 26.10.31
-only; sing-box is not shipped and there is no core switch in the UI.
+![Route quality in a running XRoute panel](docs/images/panel-routing-en.png)
 
-The server build targets Xray 26.10.31; exported Reverse VLESS bridge profiles remain pinned
-to 26.7.28 and advertise that requirement in their response header. Both use the
-current `streamSettings.method` transport field. Compatibility is accepted only
-after an end-to-end reverse data-plane test, not by connection status alone.
+</details>
 
-The server pins upstream v26.10.31 at commit `a4a3dff`, built with Go 1.27.3.
-The source update retains the certificate-trust fixes and disables MPTCP by default;
-image promotion still requires the complete
-ARM64 configuration and data-plane acceptance gate.
+Screenshots from a running installation. Network addresses are hidden.
 
-The core build applies a maintained concurrency-safety patch: selector cache
-replacement is synchronized, failed XHTTP setup retains its own response-body
-reference, and TLS file/OCSP refresh publishes immutable certificate snapshots.
-Regression tests run during the build; release acceptance also exercises the
-affected upstream packages with Go's race detector.
+## What you need
 
-Supported server-side connections are:
+- An ARM64 MikroTik, such as hAP ax³, with RouterOS 7 and container support.
+- An external SSD/USB disk with room for the container and its data.
+- An internet connection and a supported proxy subscription or another exit.
+- A domain and certificate if your incoming connections need them. Outbound-only routing does not require a domain.
 
-- VLESS over WebSocket, gRPC, HTTPUpgrade, or XHTTP through ordinary TLS/CDN;
-- direct VLESS + REALITY + Vision;
-- direct VLESS + gRPC + REALITY;
-- direct VLESS + XHTTP + REALITY;
-- Hysteria 2 over QUIC/UDP.
+## What it does
 
-The gateway routes selected services or a complete public-Internet flow for
-specific LAN, Wi-Fi, WireGuard, SSTP, or OpenVPN clients through provider
-VLESS/Hysteria nodes, Reverse VLESS, or selected RouterOS WireGuard tunnels. It does not take
-ownership of existing LANs, VPNs, routes, Wi-Fi, or unrelated firewall rules.
-All project-created RouterOS objects are scoped by the `SB-GATEWAY` owner
-marker. Changes to pre-existing objects are limited to the explicitly selected
-WireGuard peer's `allowed-address` and eligible logging rules used to filter
-successful service-account logins. Original values are recorded for restoration;
-other users' logins, errors, warnings and custom logging filters are preserved.
+- Assign routes to LAN, Wi-Fi and supported VPN clients.
+- Use VLESS, Hysteria 2, Reverse VLESS or selected RouterOS WireGuard tunnels as exits.
+- Choose the lowest-latency server with URLTest, or keep a fixed priority order with backups.
+- Keep selected countries, domains and services on the ordinary WAN.
+- Manage incoming connections, TLS certificates, subscriptions and client profiles.
+- Preview changes before Apply, view logs, make backups and update the container from the panel.
 
-An incoming WireGuard client is identified by its RouterOS peer, not by the
-shared WireGuard interface. The saved peer `.id` is stable across public-key or
-address edits on the same RouterOS object. The client source CIDRs are derived
-from that peer's current concrete IPv4 entries before Check, Plan, and Apply.
-Host `/32` and site-to-site prefixes are accepted; `0.0.0.0/0` is never treated
-as a client source.
-Deleting and recreating the peer produces a new identity and requires explicit
-reselection; the gateway never transfers a policy by guessing from an address.
+Incoming VLESS supports WebSocket, gRPC, HTTPUpgrade and XHTTP with TLS,
+as well as direct REALITY connections. Hysteria 2 uses QUIC/UDP.
+The [architecture guide](docs/ARCHITECTURE.md) describes the supported combinations
+and the Xray patches used by the project.
 
-The reference hardware is MikroTik hAP ax3, but compatibility is capability
-based: a target needs ARM64 RouterOS 7, the matching `container` package,
-kernel TPROXY/nftables support, external writable storage, and the
-routing/firewall primitives verified by preflight. Compatibility does not
-depend on one fixed RouterOS release channel.
+XRoute adds its own marked RouterOS objects. Changes to existing objects
+are limited to the settings you explicitly select; see
+[RouterOS integration](docs/ROUTEROS.md) before installation.
 
-## First installation
+## Install
 
-Download the RouterOS bundle from the [latest release](https://github.com/Ati054/sb-gateway/releases/latest) and
-verify its SHA-256 checksum. The bundle contains the ARM64 container archive,
-its checksum and manifest, and the RouterOS scripts required for installation.
+1. Download the RouterOS bundle from [Releases](https://github.com/Ati054/xroute/releases/latest) and check its SHA-256 checksum.
+2. Put the container archive and the `routeros` directory on the external SSD.
+3. Make a private copy of `routeros/variables.example.rsc` as `variables.rsc` and fill in your addresses and bootstrap credentials.
+4. Import `bootstrap.rsc` from the MikroTik terminal.
+5. Open the panel, create the administrator password and configure your devices and routes.
 
-Use a USB SSD for the container root and application data. Create a private
-copy of `routeros/variables.example.rsc` named `variables.rsc`, enter the
-RouterOS addresses and temporary bootstrap credentials, then upload the
-container archive and the `routeros` directory to one folder on the SSD.
-Import `bootstrap.rsc` once from WebFig Terminal. The script checks the target,
-creates project-owned RouterOS objects, installs the container, and leaves
-managed traffic on the normal WAN until the selected routes pass readiness
-checks. Finish network and route configuration in the Web UI.
+Follow the [installation guide](docs/INSTALL.md) for the commands, requirements
+and recovery steps. Do not put your private `variables.rsc`, subscription links
+or exported configuration in a public repository.
 
-The complete procedure, verification commands, and recovery steps are in the
-[English installation guide](docs/INSTALL.md). The
-[Russian installation guide](docs/INSTALL-RU.md) follows the same release
-contract.
+## Everyday use
 
-## Main operating model
+Save your edits, review the proposed changes, then press Apply. Changes confined
+to the container use a shorter path; changes to RouterOS networking get a backup
+and a rollback guard. A successful save alone does not mean a change is active.
 
-- The Web UI at `https://<container-address>:9443` is the normal control
-  surface. WebFig and the static `sb-gateway` binary are recovery paths.
-- **Operations → Xray Core logs** shows the bounded tail of the core error and
-  process logs with three-second refresh and copy support. Xray log level is a
-  normal checked draft setting; per-connection access logging stays disabled,
-  and an applied `debug` level automatically returns to `warning` after 15
-  minutes.
-- Critical RouterOS topology/firewall changes use preview, validation, a fresh
-  backup, a RouterOS-local rollback scheduler, readiness checks, and rollback.
-  Stable releases use SSH Safe Mode as an additional owner; RouterOS 7.24 uses
-  the scheduler guard directly because its SSH console can terminate after
-  acknowledging Safe Mode.
-- Container-only or atomically replaceable data changes do not enter the full
-  protected RouterOS path. CDN CIDR lists and other LKG-backed network data are
-  replaced without dropping established connections.
-- A `display_name`-only draft uses `state_only` after a fresh render proves
-  every runtime artifact and the RouterOS candidate byte-identical. It commits
-  local metadata without RouterOS discovery, backup, runtime publication,
-  restart, or health probes; any failed proof falls back to the normal path.
-- Apply inventories independent RouterOS REST tables through a bounded worker
-  pool and reuses that verified snapshot for post-apply capability checks; the
-  post-check refreshes only live container state. Post-Apply recovery archive
-  creation/mirroring and stale-backup pruning run as persisted maintenance;
-  rapid commits are coalesced to the latest active generation.
-- Full protected RouterOS Apply stages both content-addressed apply and rollback
-  imports in one legacy SCP session. Symmetric deltas up to 16 KiB per script
-  are installed directly through REST, avoiding SCP/import while retaining the
-  same backup, scheduler guard, health checks, and rollback contract.
-- RouterOS changes use complete renderer-owned section deltas when they are
-  materially smaller than the full candidate; backup, the
-  independent rollback scheduler, health checks, and automatic full fallback
-  remain mandatory.
-- A rule-only Xray change is proven against the live config and published with
-  Xray RoutingService. A changed DNS artifact restarts only the in-process DNS
-  component; there is no background config polling and Xray stays running.
-  Structural Xray changes use the native controller restart contract. The exact Xray
-  config validated before such a restart receives a one-shot SHA-256 marker, so
-  only the duplicate binary test is skipped. Cold/manual starts still validate
-  the live config.
-- The `watchdog` role of the same static Go binary uses direct API/process
-  evidence every 5 seconds and batches
-  listener, TPROXY route and nftables evidence into a 30-second deep probe. It does
-  not poll `supervisorctl`: a blocked XML-RPC client must never consume a
-  router core and starve DNS. Listener inventory is read from `/proc`, and the
-  process parses generated JSON directly.
-- The direct DNS provider selected in the panel also owns RouterOS DNS:
-  provider bootstrap IPs and the selected DoH URL are rendered as an isolated
-  RouterOS DNS delta. Changing it does not clear established connections.
-- Policy DNS is the `dns` role of the single static `sb-gateway` Go binary. It
-  keeps bounded in-memory cache/workers, coalesces duplicate lookups, reuses
-  UDP/DoH/DoT connections, ages cached TTLs, and serves bounded stale data only
-  after an upstream failure. Apply restarts this component only when its
-  generated artifact really changed; an idle router performs no DNS reload polling.
-- The `agent` role samples Xray/nft client counters outside the request-serving API,
-  persists the complete dashboard snapshot atomically, and drops from a
-  30-second foreground cadence to five minutes when the overview is closed.
-  The same process owns selector health/hysteresis. It consumes renderer-
-  normalized candidate groups, preserves the selected route across restarts,
-  and changes an Xray selector only after the configured confirmations.
-  Counter polling never changes routing state.
-- URLTest selects by HTTP probe latency; priority mode follows the configured
-  node order. Neither mode performs bandwidth downloads or uses payload-byte
-  accounting for selection. Cumulative node penalties are removed; availability
-  failover remains independent of planned latency optimization. See
-  [Operations](docs/OPERATIONS.md) for the current selection contract.
-- Trusted catalog cards retain recursive upstream dependencies and narrow
-  reviewed release fallbacks. Binance ships as a built-in card and keeps its
-  website, official API domains, and AWS WAF token host on the card's selected
-  egress instead of routing shared AWS/CloudFront infrastructure globally.
-  The Russian telecom card similarly pins `sibset.ru`, `sibseti.ru`,
-  `lk.sibseti.ru`, and `211.ru` while its broader catalog continues to refresh
-  daily.
-- QUIC compatibility for service cards is an explicit, off-by-default switch.
-  When enabled it rejects only matched UDP/443 before the same selected
-  direct/VPN/Reverse route, allowing normal HTTPS/TCP retry without changing
-  the card's egress or unrelated QUIC.
-- Runtime artifacts equal to the live files skip validation, publication,
-  restart, and process readiness. Large comparisons, atomic copies, and hashes
-  are streamed to avoid transient whole-file RAM duplication.
-- Local managed clients choose WAN fail-open or LAN-only fail-closed for a
-  container outage. Remote VLESS/Hysteria users always fail closed and never
-  receive ordinary WAN as an implicit fallback.
-- Managed LAN traffic on the router uses kernel TPROXY only; the container does
-  not use a userspace TUN/gVisor dataplane. An exported full-tunnel profile for
-  a remote phone or PC creates its system VPN interface on the client itself.
-  Its public IPv6 follows the assigned VLESS policy only
-  (`remote_ipv6_mode: proxy_only`); an IPv4-only WAN never becomes a direct
-  IPv6 fallback.
-- In `VLESS + WAN`, selected service cards use WAN and the remaining traffic
-  uses the selected VPN policy. In `WAN + VLESS`, the same cards use the VPN
-  policy and the remaining traffic uses WAN. The VPN side can contain provider
-  VLESS/Hysteria nodes, Reverse VLESS, and RouterOS WireGuard exits. With no
-  service cards, only the base route applies. WAN and VPN use isolated DNS
-  lanes, so an upstream DNS connection follows the same selector as data.
-- A selected RouterOS WireGuard interface is prepared automatically with an
-  isolated `sb-wg-*` table and a synthetic SB Gateway source identity. The
-  main MikroTik default route is not replaced, and the peer's original
-  `allowed-address` value is retained for restoration.
+Use **Operations** for logs, backups, recovery and image updates. Updates keep
+your saved configuration. The panel distinguishes a completed operation from
+one still waiting for recovery or confirmation.
 
-## CDN, direct ingress, and subscriptions
+The [operations guide](docs/OPERATIONS.md) explains failover, DNS, update recovery
+and the limits of latency-based server selection.
 
-Each CDN transport has one protocol template and one or more independent CDN
-deployments. Every deployment can use its own distribution hostname, client
-SNI, origin hostname/port, TLS profile, origin protection, and publication
-flag. Direct REALITY transports are not CDN transports and use their own
-SNI/handshake target and X25519 material.
+## Development
 
-TLS profiles support uploaded PEM pairs, automatic ACME issuance, and a local
-ECDSA `MyRootCA` with a ten-year leaf for one concrete SNI. The local mode is
-intended for TLS-pinned clients and rotates only on an explicit action or SNI
-change.
-
-The client subscription uses one opaque random path without `sub`,
-`subscription`, or `links`. The UI exposes three publication scenarios:
-
-1. through CDN, using either a new subscription hostname or an already
-   configured CDN deployment;
-2. direct HTTPS on the MikroTik WAN;
-3. both CDN and direct HTTPS, with a selectable primary address.
-
-Several CDN hostnames and the subscription can share public TCP/443 through
-TLS SNI and HTTP path routing. A direct HTTPS subscription consumes its chosen
-WAN TCP port and therefore cannot share the same address/port with a direct
-REALITY listener. The validator reports such conflicts before Apply.
-
-The same opaque subscription URL negotiates a URI/base64 fallback, a complete
-Xray or sing-box JSON profile, or a Mihomo YAML profile. Complete profiles can carry the
-selected service exceptions, split encrypted DNS, client-side node fallback,
-conservative ad blocking, and local-network preservation. LAN authorization is
-still enforced by the remote user's **LAN access** profile on SB Gateway; a
-client profile cannot grant itself access.
-
-No standalone public decoy website or TCP/80 listener is created. Unknown SNI
-is rejected. Unknown paths on configured TLS/CDN hostnames receive a neutral
-JSON 404. Direct REALITY can either retain an external handshake target or use
-the same managed API cover on a selected local certificate; Hysteria 2 uses the
-managed JSON cover by default for unauthorized HTTP/3 probes.
-
-## Client activity and backups
-
-The overview shows compact local and remote client rows with current uplink,
-downlink, monthly traffic, last activity, and an `A` marker for an active
-client. Remote counters come from the local Xray StatsService. Local counters
-come from an isolated counter-only nftables table; it never accepts, drops,
-marks, NATs, redirects, or inspects packet payloads.
-
-Application recovery archives use the encrypted `.sbgw` format. The current
-panel password is used as the encryption secret; there is no separate backup
-password. At most three current archives are retained on the external storage;
-up to three RouterOS Files mirrors are maintained asynchronously on a
-best-effort basis and never block an update. Archives can be created,
-downloaded, uploaded, and restored from the Web UI. Restore asks for the
-password because the archive
-must be decrypted; image update and full uninstall require only the logged-in
-session and one explicit checkbox.
-
-## Image installation and update
-
-The maintainer build command creates a versioned single-platform Docker image
-archive plus checksum/manifest evidence:
-
-```powershell
-.\scripts\build-routeros-bundle.ps1
-```
-
-The one-time WebFig bootstrap uses the verified bundle. A later Web UI update
-requires only one RouterOS-compatible `linux/arm64` `.tar`: the panel streams
-and verifies SHA-256, image metadata, lifecycle protocol, and the declared
-configuration-schema range itself. A candidate is accepted for a direct
-skipped-release update only when its minimum schema includes the schema used by
-the installed release. No second image and no
-`.sha256` upload are required. RouterOS keeps the previous stopped container
-during probation and restores it automatically if the candidate fails. After
-success, the previous container, temporary root, uploaded archive, worker, and
-temporary veth are removed so exactly one SB Gateway container remains.
-
-## Development checks
+The controller and RouterOS tools are written in Go. The panel source is in
+`app/`; the container serves a static Next.js export. Vinext/Vite is also used
+for local development and the Sites preview, so `next.config.ts` and
+`vite.config.ts` serve different build targets. Vite is not a Vitest config.
 
 ```sh
 make validate
-go build ./cmd/...
 go test ./cmd/... ./internal/... ./tests/tools
 npm ci --ignore-scripts
 npm run lint
@@ -283,42 +91,52 @@ npm test
 npm run build:static
 ```
 
-The public source includes sanitized Go and browser regression tests. Private
-lab topology, credentials, hardware harnesses, and internal evidence are not
-part of that suite. Passing CI therefore verifies the published functional
-regressions as well as compilation, but does not replace validation on the
-target MikroTik and the administrator's external nodes.
-
-Selection and failover behavior is documented in
-[Operations](docs/OPERATIONS.md). Known dependency audit findings and verification
-limitations are documented in [Security](docs/SECURITY.md) and the release notes.
+See [development checks](docs/DEVELOPMENT-CHECKS.md) for release builds and
+additional tests. CI cannot reproduce every MikroTik model or every external
+proxy server, so test changes on a separate router before relying on them.
 
 ## Documentation
 
-`README.md`, `README-RU.md`, `PRODUCT.md`, `DESIGN.md`, and the current files
-under `docs/` define the maintained product contract. The supported public
-release baseline and public history start with 1.6.17.
+Use [Discussions Q&A](https://github.com/Ati054/xroute/discussions/categories/q-a)
+for setup and usage questions.
+Report problems using the [short bug-report template](.github/ISSUE_TEMPLATE/bug_report.md).
+Remove subscription URLs, tokens, keys and personal details from logs.
 
-- [Полное русское руководство](README-RU.md)
 - [Installation](docs/INSTALL.md)
-- [Установка](docs/INSTALL-RU.md)
-- [Product contract](PRODUCT.md)
-- [Visual design system](DESIGN.md)
-- [Web UI](docs/WEB-UI.md)
-- [Клиенты, маршруты и подписки](docs/CLIENTS.md)
-- [Расширенная эксплуатация и восстановление](docs/OPERATIONS.md)
-- [RouterOS](docs/ROUTEROS.md)
-- [Архитектура](docs/ARCHITECTURE.md)
-- [CDN и Cloudflare](docs/CLOUDFLARE.md)
-- [Безопасность](docs/SECURITY.md)
-- [Диагностика](docs/TROUBLESHOOTING.md)
-- [История изменений](CHANGELOG.md)
+- [Panel and settings](docs/WEB-UI.md)
+- [Regional WAN exceptions](docs/REGIONAL-DIRECT.md)
+- [Devices, routes and subscriptions](docs/CLIENTS.md)
+- [Operations and recovery](docs/OPERATIONS.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Security](docs/SECURITY.md)
+- [Changelog](CHANGELOG.md)
+
+Maintainer notes: [product scope](docs/internal/PRODUCT.md) and
+[interface design](docs/internal/DESIGN.md).
 
 ## License
 
-Copyright (C) 2026 [Ati054](https://github.com/Ati054)
-<ati054@tutamail.com>.
+Copyright © 2026 [Ati054](https://github.com/Ati054). Licensed under
+[AGPL-3.0-or-later](LICENSE).
 
-SB Gateway is free software licensed under the GNU Affero General Public
-License, version 3 or any later version. See [LICENSE](LICENSE). SPDX metadata
-for the repository is maintained in [.reuse/dep5](.reuse/dep5).
+## FAQ
+
+### How do I set up selective Xray / VLESS routing with a web panel on MikroTik RouterOS 7?
+
+Install the XRoute container, add a subscription, create a routing policy and
+assign devices to it. Choose VLESS with WAN exceptions for services that should
+stay direct, or WAN with VLESS exceptions for selected services. Save and Apply.
+See the [installation guide](docs/INSTALL.md) and [panel guide](docs/WEB-UI.md).
+
+### How is XRoute for OpenWrt different from Podkop and PassWall2?
+
+[XRoute for OpenWrt](https://github.com/Ati054/xroute-openwrt) uses Xray, a Go
+controller and LuCI. [Podkop](https://github.com/itdoginfo/podkop) configures
+sing-box; [PassWall2](https://github.com/Openwrt-Passwall/openwrt-passwall2)
+supports several proxy cores, including Xray and sing-box. They have different
+interfaces and configuration models; compare their supported workflows with
+your routing needs.
+
+## Community
+
+Telegram: [@xroute_dev](https://t.me/xroute_dev)

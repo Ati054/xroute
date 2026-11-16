@@ -116,36 +116,14 @@ test("Reverse VLESS offers only the three direct REALITY transports", async () =
   assert.doesNotMatch(kinds, /"ws"|"grpc"|"httpupgrade"|"xhttp"/);
 });
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
+test("builds the Russian static management panel", async () => {
+  const html = await readFile(
+    process.env.XROUTE_STATIC_PANEL_HTML || new URL("../out/index.html", import.meta.url),
+    "utf8",
   );
-}
-
-test("server-renders the Russian management panel", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
   assert.match(
     html,
-    /<title>SB Gateway — управление VLESS на MikroTik<\/title>/i,
+    /<title>XRoute — управление VLESS на MikroTik<\/title>/i,
   );
   assert.match(html, /Проверяем локальный сеанс/);
   assert.doesNotMatch(html, /Отказ панели не отключает интернет/);
@@ -154,16 +132,18 @@ test("server-renders the Russian management panel", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
-test("offers a persistent RU/EN choice before the first browser session", async () => {
+test("offers a persistent five-language choice before the first browser session", async () => {
   const [page, i18n, css] = await Promise.all([
     readConsoleSource().then(normalizeLocalizedSource),
     readFile(new URL("../app/i18n.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(page, /<LanguageProvider>/);
-  assert.match(page, /className="language-toggle"/);
+  assert.match(page, /<LanguageSelector\s*\/>/);
   assert.match(i18n, /sb-gateway:locale/);
-  assert.match(i18n, /saved === "ru" \|\| saved === "en"/);
+  assert.match(i18n, /if \(isLocale\(saved\)\)/);
+  assert.match(i18n, /SUPPORTED_LOCALES\.map/);
+  assert.match(i18n, /document\.documentElement\.dir = LOCALE_DETAILS\[locale\]\.direction/);
   assert.match(i18n, /setNeedsChoice\(true\)/);
   assert.match(i18n, /Выберите язык \/ Choose language/);
   assert.match(i18n, /document\.documentElement\.lang = locale/);
@@ -410,7 +390,7 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.doesNotMatch(page, /Секретный путь создаётся автоматически/);
   assert.doesNotMatch(page, /Секретный HTTP-путь/);
   assert.match(page, /Будет создан автоматически при сохранении/);
-  assert.match(page, /Новый образ SB Gateway/);
+  assert.match(page, /Новый образ XRoute/);
   assert.match(page, /один \.tar/i);
   assert.match(page, /Promise\.allSettled\(\[/);
   assert.doesNotMatch(
@@ -535,7 +515,6 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.doesNotMatch(page, /RouterOS не предоставляет этому control plane/);
   assert.doesNotMatch(page, /Единственное ядро шлюза/);
   assert.doesNotMatch(page, /По карточкам устройств/);
-  assert.match(page, /Интернет защищён от падения контейнера/);
   assert.doesNotMatch(page, /Домашний интернет защищён от падения контейнера/);
   assert.doesNotMatch(page, /Интернет работает штатно/);
   assert.doesNotMatch(page, /Удалённые VLESS-подключения останутся закрыты/);

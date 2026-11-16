@@ -31,6 +31,13 @@ the session cap is closed before reading its question; the unique-query queue
 does not buffer TCP connections. These are concurrency limits, not queries
 per second. Cache hits and local answers bypass a saturated worker queue.
 
+Temporary TCP accept errors, including descriptor exhaustion, retain the
+listener and retry with cancelable exponential backoff from 5 ms to 1 second.
+A successful accept resets the backoff. Shutdown and permanent errors stop it.
+Validated IQUERY and STATUS requests receive a local header-only NOTIMP response;
+they never enter upstream routing or caches. Malformed packets still receive
+FORMERR, and response packets are ignored.
+
 Waiting and resolution share the original request deadline. Increasing workers
 also increases the pending queue. When multiple resolver profiles exist, one
 profile may occupy at most half the active slots and half the unique queue.

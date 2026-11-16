@@ -1,5 +1,17 @@
 # Build Storage
 
+The image builder supports `--arch arm64` (default) and `--arch amd64`:
+
+```sh
+go run ./cmd/routeros-image --arch amd64 --output-dir dist/routeros-amd64
+```
+
+Images are separate single-platform Docker archives. The packager verifies the
+embedded image configuration against the requested architecture; changing a TAR
+filename does not change its platform. GitHub asset packaging accepts the matching
+`-Architecture amd64` switch. ARM64 retains its existing bundle filename; AMD64
+uses a separate `routeros-amd64-bundle.zip` filename.
+
 Before a large local compile or image build, check both the workspace disk and
 the disk containing Docker and temporary files. On Windows with WSL, use:
 

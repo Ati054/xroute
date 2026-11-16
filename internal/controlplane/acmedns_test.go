@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
+	"github.com/Ati054/xroute/internal/acmejob"
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 func acmeDNSFixture() (acmejob.Settings, map[string]string) {

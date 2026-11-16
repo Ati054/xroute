@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/memorybudget"
 )
 
 func TestXrayAliasDispatchNames(t *testing.T) {

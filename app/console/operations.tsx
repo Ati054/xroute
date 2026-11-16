@@ -165,7 +165,7 @@ function MikroTik({
             />
             <span className="drop-icon">⇧</span>
             <strong>
-              {exportName || "Выберите файл или перетащите его сюда"}
+              {exportName || tr("Выберите файл или перетащите его сюда")}
             </strong>
             <small>{tr("Файл анализируется локальным control plane")}</small>
           </label>
@@ -739,7 +739,8 @@ export function Operations({
       const result = await scheduleImageUpdate<JsonObject>({
         candidate_source: "local-file",
         candidate_reference: candidateReference.trim(),
-        confirmation: data.get("confirmed") === "on" ? tr("ОБНОВИТЬ") : "",
+        // API confirmation tokens are fixed protocol values, not UI copy.
+        confirmation: data.get("confirmed") === "on" ? "ОБНОВИТЬ" : "",
       });
       setLifecycleMessage(
         resultMessage(
@@ -778,7 +779,7 @@ export function Operations({
     setCandidateReference("");
     setCandidateVersion("");
     setCandidateChecksum("");
-    setLifecycleMessage(tr("Загружаю образ прямо на SSD; после записи проверю arm64 и SHA-256…"));
+    setLifecycleMessage(tr("Загружаю образ прямо на SSD; проверю архитектуру и SHA-256…"));
     try {
       await preflightContainerImageUpload(file);
       const result = await uploadContainerImage<JsonObject>(file, setImageUploadProgress);
@@ -787,7 +788,7 @@ export function Operations({
       setCandidateVersion(asText(result.version, ""));
       setCandidateChecksum(asText(result.sha256, ""));
       setLifecycleMessage(
-        tr("Образ проверен: arm64, SHA-256 {value1}… Путь RouterOS подставлен автоматически.", { value1: asText(result.sha256, "").slice(0, 16) }),
+        tr("Образ проверен: {value1}, SHA-256 {value2}… Путь RouterOS подставлен автоматически.", { value1: asText(result.architecture, ""), value2: asText(result.sha256, "").slice(0, 16) }),
       );
     } catch (error) {
       setLifecycleMessage(prefixedErrorMessage(error));
@@ -804,7 +805,7 @@ export function Operations({
     try {
       const result = await scheduleFullUninstall<JsonObject>({
         storage_root: lifecycleStorageRoot,
-        confirmation: data.get("confirmed") === "on" ? tr("УДАЛИТЬ SB-GATEWAY") : "",
+        confirmation: data.get("confirmed") === "on" ? "УДАЛИТЬ SB-GATEWAY" : "",
       });
       setLifecycleMessage(
         resultMessage(
@@ -977,7 +978,7 @@ export function Operations({
       <article className="card xray-log-launcher">
         <div>
           <div className="xray-log-title-line">
-            <h3>{tr("Журналы SB Gateway")}</h3>
+            <h3>{tr("Журналы XRoute")}</h3>
             <StatusPill tone={configuredXrayLogLevel === "none" ? "muted" : configuredXrayLogLevel === "debug" ? "warn" : "info"}>
               {tr("В черновике:")} {configuredXrayLogLevel}
             </StatusPill>
@@ -1059,7 +1060,7 @@ export function Operations({
       <article className="card recovery-card">
         <div className="panel-heading recovery-heading">
           <div>
-            <h3>{tr("Резервные копии SB Gateway")}</h3>
+            <h3>{tr("Резервные копии XRoute")}</h3>
             <p>
                {tr("Три последние копии хранятся на SSD и в RouterOS Files. Архив зашифрован паролем администратора панели и не содержит образ, журнал или кэш.")} </p>
           </div>
@@ -1093,7 +1094,7 @@ export function Operations({
                 <div className="recovery-file">
                   <strong>{formatTimestamp(archive.created_at, locale)}</strong>
                   <small>
-                    SB Gateway {asText(archive.application_version, "—")} · {formatBytes(archive.size_bytes, locale)}
+                    XRoute {asText(archive.application_version, "—")} · {formatBytes(archive.size_bytes, locale)}
                   </small>
                 </div>
                 <div className="recovery-locations" aria-label={tr("Места хранения")}>
@@ -1130,7 +1131,7 @@ export function Operations({
         </div>
         {restoreArchive ? (
           <form className="recovery-restore-form" onSubmit={restoreRecovery}>
-            <input className="sr-only" name="username" autoComplete="username" value="admin" readOnly tabIndex={-1} aria-hidden="true" />
+            <input dir="auto" className="sr-only" name="username" autoComplete="username" value="admin" readOnly tabIndex={-1} aria-hidden="true" />
             <div>
               <strong>{tr("Восстановить выбранную копию")}</strong>
               <small>{tr("После проверки RouterOS один раз перезапустит контейнер.")}</small>
@@ -1170,7 +1171,7 @@ export function Operations({
             </div>
             <div className="transport-detail">
               <span className={`signal-dot signal-${liveContainer.healthy === true ? "ok" : "warn"}`} aria-hidden="true" />
-              <span>{tr("Один .tar · проверка arm64 и SHA-256 · автоматический откат")}</span>
+              <span>{tr("Один .tar · проверка архитектуры и SHA-256 · автоматический откат")}</span>
             </div>
           </div>
           <div className="transport-actions">
@@ -1182,8 +1183,8 @@ export function Operations({
         <article className="card transport-card settings-launch-card lifecycle-danger-row">
           <div className="transport-summary">
             <div className="transport-title">
-              <h3>{tr("Полное удаление SB Gateway")}</h3>
-              <code>{lifecycleStorageRoot || "Каталог проекта не определён"}</code>
+              <h3>{tr("Полное удаление XRoute")}</h3>
+              <code>{lifecycleStorageRoot || tr("Каталог проекта не определён")}</code>
             </div>
             <div className="transport-detail">
               <span className="signal-dot signal-warn" aria-hidden="true" />
@@ -1206,8 +1207,8 @@ export function Operations({
               <h2 id="image-update-title">{tr("Безопасное обновление контейнера")}</h2>
               <p className="modal-lead">{tr("RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт health-check.")}</p>
               <label className="field browser-image-upload" htmlFor="container-image-archive">
-                 {tr("Новый образ SB Gateway · один .tar")} <input id="container-image-archive" type="file" accept=".tar,application/x-tar,application/octet-stream" aria-describedby="container-image-upload-help" disabled={imageUploadBusy || lifecycleBusy} onChange={(event) => { void uploadImageFromBrowser(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                <small id="container-image-upload-help">{imageUploadBusy ? tr("Записываю прямо на SSD…") : tr("После записи панель проверит SB Gateway, linux/arm64 и SHA-256. Второй архив и файл .sha256 не нужны.")}</small>
+                 {tr("Новый образ XRoute · один .tar")} <input id="container-image-archive" type="file" accept=".tar,application/x-tar,application/octet-stream" aria-describedby="container-image-upload-help" disabled={imageUploadBusy || lifecycleBusy} onChange={(event) => { void uploadImageFromBrowser(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                <small id="container-image-upload-help">{imageUploadBusy ? tr("Записываю прямо на SSD…") : tr("Панель проверит XRoute, совместимость архитектуры и SHA-256. Второй архив и файл .sha256 не нужны.")}</small>
               </label>
               {imageUploadBusy ? (
                 <div className="image-upload-progress" aria-live="polite">
@@ -1244,10 +1245,10 @@ export function Operations({
             <button className="modal-close" type="button" onClick={() => setUninstallDialogOpen(false)} aria-label={tr("Закрыть")}>×</button>
             <form onSubmit={startFullUninstall}>
               <p className="eyebrow">{tr("Опасная операция")}</p>
-              <h2 id="full-uninstall-title">{tr("Полностью удалить SB Gateway")}</h2>
+              <h2 id="full-uninstall-title">{tr("Полностью удалить XRoute")}</h2>
               <p className="modal-lead">{tr("Удаляются только подтверждённый каталог проекта и RouterOS-объекты с точной меткой SB-GATEWAY.")}</p>
               {uninstallPreview ? <div className="lifecycle-preview"><div><strong>{tr("Будет удалено")}</strong><ul>{asStringList(uninstallPreview.removes).map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>{tr("Будет сохранено")}</strong><ul>{asStringList(uninstallPreview.preserves).map((item) => <li key={item}>{item}</li>)}</ul></div></div> : null}
-              <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Удалить SB Gateway полностью")}</strong><small>{tr("Каталог")} {lifecycleStorageRoot || "проекта"}  {tr("и только объекты с меткой SB-GATEWAY.")}</small></span></label>
+              <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Удалить XRoute полностью")}</strong><small>{tr("Каталог")} {lifecycleStorageRoot || tr("проекта")}  {tr("и только объекты с меткой SB-GATEWAY.")}</small></span></label>
               <div className="modal-actions"><button className="button button-tertiary" type="button" disabled={lifecycleBusy} onClick={() => setUninstallDialogOpen(false)}>{tr("Отмена")}</button><button className="button button-danger" type="submit" disabled={lifecycleBusy || !lifecycleStorageRoot}>{lifecycleBusy ? tr("Проверяю…") : tr("Проверить и удалить")}</button></div>
             </form>
           </section>
@@ -1279,7 +1280,7 @@ export function Operations({
           <section className="modal modal-wide xray-log-dialog" role="dialog" aria-modal="true" aria-labelledby="xray-log-title" onMouseDown={(event) => event.stopPropagation()}>
             <header className="xray-log-dialog-header">
               <div>
-                <h2 id="xray-log-title">{tr("Журналы SB Gateway")}</h2>
+                <h2 id="xray-log-title">{tr("Журналы XRoute")}</h2>
                 <p>{tr("Последние 300 строк · обновление каждые 3 секунды")}</p>
               </div>
               <button className="modal-close" type="button" onClick={() => setXrayLogOpen(false)} aria-label={tr("Закрыть")}>×</button>
@@ -1408,7 +1409,7 @@ function LifecycleUpdateProgressDialog({
       <section className="modal lifecycle-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="lifecycle-progress-title">
         <button className="modal-close" type="button" onClick={onClose} aria-label={tr("Закрыть")}>×</button>
         <h2 id="lifecycle-progress-title">{tr("Обновление контейнера")}</h2>
-        <p className="modal-lead">SB Gateway {version || "—"} · {tr("прошло")} <strong className="tabular-numbers">{formatElapsed(elapsed)}</strong></p>
+        <p className="modal-lead">XRoute {version || "—"} · {tr("прошло")} <strong className="tabular-numbers">{formatElapsed(elapsed)}</strong></p>
 
         <div className={`lifecycle-progress-status ${failed ? "is-failed" : completed ? "is-complete" : ""}`} aria-live="polite">
           <div><strong>{statusLabel}</strong><span>{progress}%</span></div>

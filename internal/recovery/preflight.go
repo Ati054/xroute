@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/storagebudget"
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/storagebudget"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 const (

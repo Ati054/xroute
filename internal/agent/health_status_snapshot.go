@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/sb-gateway/sb-gateway/internal/healthsnapshot"
+	"github.com/Ati054/xroute/internal/healthsnapshot"
 )
 
 // This optional projection omits retained samples and day reservoirs. It never

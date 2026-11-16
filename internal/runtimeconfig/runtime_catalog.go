@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 // CatalogFingerprintKind versions the connection-only Node+Secrets digest. It

@@ -3,7 +3,7 @@ package appliance
 import (
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/dnsroute"
+	"github.com/Ati054/xroute/internal/dnsroute"
 )
 
 func TestApplianceSharesRouteRegistryAcrossComponentRestarts(t *testing.T) {

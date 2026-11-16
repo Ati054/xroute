@@ -93,7 +93,8 @@ function readLatencyComparison(rawHealth: unknown, candidate: string, now: numbe
   const health = rawHealth && typeof rawHealth === "object"
     ? rawHealth as Record<string, unknown> : {};
   const marker = health.warm_planning_marker;
-  const paired = marker === "gstatic-warm-head-v1" || marker === "gstatic-fresh-paired-head-v1";
+  const paired = marker === "gstatic-warm-head-v1" || marker === "gstatic-fresh-paired-head-v1"
+    || marker === "gstatic-route-paired-head-v1" || marker === "gstatic-isolated-paired-head-v1";
   if (marker !== undefined && marker !== null && marker !== "" && !paired) return null;
   const comparisons = health[paired ? `warm_${field}` : field];
   const raw = comparisons && typeof comparisons === "object"

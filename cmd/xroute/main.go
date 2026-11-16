@@ -14,19 +14,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Ati054/xroute/internal/agent"
+	"github.com/Ati054/xroute/internal/appliance"
+	"github.com/Ati054/xroute/internal/controlplane"
+	"github.com/Ati054/xroute/internal/diagnosticlog"
+	"github.com/Ati054/xroute/internal/geoiprefresh"
+	"github.com/Ati054/xroute/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/monitor"
+	"github.com/Ati054/xroute/internal/policydns"
+	"github.com/Ati054/xroute/internal/recovery"
+	"github.com/Ati054/xroute/internal/rulesets"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/watchdog"
 	"github.com/miekg/dns"
-	"github.com/sb-gateway/sb-gateway/internal/agent"
-	"github.com/sb-gateway/sb-gateway/internal/appliance"
-	"github.com/sb-gateway/sb-gateway/internal/controlplane"
-	"github.com/sb-gateway/sb-gateway/internal/diagnosticlog"
-	"github.com/sb-gateway/sb-gateway/internal/geoiprefresh"
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
-	"github.com/sb-gateway/sb-gateway/internal/monitor"
-	"github.com/sb-gateway/sb-gateway/internal/policydns"
-	"github.com/sb-gateway/sb-gateway/internal/recovery"
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
-	"github.com/sb-gateway/sb-gateway/internal/watchdog"
 )
 
 var (
@@ -112,7 +112,7 @@ func main() {
 			log.Fatalf("recovery: %v", err)
 		}
 	case "version", "--version", "-version":
-		fmt.Printf("sb-gateway %s (%s)\n", version, revision)
+		fmt.Printf("%s %s (%s)\n", commandName(os.Args[0]), version, revision)
 	case "prune-update-backups":
 		if len(os.Args) != 2 {
 			log.Fatal("prune-update-backups accepts no arguments")
@@ -443,6 +443,13 @@ func runDNSProbe(arguments []string) error {
 	return nil
 }
 
+func commandName(executable string) string {
+	if filepath.Base(executable) == "xroute" {
+		return "xroute"
+	}
+	return "sb-gateway"
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: sb-gateway <appliance|api|monitor|agent|dns|dns-probe|watchdog|rulesets|geoip-activate|recovery-apply-pending|prune-update-backups|tcp-ready|xray-balancers|wireguard-egress-plan|version> [options]")
+	fmt.Fprintln(os.Stderr, "usage: "+commandName(os.Args[0])+" <appliance|api|monitor|agent|dns|dns-probe|watchdog|rulesets|geoip-activate|recovery-apply-pending|prune-update-backups|tcp-ready|xray-balancers|wireguard-egress-plan|version> [options]")
 }

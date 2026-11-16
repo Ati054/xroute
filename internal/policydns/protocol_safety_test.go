@@ -83,6 +83,36 @@ func TestIQueryHandledLocallyBeforeRoutesAndCache(t *testing.T) {
 	}
 }
 
+func TestStatusHandledLocallyBeforeRoutesAndCache(t *testing.T) {
+	backend := &questionlessUpstream{}
+	r := sharedQueryRuntime(t, map[string]upstream{"wan": backend}, laneConfig{ID: "allowed", Final: "wan"}, laneConfig{ID: "blocked", Final: "reject"})
+	q := dnsQuery(83, "status.example.test")
+	q[2] = dns.OpcodeStatus << 3
+	for _, lane := range []string{"allowed", "blocked"} {
+		a, err := r.resolve(t.Context(), lane, q)
+		if err != nil || len(a) != 12 || binary.BigEndian.Uint16(a[:2]) != 83 || a[2]>>3&15 != dns.OpcodeStatus || a[3]&15 != dns.RcodeNotImplemented {
+			t.Fatalf("STATUS not handled locally: %v %x", err, a)
+		}
+		for _, b := range a[4:] {
+			if b != 0 {
+				t.Fatal("STATUS echoed a section")
+			}
+		}
+	}
+	if backend.calls.Load() != 0 {
+		t.Fatal("STATUS reached upstream")
+	}
+	bad := q[:len(q)-1]
+	a, _ := r.resolve(t.Context(), "allowed", bad)
+	if len(a) < 12 || a[3]&15 != dns.RcodeFormatError {
+		t.Fatal("STATUS bypassed wire validation")
+	}
+	q[2] |= 0x80
+	if a, _ := r.resolve(t.Context(), "allowed", q); a != nil {
+		t.Fatal("responded to response")
+	}
+}
+
 func TestGoAwayRejectionsNeverReplay(t *testing.T) {
 	for _, code := range []http2.ErrCode{http2.ErrCodeEnhanceYourCalm, http2.ErrCodeInadequateSecurity, http2.ErrCodeHTTP11Required} {
 		//lint:ignore SA1019 Exercise compatibility with existing typed transports.

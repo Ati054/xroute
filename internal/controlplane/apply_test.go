@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/routeros"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
 
 type fakeRuntimeApplier struct {

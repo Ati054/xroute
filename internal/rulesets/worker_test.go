@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 func TestCatalogAndOfflineSeeds(t *testing.T) {
@@ -19,7 +19,7 @@ func TestCatalogAndOfflineSeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(packs) != 64 || packs[0].Name != "Госуслуги и государственные сайты" {
+	if len(packs) != 65 || packs[0].Name != "Госуслуги и государственные сайты" {
 		t.Fatalf("embedded catalog is incomplete or incorrectly encoded: %d %#v", len(packs), packs[0])
 	}
 	for _, id := range []string{"cn-alibaba", "cn-jd", "cn-douyin", "cn-iqiyi", "cn-kuaishou", "ir-government", "ir-shopping", "ir-payment", "ir-social", "ir-tech"} {

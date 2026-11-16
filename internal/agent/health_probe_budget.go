@@ -36,10 +36,8 @@ type measuredParallelQualityRuntime interface {
 
 func (controller *healthController) probeQuality(policyID, node string, contract healthPolicyContract) probeEvidence {
 	measurement := controller.qualityMeasurementForPolicy(policyID, contract)
-	if isPairedPlanningMeasurement(measurement) {
-		if runtime, ok := controller.runtime.(requestedQualityRuntime); ok {
-			return runtime.ProbeWithQualityRequest(node, qualityProbeRequest{Measurement: measurement})
-		}
+	if runtime, ok := controller.runtime.(requestedQualityRuntime); ok {
+		return runtime.ProbeWithQualityRequest(node, qualityProbeRequest{policyProbeScope: controller.probeScope(policyID), Measurement: measurement})
 	}
 	return controller.runtime.Probe(node)
 }
@@ -73,7 +71,10 @@ func (controller *healthController) sharedQualityBatch(policyID string, contract
 	}
 	legacy, oldParallel := controller.runtime.(parallelQualityRuntime)
 	requested, newParallel := controller.runtime.(measuredParallelQualityRuntime)
-	if (oldParallel || newParallel) && len(pending) > 1 {
+	scoped, scopedParallel := controller.runtime.(interface {
+		ProbeQualityParallelForPolicy(policyProbeScope, []string, qualityMeasurement) map[string]probeEvidence
+	})
+	if (oldParallel || newParallel || scopedParallel) && len(pending) > 1 {
 		wave := uint64(0)
 		if qualityProbeWidth(controller.runtime) > 1 {
 			wave = qualityWaveSequence.Add(1)
@@ -82,7 +83,9 @@ func (controller *healthController) sharedQualityBatch(policyID string, contract
 			controller.probeBudget.QualityAttempted[controller.probeKey(policyID, node, contract)] = true
 		}
 		var observations map[string]probeEvidence
-		if newParallel && isPairedPlanningMeasurement(controller.qualityMeasurementForPolicy(policyID, contract)) {
+		if scopedParallel {
+			observations = scoped.ProbeQualityParallelForPolicy(controller.probeScope(policyID), pending, controller.qualityMeasurementForPolicy(policyID, contract))
+		} else if newParallel && isPairedPlanningMeasurement(controller.qualityMeasurementForPolicy(policyID, contract)) {
 			observations = requested.ProbeQualityParallelWithMeasurement(pending, controller.qualityMeasurementForPolicy(policyID, contract))
 		} else if oldParallel {
 			observations = legacy.ProbeQualityParallel(pending)
@@ -268,15 +271,17 @@ func (controller *healthController) beginProbeBudget(pool healthPool, policyIDs 
 }
 
 func (controller *healthController) probeKey(policyID, node string, contract healthPolicyContract) string {
-	prefix := ""
-	if isPairedPlanningMeasurement(controller.opts.planningMeasurement()) {
-		prefix = string(controller.qualityMeasurementForPolicy(policyID, contract)) + ":" + controller.qualityContextKey() + ":"
-	}
 	if fingerprint := contract.Nodes[node].Fingerprint; fingerprint != "" {
-		return prefix + fingerprint
+		scope := ""
+		if _, ok := controller.runtime.(policyScopedProbeRuntime); ok {
+			selected := controller.probeScope(policyID)
+			scope = policyID + ":" + node + ":" + selected.Selected + ":" + selected.Member + ":"
+		}
+		return string(controller.qualityMeasurementForPolicy(policyID, contract)) + ":" + controller.qualityContextKey() + ":" + scope + fingerprint
 	}
 	// An unverified legacy endpoint cannot share evidence across policies.
-	return prefix + policyID + ":" + node
+	scope := controller.probeScope(policyID)
+	return string(controller.qualityMeasurementForPolicy(policyID, contract)) + ":" + controller.qualityContextKey() + ":" + policyID + ":" + node + ":" + scope.Selected + ":" + scope.Member
 }
 
 func (controller *healthController) claimProbeTargets(policyID string, contract healthPolicyContract, targets []string, atomicPair bool) (accepted, deferred []string) {

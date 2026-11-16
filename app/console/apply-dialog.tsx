@@ -519,7 +519,7 @@ export function RollbackDialog({
     try {
       const response = await runDraftOperation("rollback", {
         password,
-        confirmation: tr("ОТКАТИТЬ"),
+        confirmation: "ОТКАТИТЬ",
       });
       await onCompleted();
       setResult(response);

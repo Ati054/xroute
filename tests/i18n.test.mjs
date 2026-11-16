@@ -76,7 +76,33 @@ test("English source catalog covers localized UI text and contains no Russian fa
   }
 
   const missing = new Set();
+  const displayAttributes = new Set(["title", "description", "label", "placeholder", "aria-label", "alt", "caption", "hint", "eyebrow", "subtitle", "emptyText", "help", "summary"]);
+  function checkDisplayExpression(node) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return;
+    if (ts.isConditionalExpression(node)) {
+      checkDisplayExpression(node.whenTrue);
+      checkDisplayExpression(node.whenFalse);
+      return;
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "numberField") {
+      const label = node.arguments[1];
+      if (label && ts.isStringLiteral(label) && !keys.has(label.text)) missing.add(label.text);
+      return;
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
+        ["tr", "t", "localizedText", "formatLocalizedText"].includes(node.expression.text)) return;
+    if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /[А-Яа-яЁё]/.test(node.text)) {
+      assert.fail(`Raw Cyrillic display expression remains: ${node.text}`);
+    }
+    ts.forEachChild(node, checkDisplayExpression);
+  }
   function visit(node) {
+    if (ts.isJsxExpression(node) && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) {
+      checkDisplayExpression(node);
+    }
+    if (ts.isJsxAttribute(node) && displayAttributes.has(node.name.getText(page)) && node.initializer && ts.isJsxExpression(node.initializer)) {
+      checkDisplayExpression(node.initializer);
+    }
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&

@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sb-gateway/sb-gateway/internal/healthsnapshot"
+	"github.com/Ati054/xroute/internal/healthsnapshot"
 )
 
 // Unknown fields, especially probe histories, must never enter the polling

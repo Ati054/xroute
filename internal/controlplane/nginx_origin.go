@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
 // ACLs are operational state, not configuration generations: rollback must

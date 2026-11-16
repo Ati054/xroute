@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 var serviceIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)

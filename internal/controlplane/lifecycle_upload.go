@@ -18,7 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 const (
@@ -31,7 +32,6 @@ var (
 	lifecycleUploadNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,126}\.tar$`)
 	lifecycleStoredNamePattern = regexp.MustCompile(`^sb-gateway-upload-[a-f0-9]{16}\.tar$`)
 	lifecycleVersionPattern    = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9._-]+)?$`)
-	lifecycleStoragePattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{2,190}$`)
 )
 
 type dockerSaveManifest struct {
@@ -84,7 +84,7 @@ func (server *Server) preflightLifecycleImageUpload(response http.ResponseWriter
 	}
 	storageRoot, err := validateLifecycleStorageRoot(text(objectAt(config, "storage")["root"]))
 	if err != nil {
-		server.writeErrorResponse(response, request, http.StatusConflict, "storage_root_required", "Set Settings → Container and storage → Project directory on external SSD before selecting an image.")
+		server.writeErrorResponse(response, request, http.StatusConflict, "storage_root_required", "Set Settings → Container and storage → Project directory before selecting an image.")
 		return
 	}
 	if writable, _ := server.checkPersistentMounts(); !writable {
@@ -149,14 +149,16 @@ func (server *Server) uploadLifecycleImage(response http.ResponseWriter, request
 	limited := http.MaxBytesReader(response, request.Body, maximum)
 	upload := newImageUploadWriter(temporary)
 	capability := dockerImageCapability{}
-	version, size, digest, inspectErr := inspectDockerImageStream(limited, upload, &capability)
+	version, size, digest, inspectErr := inspectDockerImageStream(limited, upload, server.imageArchitecture(), &capability)
 	if inspectErr != nil {
 		temporary.Close()
 		var maxBytesError *http.MaxBytesError
 		if errors.As(inspectErr, &maxBytesError) {
 			server.writeErrorResponse(response, request, http.StatusRequestEntityTooLarge, "image_upload_too_large", "Container image exceeds the configured upload limit.")
+		} else if errors.Is(inspectErr, errImageArchitectureMismatch) {
+			server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "image_architecture_mismatch", fmt.Sprintf("Choose an XRoute linux/%s image for this router. The uploaded archive has a different architecture.", server.imageArchitecture()))
 		} else {
-			server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_image_archive", "The upload is not a valid Docker linux/arm64 SB Gateway image archive.")
+			server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_image_archive", "The upload is not a valid XRoute Docker image archive.")
 		}
 		return
 	}
@@ -182,7 +184,7 @@ func (server *Server) uploadLifecycleImage(response http.ResponseWriter, request
 	}
 	routerOSPath := storageRoot + "/data/lifecycle-uploads/" + finalName
 	verification := map[string]any{"images": map[string]any{routerOSPath: map[string]any{
-		"sha256": digest, "size_bytes": size, "version": version, "catalog_schema": capability.CatalogSchema, "verified_at": server.now().UTC().Format(time.RFC3339Nano),
+		"sha256": digest, "size_bytes": size, "version": version, "architecture": capability.Architecture, "catalog_schema": capability.CatalogSchema, "verified_at": server.now().UTC().Format(time.RFC3339Nano),
 	}}}
 	if err := server.repository.saveAuxiliary("lifecycle-image-verifications", verification); err != nil {
 		server.internalStateError(response, request, err)
@@ -194,14 +196,19 @@ func (server *Server) uploadLifecycleImage(response http.ResponseWriter, request
 	log.Printf("lifecycle image upload verified version=%s size_bytes=%d sha256=%s", version, size, digest)
 	server.writeJSON(response, http.StatusOK, map[string]any{
 		"ok": true, "filename": finalName, "size_bytes": size, "sha256": digest,
-		"architecture": "arm64", "version": version, "checksum_verified": true,
+		"architecture": capability.Architecture, "version": version, "checksum_verified": true,
 		"routeros_path": routerOSPath, "superseded_uploads_removed": removed,
 	})
 }
 
-type dockerImageCapability struct{ CatalogSchema int }
+type dockerImageCapability struct {
+	CatalogSchema int
+	Architecture  string
+}
 
-func inspectDockerImageStream(source io.Reader, destination io.Writer, observations ...*dockerImageCapability) (string, int64, string, error) {
+var errImageArchitectureMismatch = errors.New("container image architecture does not match this router")
+
+func inspectDockerImageStream(source io.Reader, destination io.Writer, expectedArchitecture string, observations ...*dockerImageCapability) (string, int64, string, error) {
 	digest := sha256.New()
 	counter := &countingWriter{destination: io.MultiWriter(destination, digest)}
 	stream := io.TeeReader(source, counter)
@@ -267,13 +274,16 @@ func inspectDockerImageStream(source io.Reader, destination io.Writer, observati
 	labels := config.Config.Labels
 	_, _, compatible := releasecontract.Compatible(labels, currentSchemaVersion)
 	catalogSchema, catalogCompatible := releasecontract.CatalogSchema(labels)
-	correctPlatform := config.OS == "linux" && (config.Architecture == "arm64" || config.Architecture == "aarch64")
-	if !correctPlatform || !compatible || !catalogCompatible || !lifecycleVersionPattern.MatchString(version) {
+	if !releasecontract.ImagePlatformMatches(config.OS, config.Architecture, expectedArchitecture) {
+		return "", counter.written, "", errImageArchitectureMismatch
+	}
+	if !compatible || !catalogCompatible || !lifecycleVersionPattern.MatchString(version) {
 		return "", counter.written, "", errors.New("container image identity is invalid")
 	}
 	for _, observation := range observations {
 		if observation != nil {
 			observation.CatalogSchema = catalogSchema
+			observation.Architecture = releasecontract.ImageArchitecture(config.Architecture)
 		}
 	}
 	return version, counter.written, hex.EncodeToString(digest.Sum(nil)), nil
@@ -299,17 +309,7 @@ func maxLifecycleImageUploadBytes() int64 {
 }
 
 func validateLifecycleStorageRoot(value string) (string, error) {
-	root := strings.Trim(strings.TrimSpace(value), "/")
-	lower := strings.ToLower(root)
-	if !lifecycleStoragePattern.MatchString(root) || !strings.Contains(root, "/") || strings.HasPrefix(lower, "flash") || lower == "disk1" || lower == "usb1" || lower == "usb2" || lower == "sata1" || lower == "nvme1" {
-		return "", errors.New("storage root must be a dedicated directory on external storage")
-	}
-	for _, part := range strings.Split(root, "/") {
-		if part == "" || part == "." || part == ".." {
-			return "", errors.New("storage root must be a dedicated directory on external storage")
-		}
-	}
-	return root, nil
+	return routeros.ValidateStorageRoot(value, true)
 }
 
 func replaceRegularFile(source, destination string) error {

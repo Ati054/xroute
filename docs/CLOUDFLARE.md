@@ -1,6 +1,6 @@
 # CDN-развёртывания и Cloudflare
 
-Документ соответствует модели CDN-развёртываний SB Gateway 1.6.21.
+Документ соответствует модели CDN-развёртываний XRoute 1.6.21.
 
 Документ относится к VLESS WebSocket, gRPC, HTTPUpgrade, XHTTP и выдаче
 клиентской HTTPS-подписки. Direct REALITY и Hysteria 2 не являются обычным
@@ -25,7 +25,7 @@ Cloudflare и Yandex в одном WebSocket/XHTTP транспорте могу
 настройки, после чего CDN deployment редактируется независимо.
 
 Публичный сертификат distribution hostname находится на стороне CDN.
-TLS-профиль SB Gateway подтверждает участок CDN→origin или прямой endpoint;
+TLS-профиль XRoute подтверждает участок CDN→origin или прямой endpoint;
 его SAN должен соответствовать origin hostname, который реально проверяет
 provider.
 

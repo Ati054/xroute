@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 var catalogSnapshotPath = regexp.MustCompile(`^state/subscription-nodes-[a-f0-9]{64}\.json$`)

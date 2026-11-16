@@ -10,6 +10,28 @@ accesses document why removing an obsolete API access would change behavior;
 do not disable the analyzer category globally. Discard a health callback's
 change flag when that branch unconditionally marks the state dirty.
 
+## RouterOS Installer Parsing
+
+Run `node --test tests/routeros-storage-preflight.test.mjs` and parse the shipped
+`preflight.rsc` on both ARM64 RouterOS and x86 CHR before a fresh-install check.
+Exercise the storage-validation prefix of `uninstall.rsc` on both platforms
+without running its removal phase. Both scripts must reject bare disk and
+system-directory names and accept dedicated project directory names.
+RouterOS parses quoted strings even in branches that will not execute; literal
+regex end anchors must be written as `\$` in the script source.
+
+On CHR, verify that a dedicated system-disk directory such as `xroute` passes,
+while bare disk names and system directories are rejected. On hardware routers,
+internal `flash/` and bare system-disk paths remain rejected. These source checks
+do not replace importing the complete release bundle on a clean installation.
+
+The container runtime preflight accepts native `aarch64` and `x86_64` machines
+without an environment override. Other architectures exit with configuration
+error status 78 before mounted credentials are read. Run
+`go test ./routeros -run TestRuntimePreflightArchitecture -count=1` on a POSIX
+host, then boot both final image architectures through the actual entrypoint.
+An image's platform metadata and a successful build do not verify startup.
+
 ## Survey baseline coverage
 
 Cadence regressions (`health_sample_cadence_test.go` and
@@ -38,17 +60,41 @@ The shared-slot test preserves both equal intervals and mixed 3/30/60-second
 intervals. An incomplete nomination must not consume the first valid win, while
 reusing an already accepted pair must not earn the second confirmation.
 
+## Upgrade From Existing Installations
+
+Before publishing the first XRoute release, qualify an in-place update from a
+populated SB Gateway installation using the exact release archive. Rebranding
+must not require reinstalling the container, rerunning bootstrap, resetting
+settings, renaming managed RouterOS objects or reconfiguring clients.
+
+Capture a private baseline and compare the following after update, restart and
+a subsequent ordinary Apply:
+
+- Administrator access and the existing panel address.
+- Subscriptions, client identities and keys, exported subscription URLs,
+  certificates, route lists, explicit node selections and DNS policies.
+- Installation paths, managed RouterOS object identities, memory limits and
+  container startup settings.
+- Client DNS and TCP/UDP forwarding, including an existing VPN client.
+
+Verify rollback to the previous image with its saved state. Compare normalized
+user settings separately from versioned runtime metadata, which may legitimately
+change. Preserve pending drafts without applying them during startup. A
+successful fresh installation or source test does not qualify this upgrade;
+retain the runtime result privately and do not mark it passed before execution.
+
 ## Public Release History
 
 `docs/PUBLIC-CHANGELOG.md` is the reviewed, user-facing version history. The
 public export copies it to `CHANGELOG.md` in full and verifies that its first
-release matches `package.json`. Add a new entry when preparing a release;
-do not discard older entries or substitute the internal development journal.
+release matches `package.json`. The history begins with XRoute 1.7.0, the first
+public release under that name. Earlier development versions are not included.
+Add a new entry when preparing a release and retain the existing XRoute entries.
+Do not substitute the legacy development journal.
 The public-tree check rejects missing or duplicate versions and a mismatched
 copy. Detailed private acceptance evidence remains outside this history.
-The release-contract test also retains the known public version headings;
-adding a release must not silently remove older entries. Stable and numbered
-RC headings use the same parser.
+The release-contract test retains the first XRoute entry and excludes legacy
+version headings. Stable and numbered RC headings use the same parser.
 The export copies the reviewed file byte-for-byte, including line endings,
 so Windows archives and Linux verification compare the same content.
 
@@ -66,7 +112,7 @@ Domain-set verification and native Xray matcher checks are documented in
 [Shared Domain Sets](DOMAIN-SETS.md). Keep shared membership independent of
 per-lane actions and test both matched and unmatched traffic before publishing.
 
-`go test ./internal/memorybudget ./cmd/sb-gateway ./internal/controlplane`
+`go test ./internal/memorybudget ./cmd/xroute ./internal/controlplane`
 covers finite/unlimited and nested cgroup limits, role allocation, explicit
 lower overrides, safe persisted hints, helper dispatch and unchanged Apply/ACME
 contracts. The budgeting opt-in is set by the image, not by host test commands.
@@ -128,10 +174,19 @@ go test ./internal/runtimeconfig ./internal/controlplane -run 'Test.*(Streaming|
 
 ## Console Forms
 
-Run `npm test`, `npm run lint` and `npm run build:static` after moving console
-components. `tests/console-modules.test.mjs` rejects cyclic section imports and
+Run `npm test` and `npm run lint` after moving console components. `npm test`
+builds both web targets before running the checks. The container markup check
+reads the built `out/index.html`, not the Cloudflare Workers bundle, which
+requires its own runtime. To inspect an image-extracted page, set the test-only
+`XROUTE_STATIC_PANEL_HTML` path. The normal build always checks its fresh output.
+`tests/console-modules.test.mjs` rejects cyclic section imports and
 another oversized route entry. Source-contract checks include every console
 module, including RU/EN translations and transport serializers.
+The translation guard also checks display attributes containing fallback or
+conditional expressions and visible JSX children, so unwrapped descriptions,
+placeholders and file-selection fallbacks cannot
+silently stay Russian in another locale. Overview watchdog text describes
+whether monitoring is enabled; audit events use localized CDN update labels.
 
 After the static build, `npm run test:browser` runs the real bundled UI against
 an isolated synthetic API. It requires a developer-installed Playwright and
@@ -479,3 +534,47 @@ public checkout without importing private local history or rewriting public hist
 Go 1.27.4 addresses [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), an HTTP/1 MaxBytesReader/header race. Update the Docker image digest, module toolchain, CI pins and binary-version assertions together; verify the final executable with the current vulnerability database. A newer host scanner does not replace the standard library linked into an older image.
 
 The v26.11.9 rebase preserves all maintained gateway patches. Upstream changes include a default Chrome 155 TLS fingerprint, MUX worker limits and failed inbound-add cleanup. Re-run transport retirement, Reverse backpressure, protobuf/API renderer and actual TLS handshake checks. A conflict-free patch application is not acceptance. MUX maximum total sessions per worker is distinct from active concurrency or a container-wide connection limit.
+
+## Panel localization and documentation screenshots
+
+The panel supports ru, en, fa, zh-Hans and zh-Hant. Run the i18n and multilingual
+catalog tests to check unique keys, placeholders, single-pass interpolation and
+language-independent API confirmation tokens. Keep protocol identifiers and
+user-supplied names unchanged.
+
+After a static panel build, scripts/capture-panel-demo.mjs renders all five
+locales on desktop and mobile for isolated UI regression checks. It uses a
+loopback server, synthetic configuration, read-only mocked API responses and
+blocks external requests. Set XROUTE_PLAYWRIGHT_MODULE to an installed Playwright
+module if it is not available from the workspace.
+
+Release documentation uses screenshots from an authorized running test
+installation after its status and traffic counters have loaded. Capture the
+overview and a populated routing policy, with the same UI language as its README.
+Use complete application views without cutting controls or capturing loading
+placeholders. Keep recorded measurements unchanged and redact network addresses,
+client identities and other private values. Synthetic regression fixtures are
+not presented as live screenshots.
+
+Product and design notes live in docs/internal/PRODUCT.md and
+docs/internal/DESIGN.md. Next.js creates the static container UI;
+Vinext/Vite serves the development and Sites targets. Both configurations are
+intentional; vite.config.ts is not a Vitest configuration.
+
+The canonical Go module is github.com/Ati054/xroute and the main command source
+is cmd/xroute. Existing runtime paths, SB_* environment variables and RouterOS
+ownership markers remain compatibility identifiers for installed systems.
+
+XRoute release archives and OCI tags use the lowercase xroute name. The image
+also provides an xroute command alias. Existing sb-gateway invocations, image
+identity labels, SB_* settings and managed RouterOS ownership markers remain
+valid so an installed gateway can verify and apply the renamed image.
+
+The sidebar shows the route mark and XRoute wordmark without a platform subtitle.
+The overview keeps health, restart and recovery details without an outage slogan.
+Legacy `SB-GATEWAY` ownership labels and API confirmation tokens remain unchanged.
+
+Managed install-artifact cleanup accepts both legacy sb-gateway and lowercase
+xroute versioned ARM64 TAR/checksum names in the confirmed storage root only.
+The RouterOS file-retention regression must keep nested runtime uploads, foreign
+roots and unversioned/lookalike names intact.

@@ -16,6 +16,8 @@
 /system/script/set $readyId source={
   :local target $1
   :local disksOnly ($2 = true)
+  :local hostArchitecture [/system/resource/get architecture-name]
+  :local systemDiskAllowed (([:pick [/system/resource/get board-name] 0 3] = "CHR") && (($hostArchitecture = "x86") || ($hostArchitecture = "x86_64")))
   :local pathReady do={
     :local path [:tostr $1]
     :if ([:pick $path 0 1] = "/") do={ :set path [:pick $path 1 [:len $path]] }
@@ -24,13 +26,15 @@
     :local diskName [:pick $path 0 $separator]
     :local kind ""
     :do {
-      :if ([/file/get $diskName type] != "disk") do={ :return false }
+      :if ([/file/get $diskName type] != "disk") do={
+        :if (($2 != true) || ([/file/get $diskName type] != "directory")) do={ :return false }
+      }
       :set kind [/file/get $path type]
     } on-error={ :return false }
     :return (($kind = "directory") || ($kind = "container store"))
   }
   :local root [/container/get $target root-dir]
-  :if ([$pathReady $root] != true) do={ :return false }
+  :if ([$pathReady $root $systemDiskAllowed] != true) do={ :return false }
   :if ([:pick $root 0 1] = "/") do={ :set root [:pick $root 1 [:len $root]] }
   :local rootDisk [:pick $root 0 [:find $root "/"]]
   :local checkedDisks [:toarray ""]
@@ -50,10 +54,14 @@
           :if (([:typeof $separator] != "num") || ($separator = 0)) do={ :return false }
           :local diskName [:pick $source 0 $separator]
           :if (($checkedDisks->$diskName) != true) do={
-            :do { :if ([/file/get $diskName type] != "disk") do={ :return false } } on-error={ :return false }
+            :do {
+              :if ([/file/get $diskName type] != "disk") do={
+                :if (($systemDiskAllowed != true) || ([/file/get $diskName type] != "directory")) do={ :return false }
+              }
+            } on-error={ :return false }
             :set ($checkedDisks->$diskName) true
           }
-        } else={ :if ([$pathReady $source] != true) do={ :return false } }
+        } else={ :if ([$pathReady $source $systemDiskAllowed] != true) do={ :return false } }
       }
     }
   }

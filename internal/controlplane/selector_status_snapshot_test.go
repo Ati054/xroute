@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/healthsnapshot"
+	"github.com/Ati054/xroute/internal/healthsnapshot"
 )
 
 func writeCompactSelectorFixture(t testing.TB, root string, body []byte) {

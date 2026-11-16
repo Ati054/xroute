@@ -668,9 +668,9 @@ func (runtime *runtime) planQuery(laneID string, query []byte) (queryPlan, error
 	if !validDNSWire(query) || binary.BigEndian.Uint16(query[4:6]) > 1 {
 		return queryPlan{answer: dnsErrorReply(query, dns.RcodeFormatError), local: true}, nil
 	}
-	if query[2]>>3&15 == dns.OpcodeIQuery {
-		// IQUERY is obsolete (RFC 3425). Return only its header; do not
-		// expose its Answer/OPT sections or send it to a recursive resolver.
+	if opcode := query[2] >> 3 & 15; opcode == dns.OpcodeIQuery || opcode == dns.OpcodeStatus {
+		// IQUERY is obsolete (RFC 3425), and this resolver does not implement
+		// STATUS. Return only the header, without forwarding probe records.
 		answer := make([]byte, 12)
 		copy(answer[:2], query[:2])
 		answer[2], answer[3] = 0x80|query[2]&0x79, dns.RcodeNotImplemented

@@ -40,6 +40,11 @@ func delayedAvailabilityRuntime(t *testing.T, delay time.Duration, check func() 
 		lane.probeSelector = "outbound-health-background"
 		selected := ""
 		lane.command = func(_ context.Context, _ time.Duration, _ string, args ...string) ([]byte, error) {
+			// Production and probe selectors are different API objects. A probe
+			// override must not change the captured production readback.
+			if len(args) > 1 && args[1] == "bi" && args[len(args)-1] != lane.probeSelectorName() {
+				return selectorInfo("block"), nil
+			}
 			if len(args) > 1 && args[1] == "bo" {
 				selected = args[len(args)-1]
 				return nil, nil

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/applytiming"
+	"github.com/Ati054/xroute/internal/applytiming"
 )
 
 type backupTimingRoundTripper func(*http.Request) (*http.Response, error)

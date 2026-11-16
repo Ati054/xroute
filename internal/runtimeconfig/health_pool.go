@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/healthcontract"
+	"github.com/Ati054/xroute/internal/healthcontract"
 )
 
 // BuildXrayHealthPool renders the selector controller contract from the same

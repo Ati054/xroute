@@ -23,9 +23,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
-	"github.com/sb-gateway/sb-gateway/internal/netpolicy"
-	"github.com/sb-gateway/sb-gateway/internal/rulesets"
+	"github.com/Ati054/xroute/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/netpolicy"
+	"github.com/Ati054/xroute/internal/rulesets"
 )
 
 const (
@@ -61,6 +61,7 @@ func OptionsFromEnvironment() Options {
 }
 
 type Server struct {
+	testImageArchitecture     string // Synthetic archive fixtures; never set from configuration or environment.
 	opts                      Options
 	repository                *stateRepository
 	secrets                   *secretStore

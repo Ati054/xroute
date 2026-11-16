@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/applyguard"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeproof"
+	"github.com/Ati054/xroute/internal/applyguard"
+	"github.com/Ati054/xroute/internal/runtimeproof"
 )
 
 const (

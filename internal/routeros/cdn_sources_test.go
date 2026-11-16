@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/cdnfeed"
 )
 
 func TestCDNSyncAddsBeforeRemovingAndVerifiesExecution(t *testing.T) {

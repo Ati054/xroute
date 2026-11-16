@@ -666,7 +666,7 @@ export function AddDialog({
                 {kind === "remote" ? tr("Имя подключения") : tr("Имя устройства")}
                 {kind === "remote" ? (
                   <>
-                    <input
+                    <input dir="auto"
                       required
                       name="name"
                       value={remoteConnectionName}
@@ -681,7 +681,7 @@ export function AddDialog({
                     ) : null}
                   </>
                 ) : (
-                  <input
+                  <input dir="auto"
                     required
                     name="name"
                     value={localDeviceName}
@@ -880,7 +880,7 @@ export function AddDialog({
                       <div className="lan-access-toolbar">
                         <label className="lan-access-search">
                           <span>{tr("Найти внутреннюю сеть")}</span>
-                          <input
+                          <input dir="auto"
                             type="search"
                             value={allowedNetworkQuery}
                             onChange={(event) =>

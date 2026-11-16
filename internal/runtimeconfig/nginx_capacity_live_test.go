@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/diagnosticlog"
+	"github.com/Ati054/xroute/internal/diagnosticlog"
 )
 
 // Use an isolated Linux container with nginx-mod-stream and nofile >= 16384.

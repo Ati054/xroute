@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 const (
@@ -18,6 +18,7 @@ const (
 )
 
 var lifecycleStorageRootPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{2,190}$`)
+var reservedStorageRootPattern = regexp.MustCompile(`^(?:flash|disk[0-9]+|usb[0-9]+|slot[0-9]+|sata[0-9]+|nvme[0-9]+|skins|pub|hotspot|web-proxy)$`)
 
 func validFixedManagedScript(name, source string) bool {
 	var prefix string
@@ -89,9 +90,16 @@ func (client *Client) ScheduleFullUninstall(ctx context.Context, storageRoot str
 }
 
 func validateLifecycleStorageRoot(value string) (string, error) {
+	return ValidateStorageRoot(value, true)
+}
+
+// ValidateStorageRoot validates a dedicated project directory. A bare root
+// directory is only usable on CHR; generated workers verify that on the router
+// before making changes. Physical routers keep the external-volume requirement.
+func ValidateStorageRoot(value string, allowSystemDisk bool) (string, error) {
 	root := strings.Trim(strings.TrimSpace(value), "/")
 	lower := strings.ToLower(root)
-	if !lifecycleStorageRootPattern.MatchString(root) || !strings.Contains(root, "/") || strings.HasPrefix(lower, "flash") {
+	if !lifecycleStorageRootPattern.MatchString(root) || !allowSystemDisk && !strings.Contains(root, "/") || strings.HasPrefix(lower, "flash") || reservedStorageRootPattern.MatchString(lower) {
 		return "", errors.New("managed storage root is unsafe")
 	}
 	for _, part := range strings.Split(root, "/") {
@@ -100,6 +108,14 @@ func validateLifecycleStorageRoot(value string) (string, error) {
 		}
 	}
 	return root, nil
+}
+
+func withStorageRootGuard(root string, lines []string) []string {
+	if strings.Contains(root, "/") {
+		return lines
+	}
+	guard := `:local storageHost [/system/resource/get architecture-name]; :if (([:pick [/system/resource/get board-name] 0 3] != "CHR") || (($storageHost != "x86") && ($storageHost != "x86_64"))) do={ :error "XRoute: a system-disk project directory is supported only on x86 CHR" }`
+	return append([]string{lines[0], guard}, lines[1:]...)
 }
 
 func renderFullUninstallWorker(root string) string {
@@ -163,5 +179,5 @@ func renderFullUninstallWorker(root string) string {
 		`:log warning "SB-GATEWAY: full uninstall complete; foreign RouterOS objects were preserved"`,
 		`:foreach scriptId in=[/system/script/find where comment~"^SB-GATEWAY "] do={ /system/script/remove $scriptId }`,
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(withStorageRootGuard(root, lines), "\n")
 }

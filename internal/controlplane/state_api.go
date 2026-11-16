@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
-	"github.com/sb-gateway/sb-gateway/internal/runtimeproof"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/runtimeproof"
 )
 
 var apiCollections = map[string]string{
@@ -54,15 +54,28 @@ var ruleOrder = []struct {
 var defaultConfigJSON []byte
 
 func (server *Server) getDraft() (map[string]any, error) {
+	fresh := false
 	config, err := server.repository.loadDraft()
 	if errors.Is(err, os.ErrNotExist) || len(config) == 0 {
 		config, err = server.repository.loadActive()
 	}
 	if errors.Is(err, os.ErrNotExist) || len(config) == 0 {
 		config, err = decodeObject(defaultConfigJSON)
+		fresh = true
 	}
 	if err != nil {
 		return nil, err
+	}
+	if fresh && server.imageArchitecture() == "amd64" {
+		router := objectAt(config, "routeros")
+		router["architecture"] = "x86_64"
+		if required, ok := router["required_capabilities"].([]any); ok {
+			for i, capability := range required {
+				if capability == "arm64" {
+					required[i] = "amd64"
+				}
+			}
+		}
 	}
 	runtimeconfig.NormalizeURLTestPolicies(config)
 	withRuntimeNetworkFacts(config)
@@ -962,7 +975,7 @@ func (server *Server) lifecycleStatus(response http.ResponseWriter, request *htt
 		"settings": redactValue(updates, "", false), "operation": redactValue(operation, "", false),
 		"supported_update_sources": []any{"registry", "browser-upload", "local-file"},
 		"registry_requires_digest": true, "browser_upload_hash_verification": true,
-		"browser_upload_architecture_verification": "arm64", "local_file_hash_verification": "streamed-once-content-addressed",
+		"browser_upload_architecture_verification": server.imageArchitecture(), "local_file_hash_verification": "streamed-once-content-addressed",
 	})
 }
 

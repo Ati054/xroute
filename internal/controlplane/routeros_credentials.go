@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/routeros"
+	"github.com/Ati054/xroute/internal/routeros"
 )
 
 func (server *Server) provisionRouterOSCredentials(response http.ResponseWriter, request *http.Request) {

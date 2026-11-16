@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/dnsroute"
-	"github.com/sb-gateway/sb-gateway/internal/netpolicy"
+	"github.com/Ati054/xroute/internal/dnsroute"
+	"github.com/Ati054/xroute/internal/netpolicy"
 )
 
 type Options struct {
@@ -280,11 +280,19 @@ func (service *service) serveTCP(laneID string, listener net.Listener) {
 
 func (service *service) serveTCPSource(laneID string, listener net.Listener, managed bool) {
 	defer service.wait.Done()
+	var acceptDelay time.Duration
 	for {
-		connection, err := listener.Accept()
-		if err != nil {
+		if service.context().Err() != nil {
 			return
 		}
+		connection, err := listener.Accept()
+		if err != nil {
+			if retryDNSAccept(service.context(), err, &acceptDelay) {
+				continue
+			}
+			return
+		}
+		acceptDelay = 0
 		if managed {
 			if _, ok := service.managedLane(connection.RemoteAddr()); !ok {
 				_ = connection.Close()

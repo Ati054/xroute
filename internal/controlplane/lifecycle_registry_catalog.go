@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/releasecontract"
+	"github.com/Ati054/xroute/internal/releasecontract"
 )
 
 const registryCatalogInspectionBudget = 30 * time.Second
@@ -68,7 +68,7 @@ type registryCatalogFetcher struct {
 // inspectRegistryImageCatalogSchema verifies the immutable OCI/Docker metadata
 // chain, not image layers or runtime health. No registry credentials are read.
 // Private, redirected or otherwise unsupported endpoints fail closed to TAR.
-func inspectRegistryImageCatalogSchema(ctx context.Context, immutableReference, expectedVersion string) (int, error) {
+func inspectRegistryImageCatalogSchema(ctx context.Context, immutableReference, expectedVersion, architecture string) (int, error) {
 	transport := &http.Transport{
 		DialContext:     (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, TLSHandshakeTimeout: 5 * time.Second,
@@ -76,25 +76,29 @@ func inspectRegistryImageCatalogSchema(ctx context.Context, immutableReference, 
 		DisableCompression: true, ForceAttemptHTTP2: true, MaxIdleConns: 2, MaxIdleConnsPerHost: 1, IdleConnTimeout: 10 * time.Second,
 	}
 	defer transport.CloseIdleConnections()
-	return inspectRegistryImageCatalogSchemaWithClient(ctx, immutableReference, expectedVersion, &http.Client{Transport: transport})
+	return inspectRegistryImageCatalogSchemaWithClient(ctx, immutableReference, expectedVersion, &http.Client{Transport: transport}, architecture)
 }
 
 // The injected transport exists for synthetic TLS fixtures. Redirect and cookie
 // policy are still forced here, independently of the supplied client's defaults.
-func inspectRegistryImageCatalogSchemaWithClient(ctx context.Context, reference, expectedVersion string, supplied *http.Client) (int, error) {
-	return inspectRegistryImageCatalogSchemaWithClients(ctx, reference, expectedVersion, supplied, nil)
+func inspectRegistryImageCatalogSchemaWithClient(ctx context.Context, reference, expectedVersion string, supplied *http.Client, architecture ...string) (int, error) {
+	return inspectRegistryImageCatalogSchemaWithClients(ctx, reference, expectedVersion, supplied, nil, architecture...)
 }
 
 // The optional second client is a test seam for synthetic CDN responses. The
 // production path always constructs the public-address-pinned blob transport.
-func inspectRegistryImageCatalogSchemaWithClients(ctx context.Context, reference, expectedVersion string, supplied, blobClient *http.Client) (int, error) {
+func inspectRegistryImageCatalogSchemaWithClients(ctx context.Context, reference, expectedVersion string, supplied, blobClient *http.Client, architecture ...string) (int, error) {
+	expectedArchitecture := "arm64" // Existing synthetic fixtures model ARM64.
+	if len(architecture) != 0 {
+		expectedArchitecture = releasecontract.ImageArchitecture(architecture[0])
+	}
 	ctx, cancel := context.WithTimeout(ctx, registryCatalogInspectionBudget)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
 	location, err := parseRegistryCatalogLocation(reference)
-	if err != nil || supplied == nil || !lifecycleVersionPattern.MatchString(expectedVersion) {
+	if err != nil || supplied == nil || expectedArchitecture == "" || !lifecycleVersionPattern.MatchString(expectedVersion) {
 		return 0, errRegistryCatalogCapability
 	}
 	client := *supplied
@@ -119,7 +123,7 @@ func inspectRegistryImageCatalogSchemaWithClients(ctx context.Context, reference
 		for index := range manifest.Manifests {
 			descriptor := &manifest.Manifests[index]
 			platform := descriptor.Platform
-			if platform == nil || platform.OS != "linux" || platform.Architecture != "arm64" || platform.Variant != "" && platform.Variant != "v8" || len(platform.OSFeatures) != 0 {
+			if platform == nil || !releasecontract.ImagePlatformMatches(platform.OS, platform.Architecture, expectedArchitecture) || platform.Variant != "" && !(expectedArchitecture == "arm64" && platform.Variant == "v8") || len(platform.OSFeatures) != 0 {
 				continue
 			}
 			if selected != nil || !registryCatalogImageType(descriptor.MediaType) || !validRegistryCatalogDescriptor(*descriptor) {
@@ -152,7 +156,7 @@ func inspectRegistryImageCatalogSchemaWithClients(ctx context.Context, reference
 	}
 	labels := config.Config.Labels
 	_, _, compatible := releasecontract.Compatible(labels, currentSchemaVersion)
-	if config.OS != "linux" || config.Architecture != "arm64" && config.Architecture != "aarch64" || !compatible || labels["org.opencontainers.image.version"] != expectedVersion {
+	if !releasecontract.ImagePlatformMatches(config.OS, config.Architecture, expectedArchitecture) || !compatible || labels["org.opencontainers.image.version"] != expectedVersion {
 		return 0, errRegistryCatalogCapability
 	}
 	schema, known := releasecontract.CatalogSchema(labels)

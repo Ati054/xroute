@@ -7,7 +7,7 @@ import ts from "typescript";
 test("ACME ships as a separate bounded worker and never exposes DNS credentials",async()=>{
  const docker=await readFile("Dockerfile","utf8");
  const manager=await readFile("internal/controlplane/acme.go","utf8");
- assert.match(docker,/COPY --from=sb-gateway-build \/out\/sb-acme \/usr\/local\/bin\/sb-acme/);
+ assert.match(docker,/COPY --from=xroute-build \/out\/sb-acme \/usr\/local\/bin\/sb-acme/);
  assert.match(manager,/GOMAXPROCS=1/);assert.match(manager,/memorybudget.Current\(\).Worker/);
  assert.match(manager,/acmeMu.TryLock/);assert.match(manager,/command.Stdin = bytes.NewReader/);
  assert.doesNotMatch(manager,/controller.Restart|applyConfiguration\(/);

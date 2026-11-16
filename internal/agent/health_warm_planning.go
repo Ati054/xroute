@@ -129,6 +129,9 @@ func collectWarmPlanning(now time.Time, candidates []string, measured map[string
 			if previous, exists := item.warmPlanningLatest[node]; exists && !value.ObservedAt.After(previous.ObservedAt) {
 				continue // Shared or late evidence never becomes a second sample.
 			}
+			if previous, exists := item.warmPlanningLatest[node]; exists && previous.Transport != value.Transport {
+				invalidateWarmNode(item, node)
+			}
 			item.warmPlanningLatest[node] = value
 			sample := healthSample{At: float64(value.ObservedAt.Unix()),
 				ObservedAt: float64(value.ObservedAt.UnixNano()) / float64(time.Second), OK: true, DelayMS: value.DelayMS}

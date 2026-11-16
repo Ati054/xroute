@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/acmejob"
+	"github.com/Ati054/xroute/internal/memorybudget"
 )
 
 func TestPendingMemoryReductionSurvivesStatusPoll(t *testing.T) {

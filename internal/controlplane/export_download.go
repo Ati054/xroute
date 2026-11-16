@@ -83,7 +83,7 @@ func buildClientExportArchive(config, user map[string]any, nodes []clientProfile
 		links = append(links, node.link)
 	}
 	files["subscription-links.txt"] = []byte(strings.Join(links, "\n") + "\n")
-	files["README.txt"] = []byte("SB Gateway client profiles for " + text(user["id"]) + "\n\nUse TUN/VPN mode. These files contain credentials; store them securely.\n")
+	files["README.txt"] = []byte("XRoute client profiles for " + text(user["id"]) + "\n\nUse TUN/VPN mode. These files contain credentials; store them securely.\n")
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)

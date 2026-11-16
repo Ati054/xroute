@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/healthcontract"
+	"github.com/Ati054/xroute/internal/healthcontract"
 )
 
 type SecretPathResolver func(reference string) (string, error)

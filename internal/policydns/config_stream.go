@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/sb-gateway/sb-gateway/internal/domainset"
+	"github.com/Ati054/xroute/internal/domainset"
 )
 
 const maxRuntimeConfigBytes = 32 << 20

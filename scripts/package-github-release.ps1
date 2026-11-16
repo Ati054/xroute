@@ -3,6 +3,7 @@ param(
     [string]$RouterOSDirectory = "dist/routeros",
     [string]$PublicSourceDirectory = "dist/public-source",
     [string]$OutputDirectory = "dist/github-release",
+    [ValidateSet("arm64", "amd64")][string]$Architecture = "arm64",
     [switch]$SkipWorkspaceCleanup,
     [switch]$Force
 )
@@ -48,12 +49,12 @@ try {
     $outputRoot = Resolve-ProjectPath $OutputDirectory
     New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
-    $archiveName = "sb-gateway-$version-linux-arm64.tar"
+    $archiveName = "xroute-$version-linux-$Architecture.tar"
     $archivePath = Join-Path $routerOSRoot $archiveName
     $archiveChecksumPath = "$archivePath.sha256"
-    $manifestPath = Join-Path $routerOSRoot "sb-gateway-$version-linux-arm64.manifest.json"
+    $manifestPath = Join-Path $routerOSRoot "xroute-$version-linux-$Architecture.manifest.json"
     $routerOSScripts = Join-Path $routerOSRoot "routeros"
-    $sourceArchivePath = Join-Path $publicSourceRoot "sb-gateway-$version-source.zip"
+    $sourceArchivePath = Join-Path $publicSourceRoot "xroute-$version-source.zip"
     foreach ($requiredPath in @($archivePath, $archiveChecksumPath, $manifestPath, $routerOSScripts, $sourceArchivePath)) {
         if (-not (Test-Path -LiteralPath $requiredPath)) {
             throw "Missing release input: $requiredPath"
@@ -66,11 +67,12 @@ try {
         throw "The container archive does not match its checksum file."
     }
     $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-    if ([string]$manifest.version -ne $version -or [string]$manifest.platform -ne "linux/arm64" -or [string]$manifest.sha256 -ne $archiveHash) {
+    if ([string]$manifest.version -ne $version -or [string]$manifest.platform -ne "linux/$Architecture" -or [string]$manifest.sha256 -ne $archiveHash) {
         throw "The image manifest does not match the release archive."
     }
 
-    $bundleName = "sb-gateway-$version-routeros-bundle.zip"
+    $bundleName = "xroute-$version-routeros-bundle.zip"
+    if ($Architecture -eq "amd64") { $bundleName = "xroute-$version-routeros-amd64-bundle.zip" }
     $bundlePath = Join-Path $outputRoot $bundleName
     $stagingRoot = Join-Path $outputRoot ".bundle-staging"
     foreach ($target in @($bundlePath, "$bundlePath.sha256", (Join-Path $outputRoot $archiveName), (Join-Path $outputRoot "$archiveName.sha256"), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath) + ".sha256")), (Join-Path $outputRoot "RELEASE-NOTES.md"), (Join-Path $outputRoot "SHA256SUMS"), $stagingRoot)) {

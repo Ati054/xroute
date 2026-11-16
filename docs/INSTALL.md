@@ -1,4 +1,6 @@
-# Install SB Gateway 1.6.97
+# Install XRoute 1.7.0
+
+This release provides ARM64 images. The x86-64 CHR build is being tested separately and is not included in these downloads.
 
 This guide covers the first installation on an ARM64 MikroTik running
 RouterOS 7. Use the matching Russian guide if needed:
@@ -7,8 +9,9 @@ RouterOS 7. Use the matching Russian guide if needed:
 ## Requirements
 
 - ARM64 MikroTik with RouterOS 7 and the matching `container` package.
-- USB SSD with enough space for the image, container root, data, logs, and
-  recovery archives. Do not place the container on internal flash.
+- Storage with enough space for the image, container root, data, logs and
+  recovery archives on an external SSD/USB disk.
+  Do not place the container on internal flash.
 - Wired access from an administrator computer on a trusted management LAN.
 - A RouterOS certificate for the `www-ssl` service and one unused management
   TCP port.
@@ -19,16 +22,16 @@ The `container` package version must match RouterOS.
 
 ## Release files
 
-Download the assets from [release 1.6.97](https://github.com/Ati054/sb-gateway/releases/tag/v1.6.97):
+Download the assets from [release 1.7.0](https://github.com/Ati054/xroute/releases/tag/v1.7.0):
 
-- `sb-gateway-1.6.97-routeros-bundle.zip`
-- `sb-gateway-1.6.97-routeros-bundle.zip.sha256`
+- `xroute-1.7.0-routeros-bundle.zip`
+- `xroute-1.7.0-routeros-bundle.zip.sha256`
 
 The bundle contains:
 
-- `sb-gateway-1.6.97-linux-arm64.tar`
-- `sb-gateway-1.6.97-linux-arm64.tar.sha256`
-- `sb-gateway-1.6.97-linux-arm64.manifest.json`
+- `xroute-1.7.0-linux-arm64.tar`
+- `xroute-1.7.0-linux-arm64.tar.sha256`
+- `xroute-1.7.0-linux-arm64.manifest.json`
 - the `routeros/` installation scripts
 - this installation guide in English and Russian
 
@@ -37,20 +40,20 @@ Verify the bundle before extracting it.
 PowerShell:
 
 ```powershell
-(Get-FileHash .\sb-gateway-1.6.97-routeros-bundle.zip -Algorithm SHA256).Hash
-Get-Content .\sb-gateway-1.6.97-routeros-bundle.zip.sha256
+(Get-FileHash .\xroute-1.7.0-routeros-bundle.zip -Algorithm SHA256).Hash
+Get-Content .\xroute-1.7.0-routeros-bundle.zip.sha256
 ```
 
 Linux or macOS:
 
 ```sh
-sha256sum -c sb-gateway-1.6.97-routeros-bundle.zip.sha256
+sha256sum -c xroute-1.7.0-routeros-bundle.zip.sha256
 ```
 
 After extraction, verify the container archive too:
 
 ```sh
-sha256sum -c sb-gateway-1.6.97-linux-arm64.tar.sha256
+sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
 ```
 
 Use the expected SHA-256 from the matching archive's `.sha256` file and manifest
@@ -77,7 +80,7 @@ in this release. Do not use a checksum from another version or rebuild.
    ```
 
 5. Connect and format the USB SSD according to the RouterOS storage guide.
-   Create `usb1/sb-gateway` or another dedicated project directory.
+   Create `usb1/xroute` or another dedicated project directory.
 6. Configure `www-ssl` with a valid certificate and an unused management port.
    Limit **Available From** to the management network and the container address.
    Do not expose RouterOS management services to the Internet.
@@ -100,8 +103,8 @@ addresses match the router. The default image and root paths for this release
 are:
 
 ```routeros
-:global "SB_IMAGE_FILE" "usb1/sb-gateway/sb-gateway-1.6.97-linux-arm64.tar"
-:global "SB_ROOT_DIR" "usb1/sb-gateway/root-1.6.97"
+:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.0-linux-arm64.tar"
+:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.0"
 ```
 
 ## Upload and install
@@ -109,7 +112,7 @@ are:
 Upload these files to the same RouterOS directory:
 
 ```text
-usb1/sb-gateway/
+usb1/xroute/
   bootstrap.rsc
   container-startup.rsc
   cloudflare-update.rsc
@@ -119,7 +122,7 @@ usb1/sb-gateway/
   variables.rsc
   watchdog.rsc
   webfig-bootstrap.rsc
-  sb-gateway-1.6.97-linux-arm64.tar
+  xroute-1.7.0-linux-arm64.tar
 ```
 
 Copy the contents of the bundle's `routeros/` directory, not the directory
@@ -133,7 +136,7 @@ the published older bundles retain their original startup behavior.
 Run one command in WebFig Terminal:
 
 ```routeros
-/import file-name=usb1/sb-gateway/bootstrap.rsc
+/import file-name=usb1/xroute/bootstrap.rsc
 ```
 
 The bootstrap script checks every required file before making changes. It then

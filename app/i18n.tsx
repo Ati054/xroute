@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { localizedText } from "./i18n-text";
+import { formatLocalizedText, localizedText } from "./i18n-text";
+import { BrandMark } from "./brand";
+import { isLocale, LOCALE_DETAILS, SUPPORTED_LOCALES, type Locale } from "./locales";
 
-export type Locale = "ru" | "en";
+export type { Locale } from "./locales";
 
 const LOCALE_STORAGE_KEY = "sb-gateway:locale";
 
@@ -15,7 +17,7 @@ const messages = {
     "language.english": "English",
     "language.switchToEnglish": "Switch to English",
     "language.switchToRussian": "Переключить на русский",
-    "document.title": "SB Gateway — управление VLESS на MikroTik",
+    "document.title": "XRoute — управление VLESS на MikroTik",
     "document.description": "Локальная защищённая панель управления маршрутизацией, VLESS, CDN и отказоустойчивостью на MikroTik RouterOS.",
     "common.advanced": "Дополнительно",
     "common.cancel": "Отмена",
@@ -103,7 +105,7 @@ const messages = {
     "language.english": "English",
     "language.switchToEnglish": "Switch to English",
     "language.switchToRussian": "Переключить на русский",
-    "document.title": "SB Gateway — VLESS Management for MikroTik",
+    "document.title": "XRoute — VLESS Management for MikroTik",
     "document.description": "Secure local management of routing, VLESS, CDNs, and failover on MikroTik RouterOS.",
     "common.advanced": "Advanced",
     "common.cancel": "Cancel",
@@ -201,16 +203,16 @@ function LanguageChoice({ onChoose }: { onChoose: (locale: Locale) => void }) {
   return (
     <main className="language-choice-shell">
       <section className="language-choice-card" aria-labelledby="language-choice-title">
-        <span className="brand-mark">SB</span>
+        <BrandMark />
         <h1 id="language-choice-title">Выберите язык / Choose language</h1>
         <p>Язык можно изменить позже. You can change it later.</p>
         <div className="language-choice-actions">
-          <button className="button button-primary" type="button" onClick={() => onChoose("ru")}>
-            Русский
-          </button>
-          <button className="button button-secondary" type="button" onClick={() => onChoose("en")}>
-            English
-          </button>
+          {SUPPORTED_LOCALES.map((locale) => (
+            <button key={locale} className="button button-secondary" type="button" lang={locale}
+              dir={LOCALE_DETAILS[locale].direction} onClick={() => onChoose(locale)}>
+              {LOCALE_DETAILS[locale].name}
+            </button>
+          ))}
         </div>
       </section>
     </main>
@@ -225,8 +227,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-      if (saved === "ru" || saved === "en") {
+      let saved: string | null = null;
+      try { saved = window.localStorage.getItem(LOCALE_STORAGE_KEY); } catch { /* Storage may be disabled. */ }
+      if (isLocale(saved)) {
         setLocaleState(saved);
         return;
       }
@@ -238,29 +241,27 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setLocale = useCallback((nextLocale: Locale) => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    if (!isLocale(nextLocale)) return;
+    try { window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale); } catch { /* Keep the choice for this session. */ }
     setLocaleState(nextLocale);
     setNeedsChoice(false);
   }, []);
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    document.title = messages[locale]["document.title"];
+    document.documentElement.dir = LOCALE_DETAILS[locale].direction;
+    document.title = locale === "ru" || locale === "en" ? messages[locale]["document.title"] : localizedText(messages.ru["document.title"], locale);
     document
       .querySelector<HTMLMetaElement>('meta[name="description"]')
-      ?.setAttribute("content", messages[locale]["document.description"]);
+      ?.setAttribute("content", locale === "ru" || locale === "en" ? messages[locale]["document.description"] : localizedText(messages.ru["document.description"], locale));
   }, [locale, setLocale]);
 
   const value = useMemo<LanguageContextValue>(() => {
     return {
       locale,
       setLocale,
-      t: (key) => messages[locale][key],
-      tr: (source, values = {}) =>
-        Object.entries(values).reduce(
-          (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
-          localizedText(source, locale),
-        ),
+      t: (key) => locale === "ru" || locale === "en" ? messages[locale][key] : localizedText(messages.ru[key], locale),
+      tr: (source, values = {}) => formatLocalizedText(source, locale, values),
     };
   }, [locale, setLocale]);
 
@@ -276,4 +277,18 @@ export function useLanguage(): LanguageContextValue {
   const value = useContext(LanguageContext);
   if (!value) throw new Error("useLanguage must be used inside LanguageProvider");
   return value;
+}
+
+export function LanguageSelector({ className = "language-toggle" }: { className?: string }) {
+  const { locale, setLocale, tr } = useLanguage();
+  return (
+    <select className={className} aria-label={tr("Язык панели")} value={locale}
+      onChange={(event) => { if (isLocale(event.target.value)) setLocale(event.target.value); }}>
+      {SUPPORTED_LOCALES.map((value) => (
+        <option key={value} value={value} lang={value} dir={LOCALE_DETAILS[value].direction}>
+          {LOCALE_DETAILS[value].name}
+        </option>
+      ))}
+    </select>
+  );
 }

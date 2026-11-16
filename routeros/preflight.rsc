@@ -18,7 +18,7 @@
 :local version [/system/resource/get version]
 :local architecture [/system/resource/get architecture-name]
 :if ([:pick $version 0 2] != "7.") do={ :error ("SB-GATEWAY requires RouterOS major 7; detected " . $version) }
-:if ($architecture != "arm64") do={ :error ("SB-GATEWAY requires ARM64; detected " . $architecture) }
+:if (($architecture != "arm64") && ($architecture != "x86") && ($architecture != "x86_64")) do={ :error ("XRoute requires ARM64 or x86_64; detected " . $architecture) }
 
 :local channel "unknown"
 :do { :set channel [/system/package/update/get channel] } on-error={ :log warning "SB-GATEWAY: unable to read update channel; no channel change will be made" }
@@ -33,19 +33,23 @@
 :if (($containerMode != true) && ($containerMode != "yes")) do={ :error "SB-GATEWAY: container device-mode is disabled; enable it physically before applying" }
 
 :if (([:len $"SB_STORAGE_ROOT"] = 0) || ([:find $"SB_STORAGE_ROOT" "flash"] = 0)) do={ :error "SB-GATEWAY: storage root must be an external disk, not internal flash" }
+:if ([:typeof [:find $"SB_STORAGE_ROOT" "/"]] = "nil") do={
+  :if (([:pick [/system/resource/get board-name] 0 3] != "CHR") || (($architecture != "x86") && ($architecture != "x86_64"))) do={ :error "XRoute: a system-disk project directory is supported only on x86 CHR" }
+  :if (($"SB_STORAGE_ROOT" ~ "^(disk|usb|slot|sata|nvme)[0-9]+\$") || ($"SB_STORAGE_ROOT" ~ "^(skins|pub|hotspot|web-proxy)\$")) do={ :error "XRoute: select a dedicated project directory, not a disk or system directory" }
+}
 :if (($"SB_IMAGE_SOURCE" != "file") && ($"SB_IMAGE_SOURCE" != "registry")) do={ :error "SB-GATEWAY: SB_IMAGE_SOURCE must be file or registry" }
 :local projectContainers [/container/find where comment="SB-GATEWAY container"]
 :if ([:len $projectContainers] > 1) do={ :error "SB-GATEWAY: project container is ambiguous" }
 :if ([:len $projectContainers] = 0) do={
   :if ($"SB_IMAGE_SOURCE" = "file") do={
-    :if ([:len $"SB_IMAGE_FILE"] = 0) do={ :error "SB-GATEWAY: set SB_IMAGE_FILE to the verified ARM64 Docker archive uploaded through WebFig Files" }
+    :if ([:len $"SB_IMAGE_FILE"] = 0) do={ :error "SB-GATEWAY: set SB_IMAGE_FILE to the verified Docker archive for this architecture uploaded through WebFig Files" }
     :if ([:find $"SB_IMAGE_FILE" ($"SB_STORAGE_ROOT" . "/")] != 0) do={ :error "SB-GATEWAY: local image archive must be stored below SB_STORAGE_ROOT on the external disk" }
     :local localImage [/file/find where name=$"SB_IMAGE_FILE"]
     :if ([:len $localImage] != 1) do={ :error ("SB-GATEWAY: local image archive is missing or ambiguous: " . $"SB_IMAGE_FILE") }
     :if ([/file/get $localImage size] < 1048576) do={ :error "SB-GATEWAY: local image archive is unexpectedly small; verify its SHA256 on the administrator PC and upload it again" }
   }
   :if ($"SB_IMAGE_SOURCE" = "registry") do={
-    :if (([:len $"SB_IMAGE"] = 0) || ([:typeof [:find $"SB_IMAGE" "example.invalid"]] != "nil")) do={ :error "SB-GATEWAY: set a real immutable ARM64 registry image reference" }
+    :if (([:len $"SB_IMAGE"] = 0) || ([:typeof [:find $"SB_IMAGE" "example.invalid"]] != "nil")) do={ :error "SB-GATEWAY: set a real immutable registry image reference for this architecture" }
     :if ([:typeof [:find $"SB_IMAGE" "@sha256:"]] = "nil") do={ :error "SB-GATEWAY: registry image must be pinned by @sha256 digest" }
   }
 } else={

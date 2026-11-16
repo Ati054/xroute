@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sb-gateway/sb-gateway/internal/storagebudget"
+	"github.com/Ati054/xroute/internal/storagebudget"
 )
 
 func headroomBuilder(t *testing.T) (*Builder, string) {

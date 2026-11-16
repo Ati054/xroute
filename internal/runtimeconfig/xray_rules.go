@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/domainset"
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/domainset"
+	"github.com/Ati054/xroute/internal/geoipasset"
 )
 
 type xrayRuleCompiler struct {

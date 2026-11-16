@@ -259,6 +259,10 @@ func (controller *healthController) probeEmergencyCandidates(policyID string, ca
 	defer func() { trace.finish(probeErr == nil && chosen != "") }()
 	defer func() {
 		for candidate, evidence := range observations {
+			if evidence.Deferred {
+				delete(observations, candidate)
+				continue
+			}
 			// ProbeAvailability may return elapsed time for any successful origin.
 			// It is never a new primary quality measurement, even in custom runtimes.
 			evidence.QualityUnmeasured = true
@@ -283,7 +287,11 @@ func (controller *healthController) probeEmergencyCandidates(policyID string, ca
 		selected = candidate
 		return true
 	}
-	if ranked, ok := controller.runtime.(rankedEmergencyAvailabilityRuntime); ok && len(preferred) > 0 {
+	if scoped, ok := controller.runtime.(interface {
+		ProbeRankedEmergencyForPolicy(policyProbeScope, []string, []string, func(string, probeEvidence) bool) map[string]probeEvidence
+	}); ok {
+		measured = scoped.ProbeRankedEmergencyForPolicy(controller.probeScope(policyID), candidates, preferred, accept)
+	} else if ranked, ok := controller.runtime.(rankedEmergencyAvailabilityRuntime); ok && len(preferred) > 0 {
 		measured = ranked.ProbeRankedEmergencyAvailabilityParallel(candidates, preferred, accept)
 	} else if urgent, ok := controller.runtime.(emergencyAvailabilityRuntime); ok && len(candidates) > 0 {
 		measured = urgent.ProbeEmergencyAvailabilityParallel(candidates, accept)
@@ -291,7 +299,7 @@ func (controller *healthController) probeEmergencyCandidates(policyID string, ca
 		measured = parallel.ProbeAvailabilityParallel(candidates, accept)
 	} else {
 		for _, candidate := range candidates {
-			evidence := controller.runtime.ProbeAvailability(candidate)
+			evidence := controller.probeAvailability(policyID, candidate, availabilityProbeRequest{Emergency: true})
 			if evidence.LocalFailure {
 				return measured, selected, errProbeSelectorUnavailable
 			}

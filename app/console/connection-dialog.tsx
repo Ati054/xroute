@@ -1763,7 +1763,7 @@ export function ConnectionDialog({
             {kind === "subscription" ? (
               <div className="form-grid">
                 <label className="field">
-                   {tr("Имя подписки")} <input
+                   {tr("Имя подписки")} <input dir="auto"
                     name="display_name"
                     required
                     defaultValue={asText(existingSubscription.display_name, "")}
@@ -1872,9 +1872,7 @@ export function ConnectionDialog({
                          <strong>{tr("Трафик")}</strong>
                          <small>
                            {Object.keys(asObject(subscriptionProvider.usage)).length
-                             ? locale === "en"
-                               ? `${formatBytes(asObject(subscriptionProvider.usage).used_bytes, locale)} of ${formatBytes(asObject(subscriptionProvider.usage).total_bytes, locale)} · ${formatBytes(asObject(subscriptionProvider.usage).remaining_bytes, locale)} remaining`
-                               : tr("{value1} из {value2} · осталось {value3}", { value1: formatBytes(asObject(subscriptionProvider.usage).used_bytes, locale), value2: formatBytes(asObject(subscriptionProvider.usage).total_bytes, locale), value3: formatBytes(asObject(subscriptionProvider.usage).remaining_bytes, locale) })
+                             ? tr("{value1} из {value2} · осталось {value3}", { value1: formatBytes(asObject(subscriptionProvider.usage).used_bytes, locale), value2: formatBytes(asObject(subscriptionProvider.usage).total_bytes, locale), value3: formatBytes(asObject(subscriptionProvider.usage).remaining_bytes, locale) })
                              : tr("Лимит не указан провайдером")}
                          </small>
                        </span>

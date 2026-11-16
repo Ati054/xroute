@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeproof"
+	"github.com/Ati054/xroute/internal/runtimeproof"
 )
 
 type selectorReadiness = runtimeproof.SelectorObservation

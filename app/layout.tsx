@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SB Gateway — управление VLESS на MikroTik",
+  icons: { icon: { url: "/favicon.svg", type: "image/svg+xml" } },
+  title: "XRoute — управление VLESS на MikroTik",
   description:
     "Локальная защищённая панель управления маршрутизацией, VLESS, Cloudflare и отказоустойчивостью на MikroTik RouterOS.",
   robots: {

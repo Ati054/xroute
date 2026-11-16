@@ -32,10 +32,10 @@ import (
 	"github.com/go-acme/lego/v5/providers/dns/regru"
 	"github.com/go-acme/lego/v5/providers/dns/yandexcloud"
 	"github.com/go-acme/lego/v5/registration"
-	"github.com/sb-gateway/sb-gateway/internal/acmedns"
-	"github.com/sb-gateway/sb-gateway/internal/acmejob"
-	"github.com/sb-gateway/sb-gateway/internal/memorybudget"
-	"github.com/sb-gateway/sb-gateway/internal/policydns"
+	"github.com/Ati054/xroute/internal/acmedns"
+	"github.com/Ati054/xroute/internal/acmejob"
+	"github.com/Ati054/xroute/internal/memorybudget"
+	"github.com/Ati054/xroute/internal/policydns"
 )
 
 type account struct {

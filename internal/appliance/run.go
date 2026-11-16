@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sb-gateway/sb-gateway/internal/controlplane"
-	"github.com/sb-gateway/sb-gateway/internal/geoipasset"
-	"github.com/sb-gateway/sb-gateway/internal/geoiprefresh"
-	"github.com/sb-gateway/sb-gateway/internal/monitor"
-	"github.com/sb-gateway/sb-gateway/internal/policydns"
+	"github.com/Ati054/xroute/internal/controlplane"
+	"github.com/Ati054/xroute/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/geoiprefresh"
+	"github.com/Ati054/xroute/internal/monitor"
+	"github.com/Ati054/xroute/internal/policydns"
 )
 
 type Options struct {

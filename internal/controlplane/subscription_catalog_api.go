@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sb-gateway/sb-gateway/internal/runtimeconfig"
-	"github.com/sb-gateway/sb-gateway/internal/subscriptioncatalog"
+	"github.com/Ati054/xroute/internal/runtimeconfig"
+	"github.com/Ati054/xroute/internal/subscriptioncatalog"
 )
 
 // Keep the existing complete JSON inventory response, but encode each public

@@ -28,6 +28,18 @@ func livenessFixture(t *testing.T, mode string) (*healthController, *fakeSelecto
 	return c, runtime, item
 }
 
+func TestDeferredFastLaneDoesNotRecordFailureOrAdvanceClock(t *testing.T) {
+	c, runtime, item := livenessFixture(t, "best")
+	before := c.livenessAt["europe"]
+	runtime.probes["de"] = probeEvidence{Deferred: true}
+	if err := c.Tick(time.Unix(1010, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if !c.livenessAt["europe"].Equal(before) || item.AvailabilityFailures["de"] != 0 || item.FailureClass["de"] != "" || item.Selected != "de" {
+		t.Fatal("deferred observation became a failure or a completed check")
+	}
+}
+
 func TestHealthyFastLaneDoesNotRescoreScanOrWriteHistory(t *testing.T) {
 	for _, mode := range []string{"best", "priority"} {
 		t.Run(mode, func(t *testing.T) {

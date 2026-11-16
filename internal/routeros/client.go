@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	routerosassets "github.com/sb-gateway/sb-gateway/routeros"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 const maxResponseBytes = 4 << 20
