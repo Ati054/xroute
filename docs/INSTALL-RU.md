@@ -1,4 +1,4 @@
-# Установка XRoute 1.7.0
+# Установка XRoute 1.7.1
 
 > В новых установках служебные имена начинаются с `XROUTE`. При обновлении
 > сохраняются старые имена `SB-GATEWAY` и пути: для такой установки подставляйте
@@ -34,10 +34,10 @@ bootstrap импортирует его перед `install.rsc` для запу
 готовности хранилища. Не смешивайте установочные файлы разных релизов;
 старые опубликованные комплекты сохраняют прежний порядок запуска.
 
-Скачайте файлы из [релиза 1.7.0](https://github.com/Ati054/xroute/releases/tag/v1.7.0):
+Скачайте файлы из [релиза 1.7.1](https://github.com/Ati054/xroute/releases/tag/v1.7.1):
 
-- `xroute-1.7.0-routeros-bundle.zip`
-- `xroute-1.7.0-routeros-bundle.zip.sha256`
+- `xroute-1.7.1-routeros-bundle.zip`
+- `xroute-1.7.1-routeros-bundle.zip.sha256`
 
 ZIP скачивается и распаковывается **на компьютере**. Доступ MikroTik к GitHub
 не требуется. В комплект входят:
@@ -52,21 +52,21 @@ ZIP скачивается и распаковывается **на компью
 PowerShell:
 
 ```powershell
-(Get-FileHash .\xroute-1.7.0-routeros-bundle.zip -Algorithm SHA256).Hash
-Get-Content .\xroute-1.7.0-routeros-bundle.zip.sha256
+(Get-FileHash .\xroute-1.7.1-routeros-bundle.zip -Algorithm SHA256).Hash
+Get-Content .\xroute-1.7.1-routeros-bundle.zip.sha256
 ```
 
 Linux или macOS:
 
 ```sh
-sha256sum -c xroute-1.7.0-routeros-bundle.zip.sha256
+sha256sum -c xroute-1.7.1-routeros-bundle.zip.sha256
 ```
 
 После распаковки откройте терминал внутри готовой папки `xroute/` и проверьте
 архив контейнера:
 
 ```sh
-sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
+sha256sum -c xroute-1.7.1-linux-arm64.tar.sha256
 ```
 
 Ожидаемый SHA-256 берите из `.sha256` и manifest того же архива в этом релизе.
@@ -103,9 +103,9 @@ sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
    ```text
    usb1/xroute/
      setup.rsc
-     xroute-1.7.0-linux-arm64.tar
-     xroute-1.7.0-linux-arm64.tar.sha256
-     xroute-1.7.0-linux-arm64.manifest.json
+     xroute-1.7.1-linux-arm64.tar
+     xroute-1.7.1-linux-arm64.tar.sha256
+     xroute-1.7.1-linux-arm64.manifest.json
    ```
 
 2. В терминале MikroTik выполните:
@@ -182,8 +182,8 @@ IP в `subject-alt-name` должен совпадать с адресом Route
 после сверки адресов с конфигурацией роутера. Стандартные пути этого релиза:
 
 ```routeros
-:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.0-linux-arm64.tar"
-:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.0"
+:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.1-linux-arm64.tar"
+:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.1"
 ```
 
 ### Загрузка и ручная установка
@@ -202,7 +202,7 @@ usb1/xroute/
   variables.rsc
   watchdog.rsc
   webfig-bootstrap.rsc
-  xroute-1.7.0-linux-arm64.tar
+  xroute-1.7.1-linux-arm64.tar
 ```
 
 Копируйте содержимое каталога `routeros/`, а не сам каталог. Файлы

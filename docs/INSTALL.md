@@ -1,4 +1,4 @@
-# Install XRoute 1.7.0
+# Install XRoute 1.7.1
 
 > New installations use `XROUTE` ownership labels. Upgraded installations keep
 > `SB-GATEWAY` labels and their existing paths; use that prefix in the examples
@@ -30,10 +30,10 @@ are not treated as duplicate service configuration.
 
 ## Release files
 
-Download the assets from [release 1.7.0](https://github.com/Ati054/xroute/releases/tag/v1.7.0):
+Download the assets from [release 1.7.1](https://github.com/Ati054/xroute/releases/tag/v1.7.1):
 
-- `xroute-1.7.0-routeros-bundle.zip`
-- `xroute-1.7.0-routeros-bundle.zip.sha256`
+- `xroute-1.7.1-routeros-bundle.zip`
+- `xroute-1.7.1-routeros-bundle.zip.sha256`
 
 The ZIP is downloaded and extracted **on your computer**. The router does not
 need GitHub access. It contains:
@@ -48,21 +48,21 @@ Verify the bundle before extracting it.
 PowerShell:
 
 ```powershell
-(Get-FileHash .\xroute-1.7.0-routeros-bundle.zip -Algorithm SHA256).Hash
-Get-Content .\xroute-1.7.0-routeros-bundle.zip.sha256
+(Get-FileHash .\xroute-1.7.1-routeros-bundle.zip -Algorithm SHA256).Hash
+Get-Content .\xroute-1.7.1-routeros-bundle.zip.sha256
 ```
 
 Linux or macOS:
 
 ```sh
-sha256sum -c xroute-1.7.0-routeros-bundle.zip.sha256
+sha256sum -c xroute-1.7.1-routeros-bundle.zip.sha256
 ```
 
 After extraction, open a terminal inside the ready `xroute/` folder and
 verify the container archive too:
 
 ```sh
-sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
+sha256sum -c xroute-1.7.1-linux-arm64.tar.sha256
 ```
 
 Use the expected SHA-256 from the matching archive's `.sha256` file and manifest
@@ -99,9 +99,9 @@ in this release. Do not use a checksum from another version or rebuild.
    ```text
    usb1/xroute/
      setup.rsc
-     xroute-1.7.0-linux-arm64.tar
-     xroute-1.7.0-linux-arm64.tar.sha256
-     xroute-1.7.0-linux-arm64.manifest.json
+     xroute-1.7.1-linux-arm64.tar
+     xroute-1.7.1-linux-arm64.tar.sha256
+     xroute-1.7.1-linux-arm64.manifest.json
    ```
 
 2. In the MikroTik terminal, run:
@@ -179,8 +179,8 @@ addresses match the router. The default image and root paths for this release
 are:
 
 ```routeros
-:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.0-linux-arm64.tar"
-:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.0"
+:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.1-linux-arm64.tar"
+:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.1"
 ```
 
 ### Upload and install manually
@@ -199,7 +199,7 @@ usb1/xroute/
   variables.rsc
   watchdog.rsc
   webfig-bootstrap.rsc
-  xroute-1.7.0-linux-arm64.tar
+  xroute-1.7.1-linux-arm64.tar
 ```
 
 Copy the contents of the bundle's `routeros/` directory, not the directory

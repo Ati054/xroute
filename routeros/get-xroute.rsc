@@ -1,7 +1,7 @@
 # XRoute release loader. Fetch this small file over verified HTTPS and import it.
 # Only public GitHub API endpoints are used; no account or token is required.
 {
-:local version "1.7.0"
+:local version "1.7.1"
 :local arch [/system/resource/get architecture-name]
 :if (($arch = "x86") || ($arch = "x86_64")) do={ :set arch "amd64" }
 :if (($arch != "arm64") && ($arch != "amd64")) do={ :error "XRoute: this architecture is not supported" }
