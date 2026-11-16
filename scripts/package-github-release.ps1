@@ -104,6 +104,11 @@ try {
     Copy-Item -LiteralPath $routerOSScripts -Destination (Join-Path $stagingRoot "routeros") -Recurse
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL.md") -Destination $stagingRoot
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL-RU.md") -Destination $stagingRoot
+    $installationImages = Join-Path $stagingRoot 'images'
+    New-Item -ItemType Directory -Path $installationImages | Out-Null
+    foreach ($imageName in @('install-files-en.png')) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "docs/images/$imageName") -Destination $installationImages
+    }
     Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE") -Destination $stagingRoot
     Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $bundlePath -CompressionLevel Optimal
     Remove-ReleasePath $stagingRoot $outputRoot

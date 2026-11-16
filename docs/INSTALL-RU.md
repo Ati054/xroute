@@ -117,6 +117,9 @@ sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
    Подставьте имя своего диска. В меню выберите этот же диск и доверенную LAN
    администратора. Проверьте сводку и нажмите **1** для установки. **0** отменяет
    установку до начала изменений.
+
+   ![Файлы установочного комплекта на внешнем диске в WebFig](images/install-files-en.png)
+
 3. Сохраните выданный пароль REST в надёжном месте. Установщик создаёт
    зашифрованную резервную копию, локальные сертификаты HTTPS и служебную
    учётную запись XRoute. В конце он напечатает адрес панели, URL REST и пути
@@ -141,13 +144,23 @@ sha256sum -c xroute-1.7.0-linux-arm64.tar.sha256
 Если `www-ssl` ещё не используется, создайте локальный сертификат. Пример ниже для LAN `192.168.88.0/24` и стандартных адресов контейнера: подставьте свои адреса. Если служба уже работает, сохраните её порт, сертификат и доступ администратора; не выполняйте `set` из примера поверх существующей конфигурации.
 
 ```routeros
+{
+:local awaitCertificate do={
+  :local certName $1
+  :for attempt from=1 to=60 do={
+    :if ([:len [/certificate/get [/certificate/find where name=$certName] fingerprint]] > 0) do={ :return true }
+    :delay 1s
+  }
+  :error ("Certificate signing timed out: " . $certName)
+}
 /certificate add name=xroute-ca common-name=xroute-ca key-size=2048 days-valid=3650 key-usage=key-cert-sign,crl-sign
 /certificate sign xroute-ca
-:delay 3s
+$awaitCertificate "xroute-ca"
 /certificate add name=xroute-local common-name=router.lan subject-alt-name=IP:172.31.255.1,DNS:router.lan key-size=2048 days-valid=3650 key-usage=digital-signature,key-encipherment,tls-server
 /certificate sign xroute-local ca=xroute-ca
-:delay 3s
+$awaitCertificate "xroute-local"
 /ip service set www-ssl certificate=xroute-local port=59443 address=192.168.88.0/24,172.31.255.2/32 disabled=no
+}
 ```
 
 IP в `subject-alt-name` должен совпадать с адресом RouterOS в REST URL. Для поля CA PEM мастера выгрузите **публичный** сертификат: `/certificate export-certificate xroute-ca type=pem`. Приватный ключ не нужен.
@@ -247,16 +260,10 @@ URL REST, имя, пароль и порт SSH возьмите из вывод�
 и CIDR, даже если списка интерфейсов `LAN` нет. Это предложения для проверки:
 перед Apply актуальная конфигурация повторно проверяется через live preflight.
 
-Для работы только клиентом не нужны домен, входящие подключения или публичный
-сертификат: имя хоста удалённого доступа оставьте пустым. Для серверного
-сценария можно оставить подписку провайдера пустой и настроить её позже.
-Существующие VPN-интерфейсы при необходимости выбираются для управления
-или доступа клиентов.
-
-После установки через меню скачайте `routeros-export.rsc` и `routeros-ca.crt`
-из папки установки через **Files**. Экспорт загрузите в мастере; публичный
-`.crt` откройте как текст и вставьте его содержимое PEM в поле **CA PEM**.
-URL REST, имя, пароль и порт SSH возьмите из вывода `setup.rsc`.
+Сертификат RouterOS защищает HTTPS-соединение панели с REST API роутера.
+Он используется отдельно от локального HTTPS-сертификата самой панели и
+сертификатов необязательных публичных входов прокси. Для этого локального
+соединения управления публичный домен не нужен.
 
 Для работы только клиентом не нужны домен, входящие подключения или публичный
 сертификат: имя хоста удалённого доступа оставьте пустым. Для серверного

@@ -56,8 +56,8 @@ type TransactionOptions struct {
 	// Runs after rollback is armed, before any candidate RouterOS rule executes.
 	BeforeApply func(context.Context) error
 	Finalize    func(context.Context) error
-	// SchedulerGuardOnly avoids the interactive SSH Safe Mode owner on
-	// RouterOS releases where that console path is unstable. The independently
+	// SchedulerGuardOnly avoids the interactive SSH Safe Mode owner for short
+	// deltas on RouterOS releases where that console path is unstable. The independently
 	// armed, RouterOS-local rollback scheduler remains the transaction owner.
 	SchedulerGuardOnly bool
 }
@@ -129,8 +129,10 @@ func (transaction *Transaction) ApplyDelta(ctx context.Context, applySource, rol
 }
 
 // ApplyCandidate streams generated full candidates or section deltas through SCP and
-// executes only small import wrappers through the same guarded transaction.
+// executes small import wrappers under the independent local rollback scheduler.
+// Bulk imports must not depend on the console Safe Mode undo history (100 actions).
 func (transaction *Transaction) ApplyCandidate(ctx context.Context, applySource, rollbackSource string, options TransactionOptions) (TransactionResult, error) {
+	options.SchedulerGuardOnly = true
 	var result TransactionResult
 	prepareDone := applytiming.Start(ctx, applytiming.RouterOSPrepare)
 	defer prepareDone()

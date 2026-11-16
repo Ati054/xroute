@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/applytiming"
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/routeros"
 	"github.com/Ati054/xroute/internal/runtimeconfig"
 )
@@ -363,7 +363,15 @@ func (server *Server) applyConfiguration(ctx context.Context, config map[string]
 		}
 		rollbackContext, cancel := context.WithTimeout(context.Background(), xrayRuntimeReadinessTimeout)
 		defer cancel()
-		err := server.runtime.rollback(rollbackContext, receipt)
+		var err error
+		if active == nil {
+			// Before the first Apply there may be no generated core/DNS files.
+			// Removing them and restarting cannot restore a healthy runtime.
+			// Restore the persisted safe baseline without publishing active.json.
+			err = server.restoreFirstApplyRuntime(rollbackContext, recoveryRevision)
+		} else {
+			err = server.runtime.rollback(rollbackContext, receipt)
+		}
 		if err == nil {
 			activated = false
 		}

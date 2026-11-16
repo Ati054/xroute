@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -61,6 +62,38 @@ func TestSafeModeCommitRequiresAReleaseAcknowledgement(t *testing.T) {
 				t.Fatalf("unexpected Safe Mode control bytes: %v", channel.output.Bytes())
 			}
 		})
+	}
+}
+
+func TestSafeModeCommitRejectsExplicitFailureWithoutAnotherRead(t *testing.T) {
+	channel := &fakeSafeModeChannel{input: &safeModeOneReplyReader{reply: []byte("\r\nReleasing Safe Mode... Failure\r\n")}}
+	session := &SafeModeSession{channel: channel, active: true}
+	if err := session.Commit(context.Background(), time.Minute); !errors.Is(err, ErrSafeModeCommitRefused) {
+		t.Fatalf("explicit release refusal: %v", err)
+	}
+	if !channel.closed || session.active || !session.closed {
+		t.Fatalf("refused transaction was not aborted: %s", session)
+	}
+}
+
+type safeModeOneReplyReader struct{ reply []byte }
+
+func (reader *safeModeOneReplyReader) Read(buffer []byte) (int, error) {
+	if reader.reply == nil {
+		panic("release refusal must be consumed before another blocking read")
+	}
+	n := copy(buffer, reader.reply)
+	reader.reply = nil
+	return n, nil
+}
+
+func TestSafeModeCommitConsumesFinalReplyBeforeEOF(t *testing.T) {
+	for _, reply := range []string{"Safe Mode released", "Releasing Safe Mode... Success!"} {
+		channel := &fakeSafeModeChannel{input: iotest.DataErrReader(strings.NewReader(reply))}
+		session := &SafeModeSession{channel: channel, active: true}
+		if err := session.Commit(context.Background(), time.Second); err != nil {
+			t.Fatalf("final acknowledgement %q: %v", reply, err)
+		}
 	}
 }
 

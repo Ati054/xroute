@@ -113,6 +113,9 @@ in this release. Do not use a checksum from another version or rebuild.
    Substitute the actual disk name. Choose the same disk in the menu, choose
    your trusted administrator LAN, review the summary and press **1** to install.
    Press **0** to cancel before installation starts.
+
+   ![Release files uploaded to the external disk in WebFig](images/install-files-en.png)
+
 3. Save the generated REST password privately. The installer creates an encrypted
    pre-install backup, local HTTPS certificates and the XRoute service account.
    It prints the panel address, REST URL and paths to the public CA certificate
@@ -137,13 +140,23 @@ container archive. This is a separate method; do not mix it with `setup.rsc`.
 If `www-ssl` is not already in use, create a local certificate. The example below assumes LAN `192.168.88.0/24` and the default container network; substitute your actual addresses. If the service is already in use, retain its port, certificate and administrator access instead of overwriting it with this example.
 
 ```routeros
+{
+:local awaitCertificate do={
+  :local certName $1
+  :for attempt from=1 to=60 do={
+    :if ([:len [/certificate/get [/certificate/find where name=$certName] fingerprint]] > 0) do={ :return true }
+    :delay 1s
+  }
+  :error ("Certificate signing timed out: " . $certName)
+}
 /certificate add name=xroute-ca common-name=xroute-ca key-size=2048 days-valid=3650 key-usage=key-cert-sign,crl-sign
 /certificate sign xroute-ca
-:delay 3s
+$awaitCertificate "xroute-ca"
 /certificate add name=xroute-local common-name=router.lan subject-alt-name=IP:172.31.255.1,DNS:router.lan key-size=2048 days-valid=3650 key-usage=digital-signature,key-encipherment,tls-server
 /certificate sign xroute-local ca=xroute-ca
-:delay 3s
+$awaitCertificate "xroute-local"
 /ip service set www-ssl certificate=xroute-local port=59443 address=192.168.88.0/24,172.31.255.2/32 disabled=no
+}
 ```
 
 The IP in `subject-alt-name` must match the RouterOS address in the REST URL. For the wizard's CA PEM field, export the **public** certificate: `/certificate export-certificate xroute-ca type=pem`. No private key is needed.
@@ -250,15 +263,10 @@ The wizard also reads the installer's selected management interface and CIDR
 from the export, even without a RouterOS `LAN` interface list. These are review
 suggestions; live preflight still verifies the current configuration before Apply.
 
-Outbound-only use does not require a domain, an inbound listener or a public
-certificate. Leave the remote-access hostname empty. For server-only use,
-the provider subscription can be left empty and configured later. Existing
-VPN interfaces can be selected for management or client access when needed.
-
-For guided installation, download `routeros-export.rsc` and `routeros-ca.crt`
-from the installation folder in **Files**. Upload the export in the wizard;
-open the public `.crt` as text and paste its PEM contents into **CA PEM**.
-Use the REST URL, username, password and SSH port printed by `setup.rsc`.
+The RouterOS certificate protects the panel's HTTPS REST connection to the
+router. It is separate from the panel's own local HTTPS certificate and from
+certificates for optional public proxy listeners. No public domain is needed
+for this local management connection.
 
 Outbound-only use does not require a domain, an inbound listener or a public
 certificate. Leave the remote-access hostname empty. For server-only use,

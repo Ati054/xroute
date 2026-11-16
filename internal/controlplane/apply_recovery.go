@@ -63,6 +63,24 @@ func (server *Server) pendingApplyRecovery() (map[string]any, error) {
 	return operation, nil
 }
 
+func (server *Server) restoreFirstApplyRuntime(ctx context.Context, revision string) error {
+	if !safeRevision(revision) {
+		return errors.New("first Apply recovery revision is invalid")
+	}
+	baseline, err := server.repository.loadGeneration(revision)
+	if err != nil {
+		return err
+	}
+	candidate, err := server.runtime.prepare(baseline, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := server.runtime.activate(ctx, candidate); err != nil {
+		return err
+	}
+	return server.runtime.commit(candidate)
+}
+
 // reconcilePendingApply treats active.json as the only commit decision after a
 // crash. It rebuilds runtime and RouterOS from that generation; it never guesses
 // whether the interrupted candidate should have committed. A first Apply has no

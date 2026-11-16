@@ -6035,7 +6035,18 @@ td small {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 20px;
+  padding-inline-end: 44px;
+}
+
+.setup-heading > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.setup-heading > .status-pill {
+  flex-shrink: 0;
 }
 
 .setup-heading h2 {

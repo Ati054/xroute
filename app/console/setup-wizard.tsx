@@ -870,7 +870,7 @@ export function SetupWizard({
                     required
                   />
                   <small>
-                     {tr("Через постоянную SSH-сессию панель применяет патч в Safe Mode. При потере связи RouterOS откатит незавершённые изменения.")} </small>
+                     {tr("Панель применяет изменения по SSH. Локальная задача RouterOS вернёт прежние правила, если применение не завершится успешно.")} </small>
                 </label>
                 <label className="field">
                    {tr("Отдельный REST-пользователь")} <input
@@ -1451,7 +1451,7 @@ export function SetupWizard({
                 <div>
                   <strong>{tr("Перед применением автоматически")}</strong>
                   <p>
-                     {tr("RouterOS preflight → точный diff → проверка активного ядра → nginx -t. Export, backup и Safe Mode добавляются только если сам RouterOS-патч действительно изменился; иначе обновляется только контейнер с runtime-откатом.")} </p>
+                     {tr("RouterOS preflight → точный diff → проверка активного ядра → nginx -t. Export, backup и защита отката нужны только при изменении RouterOS; иначе обновляется только контейнер с runtime-откатом.")} </p>
                 </div>
               </aside>
             </div>

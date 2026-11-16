@@ -88,8 +88,7 @@ func newImportTransactionFixture() *importTransactionFixture {
 
 func importTransactionOptions() TransactionOptions {
 	return TransactionOptions{
-		SchedulerGuardOnly: true,
-		HealthCheck:        func(context.Context) error { return nil },
+		HealthCheck: func(context.Context) error { return nil },
 	}
 }
 

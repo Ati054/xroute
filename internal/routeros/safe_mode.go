@@ -17,6 +17,8 @@ import (
 
 const maxSafeModeOutputBytes = 256 << 10
 
+var ErrSafeModeCommitRefused = errors.New("RouterOS refused to release the Safe Mode transaction")
+
 type safeModeChannel interface {
 	io.Reader
 	io.Writer
@@ -151,10 +153,16 @@ func (session *SafeModeSession) Commit(ctx context.Context, timeout time.Duratio
 		_ = session.Abort()
 		return err
 	}
-	output, _, err := session.waitForAny(ctx, timeout, [][]byte{
+	refused := []byte("Releasing Safe Mode... Failure")
+	output, found, err := session.waitForAny(ctx, timeout, [][]byte{
 		[]byte("Safe Mode released"),
 		[]byte("Releasing Safe Mode... Success!"),
+		refused,
 	})
+	if bytes.Equal(found, refused) {
+		_ = session.Abort()
+		return ErrSafeModeCommitRefused
+	}
 	if err != nil || bytes.Contains(output, []byte("Failure")) {
 		_ = session.Abort()
 		return errors.New("RouterOS did not commit the Safe Mode transaction")
@@ -201,6 +209,7 @@ func (session *SafeModeSession) waitForAny(ctx context.Context, timeout time.Dur
 		return nil, nil, err
 	}
 	defer session.channel.SetDeadline(time.Time{})
+	var readErr error
 	for {
 		for _, token := range tokens {
 			if index := bytes.Index(session.pending, token); index >= 0 {
@@ -213,6 +222,11 @@ func (session *SafeModeSession) waitForAny(ctx context.Context, timeout time.Dur
 		if len(session.pending) >= maxSafeModeOutputBytes {
 			return nil, nil, errors.New("RouterOS Safe Mode output exceeds 256 KiB")
 		}
+		// A Reader may return final acknowledgement bytes together with EOF.
+		// Inspect those bytes before interpreting the terminal read error.
+		if readErr != nil {
+			return nil, nil, readErr
+		}
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
@@ -221,9 +235,7 @@ func (session *SafeModeSession) waitForAny(ctx context.Context, timeout time.Dur
 		if count > 0 {
 			session.pending = append(session.pending, buffer[:count]...)
 		}
-		if err != nil {
-			return nil, nil, err
-		}
+		readErr = err
 	}
 }
 

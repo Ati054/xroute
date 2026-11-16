@@ -248,12 +248,11 @@ func TestTransactionLeavesSchedulerArmedWhenSettlementIsUncertain(t *testing.T) 
 
 func TestFullCandidateStreamsBeforeArmingAndCleansImportsAfterCommit(t *testing.T) {
 	rest := &fakeTransactionREST{}
-	channel := &fakeSafeModeChannel{input: bytes.NewReader([]byte("Safe Mode released"))}
 	transaction := &Transaction{
 		rest: rest, run: rest.runSSHScript,
-		begin: func(_ context.Context, name string) (*SafeModeSession, error) {
-			rest.events = append(rest.events, "begin:"+name)
-			return &SafeModeSession{channel: channel, active: true}, nil
+		begin: func(context.Context, string) (*SafeModeSession, error) {
+			t.Fatal("bulk import must not use the bounded Safe Mode undo history")
+			return nil, nil
 		},
 		upload: func(_ context.Context, role, _ string) (string, error) {
 			name := "SB-GATEWAY-" + role + "-aaaaaaaaaaaa.rsc"
@@ -265,7 +264,7 @@ func TestFullCandidateStreamsBeforeArmingAndCleansImportsAfterCommit(t *testing.
 			return nil
 		},
 	}
-	_, err := transaction.ApplyCandidate(context.Background(), "apply", "rollback", TransactionOptions{
+	result, err := transaction.ApplyCandidate(context.Background(), "apply", "rollback", TransactionOptions{
 		HealthCheck: func(context.Context) error {
 			rest.events = append(rest.events, "health")
 			return nil
@@ -274,12 +273,15 @@ func TestFullCandidateStreamsBeforeArmingAndCleansImportsAfterCommit(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.GuardMode != "rollback_scheduler" {
+		t.Fatalf("guard mode = %q", result.GuardMode)
+	}
 	want := []string{
 		"guard-check", "upload:rollback", "upload:apply",
 		"prepare-import:rollback:SB-GATEWAY-rollback-aaaaaaaaaaaa.rsc",
 		"prepare-import:apply:SB-GATEWAY-apply-aaaaaaaaaaaa.rsc",
 		"arm:SB-GATEWAY-rollback-0123456789ab",
-		"begin:SB-GATEWAY-apply-0123456789ab", "health", "settled",
+		"run:SB-GATEWAY-apply-0123456789ab", "health",
 		"disarm:SB-GATEWAY-safe-rollback-1234abcd",
 		"cleanup:SB-GATEWAY-apply-aaaaaaaaaaaa.rsc,SB-GATEWAY-rollback-aaaaaaaaaaaa.rsc",
 	}
