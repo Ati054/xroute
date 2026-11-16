@@ -9,6 +9,32 @@ import (
 	"time"
 )
 
+func TestFreshTrafficReadinessDoesNotRequireGeneratedSelectorPool(t *testing.T) {
+	server := newTestServer(t)
+	pool := filepath.Join(t.TempDir(), "not-generated-yet.json")
+	server.runtime = &nativeRuntime{options: RuntimeOptions{XrayHealthPool: pool}}
+	server.checkPersistentMounts = func() (bool, []string) { return true, nil }
+	response := performRequest(t, server, http.MethodGet, "/api/health/traffic-ready", nil, nil)
+	body := decodeResponse(t, response)
+	if response.Code != http.StatusServiceUnavailable || body["configured"] != false || body["traffic_ready"] != false {
+		t.Fatalf("first launch must wait for setup without a state error: %s", response.Body.String())
+	}
+	if _, err := os.Stat(pool); !os.IsNotExist(err) {
+		t.Fatalf("readiness unexpectedly created a selector pool: %v", err)
+	}
+}
+
+func TestConfiguredTrafficReadinessStillRejectsMissingSelectorPool(t *testing.T) {
+	server, _, pool := selectorScopeReadinessFixture(t)
+	if err := os.Remove(pool); err != nil {
+		t.Fatal(err)
+	}
+	response := performRequest(t, server, http.MethodGet, "/api/health/traffic-ready", nil, nil)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("missing committed runtime must remain an error: %s", response.Body.String())
+	}
+}
+
 func TestTrafficReadinessDatesEachControllerWithoutBypassingProof(t *testing.T) {
 	server := newTestServer(t)
 	config := routerOSReadyConfig(t)

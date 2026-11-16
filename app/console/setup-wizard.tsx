@@ -187,6 +187,10 @@ export function SetupWizard({
   >("pending");
   const [subscriptionHost, setSubscriptionHost] = useState("");
   const [providerName, setProviderName] = useState(tr("Основной провайдер"));
+  const providerConfigured = asObjectList(initialConfig.subscriptions).some(
+    (provider) => provider.id === "provider-main" &&
+      provider.enabled !== false && asText(provider.url_secret_ref, "") !== "",
+  );
   const [wizardBusy, setWizardBusy] = useState(false);
   const [wizardMessage, setWizardMessage] = useState("");
   const [wizardSaved, setWizardSaved] = useState(false);
@@ -268,7 +272,7 @@ export function SetupWizard({
     return (
       (!query ||
         cidr.toLowerCase().includes(query) ||
-        importedNetworkKind(cidr, managementNetworkSuggestions)
+        tr(importedNetworkKind(cidr, managementNetworkSuggestions))
           .toLowerCase()
           .includes(query)) &&
       (networkStatusFilter === "all" || status === networkStatusFilter)
@@ -1257,10 +1261,10 @@ export function SetupWizard({
                       <span>
                         <strong>{cidr}</strong>
                         <small>
-                          {importedNetworkKind(
+                          {tr(importedNetworkKind(
                             cidr,
                             managementNetworkSuggestions,
-                          )}  {tr("· подсказка из офлайн-экспорта")} </small>
+                          ))}  {tr("· подсказка из офлайн-экспорта")} </small>
                       </span>
                       <div
                         className="card-actions"
@@ -1416,7 +1420,7 @@ export function SetupWizard({
                 </div>
                 <div>
                   <dt>{tr("Провайдер")}</dt>
-                  <dd>{providerName}  {tr("· секрет скрыт")}</dd>
+                  <dd>{providerConfigured ? <>{providerName} {tr("· секрет скрыт")}</> : tr("Не настроено")}</dd>
                 </div>
                 <div>
                   <dt>{tr("Отказ контейнера")}</dt>

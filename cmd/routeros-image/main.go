@@ -202,6 +202,9 @@ func run() error {
 	if err := writeRouterOSScripts(root, filepath.Join(output, "routeros"), defaults.architecture); err != nil {
 		return err
 	}
+	if err := writeGuidedInstaller(root, output, packageDocument.Version, defaults.architecture, info.Size(), archiveHash); err != nil {
+		return err
+	}
 	fmt.Println("RouterOS WebFig bundle ready:", output)
 	fmt.Println("Archive:", archiveName)
 	fmt.Println("SHA256:", archiveHash)

@@ -1,0 +1,253 @@
+# Generated release installer. Import interactively from a trusted LAN terminal.
+# Network changes begin only after the final INSTALL confirmation.
+{
+:local releaseVersion "@@VERSION@@"
+:local releaseArch "@@ARCH@@"
+:local imageBytes @@IMAGE_BYTES@@
+:local imageSHA256 "@@IMAGE_SHA256@@"
+:local choose do={
+  :local count $1
+  :local selected -1
+  :while ($selected < 0) do={
+    :local key [:terminal/inkey timeout=120s]
+    :if (($key = 48) || ($key = 3) || ($key = 27) || ($key = 65535)) do={ :error "XRoute: cancelled or input timed out; no installation started" }
+    # An optional Enter from the preceding answer must not cancel the next menu.
+    :if (($key >= 49) && ($key <= (48 + $count))) do={ :set selected ($key - 49) }
+  }
+  :return $selected
+}
+:put ("\r\nXRoute " . $releaseVersion . " - guided installation")
+:put "Use a wired trusted LAN connection. Press 0 or Ctrl-C to cancel."
+:local arch [/system/resource/get architecture-name]
+:local expectedArch "arm64"
+:if (($arch = "x86") || ($arch = "x86_64")) do={ :set expectedArch "amd64" }
+:if ((($arch != "arm64") && ($arch != "x86") && ($arch != "x86_64")) || ($expectedArch != $releaseArch)) do={ :error "XRoute: installer architecture does not match this router" }
+:if ([:pick [/system/resource/get version] 0 2] != "7.") do={ :error "XRoute requires RouterOS 7" }
+:if ([:len [/system/package/find where name="container" and disabled=no]] != 1) do={ :error "XRoute: install the matching RouterOS container package first; no router configuration was changed" }
+:if ([/system/device-mode/get container] != true) do={ :error "XRoute: run /system/device-mode/update container=yes and complete its physical confirmation, then run this installer again" }
+:if ([:len [/container/find where comment~"^(XROUTE|SB-GATEWAY) "]] > 0) do={ :error "XRoute is already installed. Update it from its panel; this installer will not overwrite it" }
+:if ([/system/resource/get total-memory] < 500000000) do={ :error "XRoute: at least 512 MiB RAM is required" }
+:if ([/system/resource/get free-memory] < 268435456) do={ :error "XRoute: less than 256 MiB RAM is free; no other containers or applications will be stopped automatically" }
+:foreach n in={"bridge-xroute";"veth-xroute"} do={ :if ([:len [/interface/find where name=$n]] > 0) do={ :error ("XRoute: existing interface name " . $n . "; nothing was changed") } }
+:if (([:len [/routing/table/find where name="to-xroute"]] > 0) || ([:len [/user/find where name="xroute-api"]] > 0) || ([:len [/user/group/find where name="xroute-api"]] > 0)) do={ :error "XRoute: existing table or account conflicts with a new installation" }
+:if (([:len [/system/script/find where name~"^XROUTE-"]] > 0) || ([:len [/system/scheduler/find where name~"^XROUTE-"]] > 0) || ([:len [/container/envs/find where list="xroute-env"]] > 0) || ([:len [/container/mounts/find where list~"^xroute-"]] > 0)) do={ :error "XRoute: previous installation objects remain; no existing objects will be adopted or deleted" }
+:foreach n in={"SB_MANAGED_CLIENTS";"SB_INTERNAL_NETWORKS";"SB_BYPASS_ENDPOINTS";"SB_CONTAINER_ALLOWED_INTERNAL";"SB_MANAGEMENT_SOURCES";"SB_FAIL_CLOSED_CLIENTS";"SB_MANAGED_CLIENTS_V6";"SB_INTERNAL_NETWORKS_V6"} do={
+  :if (([:len [/ip/firewall/address-list/find where list=$n]] > 0) || ([:len [/ipv6/firewall/address-list/find where list=$n]] > 0)) do={ :error ("XRoute: reserved address list already exists: " . $n) }
+}
+:foreach n in={"SB_MANAGEMENT_INGRESS";"SB_WIREGUARD_INGRESS"} do={ :if ([:len [/interface/list/find where name=$n]] > 0) do={ :error ("XRoute: reserved interface list already exists: " . $n) } }
+:if (([:len [/ip/firewall/filter/find where chain~"^xroute-" or jump-target~"^xroute-"]] > 0) || ([:len [/ip/firewall/mangle/find where chain~"^xroute-" or jump-target~"^xroute-"]] > 0)) do={ :error "XRoute: reserved firewall chain already exists" }
+:if (([:len [/interface/list/find where name="WAN"]] != 1) || ([:len [/interface/list/member/find where list="WAN"]] = 0)) do={ :error "XRoute: configure the router's working Internet connection and WAN interface list first" }
+:local https [/ip/service/find where name="www-ssl" and dynamic=no]
+:if (([:len $https] != 1) || ([/ip/service/get $https disabled] != true)) do={ :error "XRoute: www-ssl is already in use. Use the documented manual installation to preserve its existing certificate and access settings" }
+:local sshService [/ip/service/find where name="ssh" and dynamic=no]
+:if (([:len $sshService] != 1) || ([/ip/service/get $sshService disabled] = true)) do={ :error "XRoute: SSH is disabled; it is required for guarded Apply. No service was enabled" }
+:if ([:len [/ip/service/find where port=59443 and disabled=no and dynamic=no]] > 0) do={ :error "XRoute: TCP 59443 is in use; select a different port with the manual installer" }
+:if ([:len [/certificate/find where name="xroute-local" or name="xroute-ca"]] > 0) do={ :error "XRoute: an installation certificate already exists; it will not be replaced" }
+:local fasttrack [/ip/firewall/filter/find where action="fasttrack-connection" and disabled=no]
+:if ([:len $fasttrack] > 1) do={ :error "XRoute: several FastTrack rules exist; use the manual installer" }
+:local originalFasttrack ""
+:if ([:len $fasttrack] = 1) do={
+  :set originalFasttrack [/ip/firewall/filter/get $fasttrack connection-mark]
+  :if (($originalFasttrack != "") && ($originalFasttrack != "no-mark")) do={ :error "XRoute: custom FastTrack matcher; no rule was changed" }
+}
+
+# Only mounted ext4 disks with room for extraction and later rollback qualify.
+:local disks [:toarray ""]
+:put "\r\nChoose storage (existing disks are never formatted):"
+:foreach d in=[/disk/find where mounted=yes and disabled=no and fs="ext4"] do={
+  :local mount [/disk/get $d mount-point]
+  :if (([:len $mount] > 0) && ([:pick $mount 0 5] != "flash") && ([/disk/get $d free] >= 1073741824)) do={
+    :if ([:len $disks] < 9) do={ :set disks ($disks, $mount); :put ([:len $disks] . ") " . $mount . " (" . ([/disk/get $d free] / 1048576) . " MiB free)") }
+  }
+}
+:if ([:len $disks] = 0) do={ :error "XRoute: connect an ext4 SSD/USB disk with at least 1 GiB free. No disk was formatted" }
+:local disk [:pick $disks [$choose [:len $disks]]]
+:local installRoot ($disk . "/xroute")
+:local archiveName ("xroute-" . $releaseVersion . "-linux-" . $releaseArch . ".tar")
+:local archivePath ($installRoot . "/" . $archiveName)
+:local offlineImage false
+:local uploaded [/file/find where name=$archivePath]
+:if ([:len $uploaded] = 1) do={ :if ([/file/get $uploaded size] = $imageBytes) do={ :set offlineImage true } }
+:local stageIdentity ($releaseVersion . ":" . $releaseArch . ":" . $imageSHA256)
+:local stageMarker ($installRoot . "/xroute-install.marker")
+:if ([:len [/file/find where name=$installRoot]] > 0) do={
+  :if ([:len [/file/find where name=$stageMarker]] = 1) do={
+    :if ([/file/get [/file/find where name=$stageMarker] contents] != $stageIdentity) do={ :error "XRoute: storage belongs to another installer or release; no files were overwritten" }
+  } else={
+    :if ($offlineImage != true) do={ :error ("XRoute: " . $installRoot . " already exists without the complete matching archive. Upload the ready xroute folder; no files were overwritten") }
+    # A ready offline bundle may be adopted, but unrelated files are never
+    # adopted as application data or silently overwritten.
+    :local prefix ($installRoot . "/")
+    :local allowed {"setup.rsc";("xroute-" . $releaseVersion . "-install-" . $releaseArch . ".rsc");$archiveName;($archiveName . ".sha256");("xroute-" . $releaseVersion . "-linux-" . $releaseArch . ".manifest.json")}
+    :foreach f in=[/file/find] do={
+      :local name [/file/get $f name]
+      :if ([:pick $name 0 [:len $prefix]] = $prefix) do={
+        :local relative [:pick $name [:len $prefix] [:len $name]]
+        :local known false
+        :foreach expected in=$allowed do={ :if ($relative = $expected) do={ :set known true } }
+        :if ($known = false) do={ :error ("XRoute: unrelated file in installation directory: " . $relative . "; nothing was overwritten") }
+      }
+    }
+  }
+}
+
+:local lans [:toarray ""]
+:put "\r\nChoose the trusted LAN used by this administrator:"
+:foreach a in=[/ip/address/find where disabled=no and dynamic=no] do={
+  :local iface [/ip/address/get $a interface]
+  :local host [:toip [:pick [:tostr [/ip/address/get $a address]] 0 [:find [:tostr [/ip/address/get $a address]] "/"]]]
+  :if (([:len [/interface/list/member/find where list="WAN" and interface=$iface]] = 0) && (($host in 10.0.0.0/8) || ($host in 172.16.0.0/12) || ($host in 192.168.0.0/16))) do={
+    :if ([:len $lans] < 9) do={ :set lans ($lans, $a); :put ([:len $lans] . ") " . $iface . " - " . [/ip/address/get $a address]) }
+  }
+}
+:if ([:len $lans] = 0) do={ :error "XRoute: no static private LAN address outside WAN was found" }
+:local lan [:pick $lans [$choose [:len $lans]]]
+:local lanInterface [/ip/address/get $lan interface]
+:local lanAddress [:tostr [/ip/address/get $lan address]]
+:local lanCIDR ([:tostr [/ip/address/get $lan network]] . [:pick $lanAddress [:find $lanAddress "/"] [:len $lanAddress]])
+
+# Select two disjoint /30 networks without assuming example addresses are free.
+:local routerIP ""
+:local containerIP ""
+:local network ""
+:local tunAddress ""
+:local subnet 255
+:while (($subnet >= 224) && ([:len $routerIP] = 0)) do={
+  :local base ("172.31." . $subnet)
+  :local tunBase ("172.31." . ($subnet - 1))
+  :local candidate ($base . ".0/30")
+  :local tun ($tunBase . ".0/30")
+  :local busy false
+  :foreach a in=[/ip/address/find] do={
+    :local prefix [/ip/address/get $a address]
+    :local other [:toip [/ip/address/get $a network]]
+    :if (([:toip ($base . ".0")] in $prefix) || ([:toip ($base . ".3")] in $prefix) || ([:toip ($tunBase . ".0")] in $prefix) || ([:toip ($tunBase . ".3")] in $prefix) || ($other in $candidate) || ($other in $tun)) do={ :set busy true }
+  }
+  :foreach r in=[/ip/route/find where dst-address!="0.0.0.0/0"] do={
+    :local prefix [/ip/route/get $r dst-address]
+    :local other [:toip [:pick [:tostr $prefix] 0 [:find [:tostr $prefix] "/"]]]
+    :if (([:toip ($base . ".0")] in $prefix) || ([:toip ($tunBase . ".0")] in $prefix) || ($other in $candidate) || ($other in $tun)) do={ :set busy true }
+  }
+  :if ($busy = false) do={ :set routerIP ($base . ".1"); :set containerIP ($base . ".2"); :set network $candidate; :set tunAddress ($tunBase . ".1/30") }
+  :set subnet ($subnet - 2)
+}
+:if ([:len $routerIP] = 0) do={ :error "XRoute: no conflict-free internal network found; use the manual installer" }
+:put ("\r\nStorage: " . $installRoot . "\r\nManagement LAN: " . $lanInterface . " " . $lanCIDR)
+:put ("New container network: " . $network . "\r\nNew RouterOS HTTPS service: TCP 59443, LAN and container only")
+:if ($offlineImage = true) do={ :put "Uploaded release archive found: installation will not contact GitHub." }
+:put "No LAN/WAN addresses, DHCP, default route or client routing will be replaced."
+:put "Press 1 to INSTALL, or any other key to cancel:"
+:local confirmed [$choose 1]
+
+# Release image transport: begin
+:local imageURL ""
+:if ($offlineImage != true) do={
+:onerror imageLookupError in={
+  :local reply [/tool/fetch url=("https://api.github.com/repos/Ati054/xroute/releases/tags/v" . $releaseVersion) check-certificate=yes http-header-field="Accept: application/vnd.github+json" output=user as-value duration=1m]
+  :local release [:deserialize ($reply->"data") from=json]
+  :if ((($release->"tag_name") != ("v" . $releaseVersion)) || (($release->"draft") = true) || (($release->"prerelease") = true)) do={ :error "The stable release is not available" }
+  :local assetId 0
+  :foreach asset in=($release->"assets") do={
+    :if (($asset->"name") = ("xroute-" . $releaseVersion . "-linux-" . $releaseArch . ".tar")) do={
+      :if (($assetId != 0) || (($asset->"state") != "uploaded") || (($asset->"size") != $imageBytes) || (($asset->"digest") != ("sha256:" . $imageSHA256))) do={ :error "Image metadata does not match this installer" }
+      :set assetId [:tonum ($asset->"id")]
+    }
+  }
+  :if ($assetId < 1) do={ :error "The image for this architecture is not published" }
+  :set imageURL ("https://api.github.com/repos/Ati054/xroute/releases/assets/" . $assetId)
+} do={ :error ("XRoute: release image lookup failed before installation: " . $imageLookupError) }
+}
+# Release image transport: end
+
+# All executable installer content comes from this single versioned release asset.
+:if ([:len [/file/find where name=$installRoot]] = 0) do={ /file/add name=$installRoot type=directory }
+:if ([:len [/file/find where name=$stageMarker]] = 0) do={ /file/add name=$stageMarker type=file contents=$stageIdentity }
+@@FILES@@
+/import file-name=($installRoot . "/variables.example.rsc")
+:global "SB_STORAGE_ROOT" $installRoot
+:global "SB_ROOT_DIR" ($installRoot . "/root-" . $releaseVersion)
+:global "SB_CONFIG_DIR" ($installRoot . "/config")
+:global "SB_DATA_DIR" ($installRoot . "/data")
+:global "SB_LOGS_DIR" ($installRoot . "/logs")
+:global "SB_STATE_DIR" ($installRoot . "/state")
+:global "SB_IMAGE_FILE" $archivePath
+:global "SB_ROUTER_IP" $routerIP
+:global "SB_ROUTER_ADDRESS" ($routerIP . "/30")
+:global "SB_CONTAINER_IP" $containerIP
+:global "SB_CONTAINER_ADDRESS" ($containerIP . "/30")
+:global "SB_CONTAINER_NETWORK" $network
+:global "SB_TUN_ADDRESS" $tunAddress
+:global "SB_HEALTH_URL" ("http://" . $containerIP . ":9080/traffic-ready")
+:global "SB_MANAGEMENT_SOURCES" {$lanCIDR}
+:global "SB_MANAGEMENT_INGRESS_INTERFACES" {$lanInterface}
+:global "SB_INTERNAL_NETWORKS" {$lanCIDR}
+:global "SB_MANAGED_CLIENTS" [:toarray ""]
+:global "SB_ADDRESSES_CONFIRMED" true
+:global "SB_ROUTEROS_API_PASSWORD" [:rndstr length=32 from="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]
+:local apiPassword $"SB_ROUTEROS_API_PASSWORD"
+:if ($offlineImage != true) do={
+:put "\r\nDownloading the release image over verified HTTPS. This can take several minutes."
+:onerror downloadError in={
+  /tool/fetch url=$imageURL http-header-field="Accept: application/octet-stream" check-certificate=yes dst-path=$"SB_IMAGE_FILE" duration=15m
+} do={ :set "SB_ROUTEROS_API_PASSWORD"; :error "XRoute: image download failed. Check Internet, DNS and router time; no network or service configuration was changed" }
+} else={ :put "\r\nUsing the uploaded release image; no image download is needed." }
+:if ([/file/get [/file/find where name=$"SB_IMAGE_FILE"] size] != $imageBytes) do={ :set "SB_ROUTEROS_API_PASSWORD"; :error "XRoute: image size mismatch; installation stopped before network changes" }
+# RouterOS does not expose streaming SHA-256 for large files. HTTPS and length
+# are checked here; offline installation also supports an administrator SHA check.
+:put ("Release archive SHA256 (for independent verification): " . $imageSHA256)
+/export file=($installRoot . "/routeros-before-install")
+/system/backup/save name=($installRoot . "/routeros-before-install") password=$apiPassword encryption=aes-sha256
+:local oldPort [/ip/service/get $https port]
+:local oldCert [/ip/service/get $https certificate]
+:local oldAddresses [/ip/service/get $https available-from]
+:local oldSSHAddresses [/ip/service/get $sshService available-from]
+:local httpsPrepared false
+:local sshPrepared false
+# Signing can complete after /certificate/sign returns. Wait for the signed
+# object before using it as an issuer, exporting it or assigning it to HTTPS.
+:local awaitCertificate do={
+  :local certName $1
+  :local waited 0
+  :local ready false
+  :while (($ready = false) && ($waited < 60)) do={
+    :local cert [/certificate/find where name=$certName]
+    :if ([:len $cert] = 1) do={ :if ([:len [/certificate/get $cert fingerprint]] > 0) do={ :set ready true } }
+    :if ($ready = false) do={ :delay 1s; :set waited ($waited + 1) }
+  }
+  :if ($ready = false) do={ :error ("XRoute: certificate signing timed out: " . $certName) }
+}
+:onerror installError in={
+  /certificate/add name=xroute-ca common-name=xroute-ca key-size=2048 days-valid=3650 key-usage=key-cert-sign,crl-sign
+  /certificate/sign xroute-ca
+  $awaitCertificate "xroute-ca"
+  /certificate/add name=xroute-local common-name=xroute-local subject-alt-name=("IP:" . $routerIP) key-size=2048 days-valid=3650 key-usage=digital-signature,key-encipherment,tls-server
+  /certificate/sign xroute-local ca=xroute-ca
+  $awaitCertificate "xroute-local"
+  /certificate/export-certificate xroute-ca type=pem file-name=($installRoot . "/routeros-ca")
+  /ip/service/set $https certificate=xroute-local port=59443 available-from=($lanCIDR . "," . $containerIP . "/32") disabled=no
+  :set httpsPrepared true
+  :if ([:len $oldSSHAddresses] > 0) do={
+    :local sshText [:tostr $oldSSHAddresses]
+    :local allowed false
+    :foreach prefix in=$oldSSHAddresses do={ :if ([:toip $containerIP] in $prefix) do={ :set allowed true } }
+    :if ($allowed = false) do={ /ip/service/set $sshService available-from=($oldSSHAddresses, ($containerIP . "/32")); :set sshPrepared true }
+  }
+  :global "XROUTE_GUIDED_INSTALL_ROOT" $installRoot
+  /import file-name=($installRoot . "/bootstrap.rsc")
+} do={
+  :global "XROUTE_GUIDED_INSTALL_ROOT"; :set "XROUTE_GUIDED_INSTALL_ROOT"
+  :set "SB_ROUTEROS_API_PASSWORD"
+  :if ($httpsPrepared = true) do={ /ip/service/set $https disabled=yes port=$oldPort certificate=$oldCert available-from=$oldAddresses }
+  :if ($sshPrepared = true) do={ /ip/service/set $sshService available-from=$oldSSHAddresses }
+  :if (([:len $fasttrack] = 1) && ($originalFasttrack = "") && ([/ip/firewall/filter/get $fasttrack connection-mark] = "no-mark")) do={ /ip/firewall/filter/unset $fasttrack connection-mark }
+  :error ("XRoute: installation did not complete. Client diversion remains unused. Existing service settings restored. Details: " . $installError)
+}
+/export file=($installRoot . "/routeros-export")
+:put ("\r\nXRoute installed. Open https://" . $containerIP . ":9443 from the selected LAN.")
+:put ("Setup files: " . $installRoot . "/routeros-export.rsc and routeros-ca.crt (public certificate only).")
+:put ("RouterOS REST URL: https://" . $routerIP . ":59443\r\nREST user: xroute-api\r\nREST password: " . $apiPassword)
+:put ("RouterOS SSH port for the wizard: " . [/ip/service/get $sshService port])
+:put "Save the REST password privately for the panel wizard and encrypted pre-install backup. It is not a panel login password."
+:put "Create your panel password, complete setup and Apply before assigning clients."
+:set "SB_ROUTEROS_API_PASSWORD"
+}

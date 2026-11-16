@@ -151,7 +151,10 @@ func (session *SafeModeSession) Commit(ctx context.Context, timeout time.Duratio
 		_ = session.Abort()
 		return err
 	}
-	output, err := session.waitFor(ctx, timeout, []byte("Safe Mode released"))
+	output, _, err := session.waitForAny(ctx, timeout, [][]byte{
+		[]byte("Safe Mode released"),
+		[]byte("Releasing Safe Mode... Success!"),
+	})
 	if err != nil || bytes.Contains(output, []byte("Failure")) {
 		_ = session.Abort()
 		return errors.New("RouterOS did not commit the Safe Mode transaction")
@@ -242,7 +245,14 @@ type sshSafeModeChannel struct {
 }
 
 func (channel *sshSafeModeChannel) Close() error {
-	return channel.close()
+	err := channel.close()
+	// ssh.Client.Close already closes the underlying net.Conn. The final
+	// defensive connection close must not turn an acknowledged commit into
+	// a transaction failure merely because the socket is already closed.
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
 }
 
 func (channel *sshSafeModeChannel) SetDeadline(deadline time.Time) error {

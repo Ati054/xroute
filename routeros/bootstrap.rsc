@@ -5,6 +5,10 @@
 
 :local variablesSuffix "/variables.rsc"
 :local variablesPath ""
+:global "XROUTE_GUIDED_INSTALL_ROOT"
+:local bundleRoot [:tostr $"XROUTE_GUIDED_INSTALL_ROOT"]
+:set "XROUTE_GUIDED_INSTALL_ROOT"
+:if ([:len $bundleRoot] = 0) do={
 :foreach candidate in=[/file/find where name~"variables.rsc"] do={
   :local candidatePath [/file/get $candidate name]
   :if ([:len $candidatePath] >= [:len $variablesSuffix]) do={
@@ -16,8 +20,8 @@
   }
 }
 :if ([:len $variablesPath] = 0) do={ :error "XROUTE: place a private variables.rsc in the uploaded XRoute directory" }
-
-:local bundleRoot [:pick $variablesPath 0 ([:len $variablesPath] - [:len $variablesSuffix])]
+:set bundleRoot [:pick $variablesPath 0 ([:len $variablesPath] - [:len $variablesSuffix])]
+}
 :local scriptRoot $bundleRoot
 # XRoute namespace compatibility guard: begin
 :local xrouteCurrentKnown [/container/find where comment~"^XROUTE (container|rollback container)( previous| candidate| rollback| failed)?\$"]
@@ -33,8 +37,10 @@
   :if ([:len [/file/find where name=$requiredPath]] != 1) do={ :error ("XROUTE: release bundle is incomplete: " . $requiredPath) }
 }
 
-:log info ("XROUTE: bootstrap loading private variables from " . $variablesPath)
-/import file-name=$variablesPath
+:if ([:len $variablesPath] > 0) do={
+  :log info ("XROUTE: bootstrap loading private variables from " . $variablesPath)
+  /import file-name=$variablesPath
+}
 :global "SB_STORAGE_ROOT"
 :if ($"SB_STORAGE_ROOT" != $bundleRoot) do={ :error "XROUTE: variables.rsc SB_STORAGE_ROOT must match its release-bundle directory" }
 

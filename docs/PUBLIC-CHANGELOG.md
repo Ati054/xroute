@@ -4,6 +4,8 @@
 
 Initial public release under the **XRoute** name for MikroTik RouterOS 7.
 
+- Guided installation from a ready folder uploaded from a computer, without GitHub access from the router. Local REST certificates, a dedicated account and an encrypted pre-install backup are created automatically; manual installation remains available.
+- Guided installation from a ready folder uploaded from a computer, without GitHub access from the router. Local REST certificates, a dedicated account and an encrypted pre-install backup are created automatically; manual installation remains available.
 - ARM64 router images with architecture checks before updates. Installations use external SSD/USB storage. The x86-64 CHR build will be published separately after its own testing.
 - A browser panel in English, Russian, Persian with RTL, Simplified Chinese and Traditional Chinese, with localized guides and screenshots.
 - Transparent TCP/UDP routing with TPROXY and route lists for devices and subnets. Supported exits include VLESS, Hysteria 2, Reverse VLESS and selected RouterOS WireGuard tunnels.

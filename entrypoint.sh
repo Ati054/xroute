@@ -139,10 +139,14 @@ bootstrap_key_digest="$(
   && [ "$bootstrap_cert_digest" = "$bootstrap_key_digest" ] \
   || bootstrap_valid=0
 if [ "$bootstrap_valid" -ne 1 ]; then
+  bootstrap_dns=sb-gateway.local
+  if [ "${SB_ROUTEROS_NAMESPACE:-SB-GATEWAY}" = XROUTE ]; then
+    bootstrap_dns=xroute.local
+  fi
   rm -f /config/certs/bootstrap.pem /config/certs/bootstrap.key
   openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 30 \
-    -subj "/CN=sb-gateway.local" \
-    -addext "subjectAltName=DNS:sb-gateway.local,IP:${bootstrap_ip}" \
+    -subj "/CN=${bootstrap_dns}" \
+    -addext "subjectAltName=DNS:${bootstrap_dns},IP:${bootstrap_ip}" \
     -keyout /config/certs/bootstrap.key \
     -out /config/certs/bootstrap.pem >/dev/null 2>&1
   chmod 0600 /config/certs/bootstrap.pem /config/certs/bootstrap.key

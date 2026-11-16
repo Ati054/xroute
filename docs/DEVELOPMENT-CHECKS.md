@@ -12,6 +12,10 @@ change flag when that branch unconditionally marks the state dirty.
 
 ## RouterOS Installer Parsing
 
+Installer artifact checks must follow paths derived from `SB_STORAGE_ROOT`,
+including both the image archive and extracted root. Runtime Dockerfile checks
+accept LF and CRLF source checkouts while requiring the same environment flags.
+
 Run `node --test tests/routeros-storage-preflight.test.mjs` and parse the shipped
 `preflight.rsc` on both ARM64 RouterOS and x86 CHR before a fresh-install check.
 Exercise the storage-validation prefix of `uninstall.rsc` on both platforms

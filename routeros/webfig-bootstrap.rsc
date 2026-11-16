@@ -48,7 +48,7 @@
 :if ([:len $"SB_MANAGEMENT_SOURCES"] = 0) do={ :error "XROUTE: set at least one exact management CIDR before bootstrap" }
 :if ([:len $"SB_ROUTEROS_HTTPS_CERTIFICATE"] = 0) do={ :error "XROUTE: select the existing www-ssl certificate name before bootstrap" }
 
-:local sbHttpsService [/ip/service/find where name="www-ssl"]
+:local sbHttpsService [/ip/service/find where name="www-ssl" and dynamic=no]
 :if ([:len $sbHttpsService] != 1) do={ :error "XROUTE: RouterOS www-ssl service is unavailable or ambiguous" }
 :if ([/ip/service/get $sbHttpsService disabled] = true) do={ :error "XROUTE: enable www-ssl and select its certificate once in WebFig before importing this script" }
 :local sbHttpsAddresses [/ip/service/get $sbHttpsService available-from]

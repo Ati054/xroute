@@ -3,10 +3,66 @@ package routeros
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"net"
 	"testing"
+	"testing/iotest"
 	"time"
 )
+
+func TestSSHSafeModeCloseIgnoresOnlyAnAlreadyClosedSocket(t *testing.T) {
+	unexpected := errors.New("transport cleanup failed")
+	for _, tc := range []struct {
+		name string
+		err  error
+		ok   bool
+	}{
+		{"closed normally", nil, true},
+		{"already closed", &net.OpError{Op: "close", Net: "tcp", Err: net.ErrClosed}, true},
+		{"unexpected close failure", unexpected, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			channel := &sshSafeModeChannel{close: func() error { return tc.err }}
+			if err := channel.Close(); (err == nil) != tc.ok || !tc.ok && !errors.Is(err, unexpected) {
+				t.Fatalf("close result=%v, expected success=%v", err, tc.ok)
+			}
+		})
+	}
+}
+
+func TestSafeModeCommitRequiresAReleaseAcknowledgement(t *testing.T) {
+	for _, tc := range []struct {
+		name, reply string
+		ok          bool
+	}{
+		{"legacy acknowledgement", "Safe Mode released", true},
+		{"release success acknowledgement", "Releasing Safe Mode... Success!\r\n[admin@router] >", true},
+		{"taking is not releasing", "Taking Safe Mode session... Success!\r\n[admin@router] <SAFE>", false},
+		{"failure", "Releasing Safe Mode... Failure!", false},
+		{"prompt without acknowledgement", "[admin@router] >", false},
+		{"failure before success", "Failure: command rejected\r\nReleasing Safe Mode... Success!", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// SSH may split the acknowledgement at any byte boundary.
+			channel := &fakeSafeModeChannel{input: iotest.OneByteReader(bytes.NewReader([]byte(tc.reply)))}
+			session := &SafeModeSession{channel: channel, active: true}
+			if err := session.Commit(context.Background(), time.Second); (err == nil) != tc.ok {
+				t.Fatalf("commit acknowledgement accepted=%v, want=%v: %v", err == nil, tc.ok, err)
+			}
+			if !channel.closed || !session.closed || session.active {
+				t.Fatalf("console was not closed safely: %s", session)
+			}
+			want := []byte{0x18}
+			if !tc.ok {
+				want = append(want, 0x04)
+			}
+			if !bytes.Equal(channel.output.Bytes(), want) {
+				t.Fatalf("unexpected Safe Mode control bytes: %v", channel.output.Bytes())
+			}
+		})
+	}
+}
 
 func TestSafeModeSessionRunsMarkerAndCommitsAfterAcknowledgement(t *testing.T) {
 	name := "SB-GATEWAY-apply-0123456789ab"

@@ -44,11 +44,12 @@ XRoute 會新增帶有專屬標記的 RouterOS 物件。對既有物件的變更
 
 ## 安裝
 
-1. 從 [Releases](https://github.com/Ati054/xroute/releases/latest) 下載 RouterOS 套件組，並檢查 SHA-256 校驗碼。
-2. 將容器封存檔與 `routeros` 目錄放到外接 SSD。
-3. 將 `routeros/variables.example.rsc` 複製為私用的 `variables.rsc`，填入位址與初始設定用的驗證資料。
-4. 在 MikroTik 終端機中匯入 `bootstrap.rsc`。
-5. 開啟面板，建立管理員密碼，並設定裝置與路由。
+1. 在**電腦上**從 [Releases](https://github.com/Ati054/xroute/releases/latest) 下載套件組，核對 SHA-256 後解壓縮。
+2. 將準備好的 **`xroute` 資料夾**上傳至外接 ext4 SSD，例如 `usb1/xroute/`。
+3. 在 MikroTik 終端機執行 `/import file-name=usb1/xroute/setup.rsc`，選擇磁碟及可信任的管理 LAN，確認摘要後安裝。
+4. 開啟安裝程式顯示的面板位址，完成首次設定。
+
+此方式**不需要路由器連線至 GitHub**。安裝程式會建立本機 REST 憑證與服務帳號，保留現有 VPN；稍後再從面板選擇使用 XRoute 的裝置。
 
 完整指令、需求與復原步驟請依照[安裝指南](docs/INSTALL.md)。
 請勿將私用的 `variables.rsc`、訂閱連結或匯出的設定放入公開儲存庫。

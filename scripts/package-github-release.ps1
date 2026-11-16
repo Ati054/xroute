@@ -53,9 +53,11 @@ try {
     $archivePath = Join-Path $routerOSRoot $archiveName
     $archiveChecksumPath = "$archivePath.sha256"
     $manifestPath = Join-Path $routerOSRoot "xroute-$version-linux-$Architecture.manifest.json"
+    $installerName = "xroute-$version-install-$Architecture.rsc"
+    $installerPath = Join-Path $routerOSRoot $installerName
     $routerOSScripts = Join-Path $routerOSRoot "routeros"
     $sourceArchivePath = Join-Path $publicSourceRoot "xroute-$version-source.zip"
-    foreach ($requiredPath in @($archivePath, $archiveChecksumPath, $manifestPath, $routerOSScripts, $sourceArchivePath)) {
+    foreach ($requiredPath in @($archivePath, $archiveChecksumPath, $manifestPath, $installerPath, $routerOSScripts, $sourceArchivePath)) {
         if (-not (Test-Path -LiteralPath $requiredPath)) {
             throw "Missing release input: $requiredPath"
         }
@@ -70,12 +72,24 @@ try {
     if ([string]$manifest.version -ne $version -or [string]$manifest.platform -ne "linux/$Architecture" -or [string]$manifest.sha256 -ne $archiveHash) {
         throw "The image manifest does not match the release archive."
     }
+    $installerSource = Get-Content -Raw -LiteralPath $installerPath
+    foreach ($identity in @((':local releaseVersion "' + $version + '"'), (':local releaseArch "' + $Architecture + '"'), (':local imageSHA256 "' + $archiveHash + '"'), (':local imageBytes ' + (Get-Item -LiteralPath $archivePath).Length))) {
+        if (-not $installerSource.Contains($identity)) { throw "The guided installer does not match the image manifest." }
+    }
+    # Private variables must never enter the recursive copy of offline scripts.
+    $maintainedNames = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "routeros") -Filter '*.rsc' -File | ForEach-Object Name)
+    foreach ($file in Get-ChildItem -LiteralPath $routerOSScripts -Recurse -File) {
+        $relative = [System.IO.Path]::GetRelativePath($routerOSScripts, $file.FullName).Replace('\', '/')
+        if (($relative -notin $maintainedNames) -and (($relative -notlike 'legacy/*') -or ($relative.Substring(7) -notin $maintainedNames))) {
+            throw "Unexpected file in public installer scripts: $relative"
+        }
+    }
 
     $bundleName = "xroute-$version-routeros-bundle.zip"
     if ($Architecture -eq "amd64") { $bundleName = "xroute-$version-routeros-amd64-bundle.zip" }
     $bundlePath = Join-Path $outputRoot $bundleName
     $stagingRoot = Join-Path $outputRoot ".bundle-staging"
-    foreach ($target in @($bundlePath, "$bundlePath.sha256", (Join-Path $outputRoot $archiveName), (Join-Path $outputRoot "$archiveName.sha256"), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath) + ".sha256")), (Join-Path $outputRoot "RELEASE-NOTES.md"), (Join-Path $outputRoot "SHA256SUMS"), $stagingRoot)) {
+    foreach ($target in @($bundlePath, "$bundlePath.sha256", (Join-Path $outputRoot $archiveName), (Join-Path $outputRoot "$archiveName.sha256"), (Join-Path $outputRoot $installerName), (Join-Path $outputRoot "$installerName.sha256"), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath) + ".sha256")), (Join-Path $outputRoot "RELEASE-NOTES.md"), (Join-Path $outputRoot "SHA256SUMS"), $stagingRoot)) {
         if (Test-Path -LiteralPath $target) {
             if (-not $Force) { throw "Release output already exists; use -Force to replace it: $target" }
             Remove-ReleasePath $target $outputRoot
@@ -83,7 +97,10 @@ try {
     }
 
     New-Item -ItemType Directory -Path $stagingRoot | Out-Null
-    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath -Destination $stagingRoot
+    $uploadFolder = Join-Path $stagingRoot 'xroute'
+    New-Item -ItemType Directory -Path $uploadFolder | Out-Null
+    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath -Destination $uploadFolder
+    Copy-Item -LiteralPath $installerPath -Destination (Join-Path $uploadFolder 'setup.rsc')
     Copy-Item -LiteralPath $routerOSScripts -Destination (Join-Path $stagingRoot "routeros") -Recurse
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL.md") -Destination $stagingRoot
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL-RU.md") -Destination $stagingRoot
@@ -91,7 +108,7 @@ try {
     Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $bundlePath -CompressionLevel Optimal
     Remove-ReleasePath $stagingRoot $outputRoot
 
-    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath, $sourceArchivePath -Destination $outputRoot
+    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath, $installerPath, $sourceArchivePath -Destination $outputRoot
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/releases/$version.md") -Destination (Join-Path $outputRoot "RELEASE-NOTES.md")
 
     $bundleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundlePath).Hash.ToLowerInvariant()
@@ -99,12 +116,16 @@ try {
     $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceCopy).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText("$bundlePath.sha256", "$bundleHash  $bundleName`n", [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText("$sourceCopy.sha256", "$sourceHash  $([System.IO.Path]::GetFileName($sourceCopy))`n", [System.Text.UTF8Encoding]::new($false))
+    $installerCopy = Join-Path $outputRoot $installerName
+    $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installerCopy).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText("$installerCopy.sha256", "$installerHash  $installerName`n", [System.Text.UTF8Encoding]::new($false))
 
     $checksumTargets = @(
         $bundlePath,
         (Join-Path $outputRoot $archiveName),
         (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))),
         $sourceCopy,
+        $installerCopy,
         (Join-Path $outputRoot "RELEASE-NOTES.md")
     )
     $checksumLines = foreach ($target in $checksumTargets) {

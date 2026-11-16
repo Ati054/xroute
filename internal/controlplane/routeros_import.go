@@ -160,6 +160,7 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 	}
 	interfaceNetworks := map[string]map[string]bool{}
 	wanInterfaces := map[string]bool{}
+	managementSources := map[string]bool{}
 	for _, command := range commands {
 		section, properties := command.section, command.properties
 		owned := exportProjectOwned(properties)
@@ -181,6 +182,10 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 				if properties["key"] == "SB_TUN_ADDRESS" {
 					setString(facts.managedTopology, "tun_address", properties["value"])
 				}
+			case "/ip firewall address-list", "/ipv6 firewall address-list":
+				if properties["list"] == "SB_MANAGEMENT_SOURCES" && !exportDisabled(properties) {
+					addNetworkTokens(managementSources, properties["address"])
+				}
 			}
 		}
 		for _, key := range []string{"interface", "bridge"} {
@@ -200,7 +205,7 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 		}
 		if section == "/interface list member" && !exportDisabled(properties) {
 			name := properties["interface"]
-			if strings.EqualFold(properties["list"], "LAN") && resolvedInterfaceName(name) {
+			if (strings.EqualFold(properties["list"], "LAN") || owned && properties["list"] == "SB_MANAGEMENT_INGRESS") && resolvedInterfaceName(name) {
 				facts.managementIngress[name] = true
 			}
 			if strings.EqualFold(properties["list"], "WAN") && resolvedInterfaceName(name) {
@@ -262,8 +267,22 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 		facts.version = match[1]
 	}
 	for name := range facts.managementIngress {
+		if wanInterfaces[name] {
+			delete(facts.managementIngress, name)
+			continue
+		}
 		for network := range interfaceNetworks[name] {
-			facts.managementNetworks[network] = true
+			if len(managementSources) == 0 {
+				facts.managementNetworks[network] = true
+				continue
+			}
+			connected, _ := netip.ParsePrefix(network)
+			for source := range managementSources {
+				prefix, _ := netip.ParsePrefix(source)
+				if connected.Contains(prefix.Addr()) && prefix.Bits() >= connected.Bits() {
+					facts.managementNetworks[source] = true
+				}
+			}
 		}
 	}
 	facts.managedLines = strings.Count(value, managedidentity.Literal("XROUTE"))

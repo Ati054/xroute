@@ -638,7 +638,9 @@ test("release separates the user panel port from RouterOS REST", async () => {
   );
   assert.match(
     variables,
-    new RegExp(`"SB_ROOT_DIR" "usb1/xroute/root-${escapedPackageVersion}"`),
+    new RegExp(`"SB_ROOT_DIR" \\(\\$"SB_STORAGE_ROOT" \\. "/root-${escapedPackageVersion}"\\)`),
   );
+  assert.match(variables, /"SB_STORAGE_ROOT" "usb1\/xroute"/);
+  assert.match(variables, /"SB_IMAGE_FILE" \(\$"SB_STORAGE_ROOT" \. "\/xroute-/);
   assert.doesNotMatch(variables, /1\.5\.10/);
 });

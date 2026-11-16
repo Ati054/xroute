@@ -181,7 +181,7 @@ export function Overview({
   );
   const ingressHost = ingressHosts.length > 1
     ? `${ingressHosts[0]} +${ingressHosts.length - 1}`
-    : ingressHosts[0] || "адрес не задан";
+    : ingressHosts[0] || tr("адрес не задан");
   const telemetryAvailable = overviewClients.some((client) => client.available === true);
   const activeClientCount = overviewClients.filter(
     (client) => client.available === true && client.active === true,

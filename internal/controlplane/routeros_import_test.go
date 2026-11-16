@@ -2,8 +2,52 @@ package controlplane
 
 import (
 	"net/http"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
+
+func TestRouterOSImportUsesInstalledManagementSelectionAsHint(t *testing.T) {
+	for _, namespace := range []string{managedidentity.Prefix()} {
+		t.Run(namespace, func(t *testing.T) {
+			value := "/interface bridge\nadd name=home\n" +
+				"/interface list member\nadd interface=home list=SB_MANAGEMENT_INGRESS comment=\"" + namespace + " management ingress\"\n" +
+				"add interface=ether1 list=WAN\n" +
+				"add interface=ether1 list=LAN\n" +
+				"add interface=disabled-lan list=SB_MANAGEMENT_INGRESS disabled=yes comment=\"" + namespace + " management ingress\"\n" +
+				"/ip address\nadd address=192.168.77.1/24 interface=home\nadd address=192.168.78.1/24 interface=home\nadd address=192.168.99.1/24 interface=ether1\n" +
+				"/ip firewall address-list\nadd address=192.168.78.0/24 list=SB_MANAGEMENT_SOURCES comment=\"" + namespace + " management source\"\n" +
+				"add address=192.168.77.0/24 list=SB_MANAGEMENT_SOURCES disabled=yes comment=\"" + namespace + " management source\"\n"
+			facts, err := parseRouterOSExport(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(facts.managementIngress) != 1 || !facts.managementIngress["home"] {
+				t.Fatalf("management hint includes WAN or disabled interfaces: %#v", facts.managementIngress)
+			}
+			if len(facts.managementNetworks) != 1 || !facts.managementNetworks["192.168.78.0/24"] {
+				t.Fatalf("installer-selected source was lost or broadened: %#v", facts.managementNetworks)
+			}
+		})
+	}
+}
+
+func TestRouterOSImportCurrentNamespaceManagementHint(t *testing.T) {
+	// Ownership is immutable after process initialization, just as on a router.
+	command := exec.Command(os.Args[0], "-test.run=^TestRouterOSImportUsesInstalledManagementSelectionAsHint$")
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, managedidentity.Environment+"=") {
+			command.Env = append(command.Env, value)
+		}
+	}
+	command.Env = append(command.Env, managedidentity.Environment+"=XROUTE")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("new namespace management hint: %v: %s", err, output)
+	}
+}
 
 func TestRouterOSImportBuildsReviewWithoutTrustingDiscoveredNetworks(t *testing.T) {
 	server := newTestServer(t)

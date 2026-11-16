@@ -251,15 +251,20 @@ func (server *Server) trafficReadiness(response http.ResponseWriter, request *ht
 		return
 	}
 	baseReady, payload := server.routerReadinessState(active)
-	selector, err := server.repository.selectorReadiness()
-	if err != nil {
-		server.internalStateError(response, request, err)
-		return
-	}
-	required, pending, err := server.scopedTrafficReadyPolicies(active, selector, server.trafficReadyAfter)
-	if err != nil {
-		server.internalStateError(response, request, err)
-		return
+	required, pending := []string{}, []string{}
+	// Before the first Apply there is no generated selector pool yet. That is
+	// normal setup state, not a persistent-state failure on every watchdog poll.
+	if active != nil {
+		selector, err := server.repository.selectorReadiness()
+		if err != nil {
+			server.internalStateError(response, request, err)
+			return
+		}
+		required, pending, err = server.scopedTrafficReadyPolicies(active, selector, server.trafficReadyAfter)
+		if err != nil {
+			server.internalStateError(response, request, err)
+			return
+		}
 	}
 	ready := baseReady && len(pending) == 0
 	payload["planned_runtime_ready"] = ready && payload["planned_runtime_ready"] == true

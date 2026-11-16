@@ -49,11 +49,12 @@ are limited to the settings you explicitly select; see
 
 ## Install
 
-1. Download the RouterOS bundle from [Releases](https://github.com/Ati054/xroute/releases/latest) and check its SHA-256 checksum.
-2. Put the container archive and the `routeros` directory on the external SSD.
-3. Make a private copy of `routeros/variables.example.rsc` as `variables.rsc` and fill in your addresses and bootstrap credentials.
-4. Import `bootstrap.rsc` from the MikroTik terminal.
-5. Open the panel, create the administrator password and configure your devices and routes.
+1. Download the RouterOS bundle from [Releases](https://github.com/Ati054/xroute/releases/latest) **on your computer**, check its SHA-256 and extract it.
+2. Upload the ready **`xroute` folder** to an external ext4 SSD, for example `usb1/xroute/`.
+3. Run `/import file-name=usb1/xroute/setup.rsc` in the MikroTik terminal. Choose the disk and trusted LAN, then confirm.
+4. Open the panel at the address printed by the installer and finish setup.
+
+The router does **not** need access to GitHub for this installation. The installer creates the local REST certificate and service account. Existing VPNs remain in place; devices are assigned to XRoute later in the panel.
 
 Follow the [installation guide](docs/INSTALL.md) for the commands, requirements
 and recovery steps. Do not put your private `variables.rsc`, subscription links
