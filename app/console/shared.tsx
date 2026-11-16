@@ -400,6 +400,10 @@ export function errorMessage(error: unknown, locale: Locale = currentUiLocale())
         ? "Размер выбранного архива контейнера выходит за допустимые пределы."
       : error.code === "image_architecture_mismatch"
         ? "Архитектура образа не подходит этому роутеру. Выберите TAR для его архитектуры: ARM64 или AMD64. Обновление не запущено."
+      : error.code === "image_version_retained"
+        ? "Эта версия сохранена для отката. Выберите другую версию."
+      : error.code === "image_root_in_use"
+        ? "Каталог этого образа уже используется другим контейнером."
       : error.code === "persistent_storage_read_only"
         ? "Внешнее хранилище недоступно для записи. Загрузка образа не началась."
       : error.code === "invalid_id" || path.endsWith(".id")

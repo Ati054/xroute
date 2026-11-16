@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func TestNativeImageUpdateSchedulesVerifiedCandidateWithRecovery(t *testing.T) {
@@ -79,6 +81,57 @@ func TestNativeImageUpdateSchedulesVerifiedCandidateWithRecovery(t *testing.T) {
 	recoveryName := text(operation["recovery_archive"])
 	if info, err := os.Stat(filepath.Join(server.opts.DataDir, "recovery-backups", recoveryName)); err != nil || !info.Mode().IsRegular() {
 		t.Fatalf("recovery archive = %#v, %v", info, err)
+	}
+}
+
+func TestNativeImageUpdateRejectsOccupiedRootBeforeSideEffects(t *testing.T) {
+	for _, scenario := range []struct{ name, comment, root, code string }{
+		{"retained", managedidentity.Literal("XROUTE container previous"), "/usb1/sb-gateway/root-1.7.2", "image_version_retained"},
+		{"retained-trailing-slash", managedidentity.Literal("XROUTE container previous"), "/usb1/sb-gateway/root-1.7.2/", "image_version_retained"},
+		{"foreign", "Other application", "/usb1/sb-gateway/root-1.7.2", "image_root_in_use"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			var mutations atomic.Int32
+			router := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				response.Header().Set("Content-Type", "application/json")
+				if request.Method == http.MethodGet && request.URL.Path == "/rest/container" {
+					_ = json.NewEncoder(response).Encode([]map[string]any{
+						{".id": "*1", "comment": managedidentity.Literal("XROUTE container"), "root-dir": "/usb1/sb-gateway/root"},
+						{".id": "*2", "comment": scenario.comment, "root-dir": scenario.root},
+					})
+					return
+				}
+				if request.Method != http.MethodGet {
+					mutations.Add(1)
+				}
+				http.Error(response, "unexpected", http.StatusNotFound)
+			}))
+			defer router.Close()
+			server := newTestServer(t)
+			cookie, csrf := bootstrapSession(t, server)
+			configureLifecycleRouter(t, server, router)
+			upload := uploadImageRequest(t, server, cookie, csrf, "candidate.tar", dockerImageArchive(t, "arm64", "1.7.2", "layer", map[string]string{"io.xroute.routeros.namespace.version": "1"}))
+			if upload.Code != http.StatusOK {
+				t.Fatalf("upload failed: %d %s", upload.Code, upload.Body.String())
+			}
+			response := performRequest(t, server, http.MethodPost, apiPrefix+"/lifecycle/image-update", map[string]any{
+				"candidate_source": "local-file", "candidate_reference": decodeResponse(t, upload)["routeros_path"], "confirmation": "ОБНОВИТЬ",
+			}, map[string]string{csrfHeader: csrf}, cookie)
+			if response.Code != http.StatusConflict || objectAt(decodeResponse(t, response), "error")["code"] != scenario.code || mutations.Load() != 0 {
+				t.Fatalf("occupied root scheduled work: %d %s mutations=%d", response.Code, response.Body.String(), mutations.Load())
+			}
+			operation, err := server.repository.auxiliary("lifecycle-operation")
+			if err != nil || len(operation) != 0 {
+				t.Fatalf("unexpected operation: %#v %v", operation, err)
+			}
+			backups, err := os.ReadDir(filepath.Join(server.opts.DataDir, "recovery-backups"))
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if len(backups) != 0 {
+				t.Fatal("occupied root created a recovery archive")
+			}
+		})
 	}
 }
 

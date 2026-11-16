@@ -128,6 +128,17 @@ func (server *Server) scheduleLifecycleImageUpdate(response http.ResponseWriter,
 		server.writeErrorResponse(response, request, http.StatusConflict, "image_version_already_active", "The selected image version is already active.")
 		return
 	}
+	for _, container := range containers {
+		if strings.Trim(text(container["root-dir"]), "/") != candidateRoot {
+			continue
+		}
+		if text(container["comment"]) == managedidentity.Literal("XROUTE container previous") {
+			server.writeErrorResponse(response, request, http.StatusConflict, "image_version_retained", "The selected version is retained as the previous image. Choose a different version; the rollback copy was not changed.")
+		} else {
+			server.writeErrorResponse(response, request, http.StatusConflict, "image_root_in_use", "The selected image directory is already used by another container.")
+		}
+		return
+	}
 	if err := server.prepareLifecycleCatalogCompatibility(request.Context(), config, catalogSchema); err != nil {
 		server.writeErrorResponse(response, request, http.StatusConflict, "image_update_live_state_invalid", err.Error())
 		return

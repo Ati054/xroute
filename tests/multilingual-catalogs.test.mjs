@@ -82,6 +82,21 @@ test("locale selection rejects invalid input and isolates substituted object nam
   for (const value of ["de", "zh", "", null, {}, "__proto__"]) assert.equal(isLocale(value), false);
 });
 
+test("occupied image errors explain the refusal in every supported language", () => {
+  const source = readFileSync(new URL("../app/console/shared.tsx", import.meta.url), "utf8");
+  const tree = ts.createSourceFile("shared.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const fn = tree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "errorMessage");
+  assert.ok(fn);
+  const code = ts.transpileModule(fn.getText(tree), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  class ApiError extends Error { constructor(code) {super("Untranslated fallback");this.code = code;} }
+  const exports = {};
+  vm.runInNewContext(code, {exports, GatewayApiError: ApiError, asText: (value, fallback) => typeof value === "string" ? value : fallback, localizedText: catalog.localizedText, formatLocalizedText: catalog.formatLocalizedText});
+  for (const locale of SUPPORTED_LOCALES) {
+    assert.equal(exports.errorMessage(new ApiError("image_version_retained"), locale), catalog.localizedText("Эта версия сохранена для отката. Выберите другую версию.", locale));
+    assert.equal(exports.errorMessage(new ApiError("image_root_in_use"), locale), catalog.localizedText("Каталог этого образа уже используется другим контейнером.", locale));
+  }
+});
+
 test("translated labels cannot alter lifecycle confirmation tokens sent to the API", () => {
   for (const name of ["console/operations.tsx", "console/apply-dialog.tsx"]) {
     const source = readFileSync(new URL(`../app/${name}`, import.meta.url), "utf8");

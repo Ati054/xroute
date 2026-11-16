@@ -2106,7 +2106,9 @@ export const englishText: Record<string, string> = {
   "Без изменений RouterOS и резервного копирования": "No RouterOS changes or backup",
   "Только проверка состояния": "State check only",
   "Список изменений": "Changes",
-  "RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт проверку работоспособности.": "RouterOS keeps the previous container stopped and starts it again if the new image fails its health check."
+  "RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт проверку работоспособности.": "RouterOS keeps the previous container stopped and starts it again if the new image fails its health check.",
+  "Эта версия сохранена для отката. Выберите другую версию.": "This version is retained for rollback. Choose a different version.",
+  "Каталог этого образа уже используется другим контейнером.": "This image directory is already used by another container."
 };
 
 const translatedText: Record<Exclude<Locale, "ru">, Record<string, string>> = {
