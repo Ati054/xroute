@@ -4,7 +4,7 @@ import { GatewayApiError, JsonObject, createCollectionItem, deleteCollectionItem
 import { automaticCidrHint, supportsAutomaticCidr } from "../cdn-capabilities";
 import { useLanguage } from "../i18n";
 import { cdnDeploymentAfterTLSProfileChange, cdnDeploymentForTLSInitialization, certificateCoversHostname, hostnameAfterTLSProfileChange, hostnameForTLSProfileInitialization, tlsConcreteHostnames, tlsProfileIdForHostname } from "../tls-hostnames";
-import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, ConnectionAddressContext, TRANSPORT_RECOMMENDATIONS, Toggle, asObject, asObjectList, asOptionalPositiveText, asStringList, asText, cdnDeploymentScopeNote, cdnDeploymentsForTransport, cdnOriginNameNote, entityIdFromName, errorMessage, expiryText, formatBytes, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, subscriptionCdnProviderNote, transportChangeLead, transportKindLabel } from "./shared";
+import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, ConnectionAddressContext, TRANSPORT_RECOMMENDATIONS, Toggle, asObject, asObjectList, asOptionalPositiveText, asStringList, asText, cdnDeploymentScopeNote, cdnDeploymentsForTransport, cdnOriginNameNote, entityIdFromName, errorMessage, expiryText, formatBytes, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, subscriptionCdnProviderNote, tlsProfileName, transportChangeLead, transportKindLabel } from "./shared";
 import { FormEvent, useContext, useEffect, useRef, useState } from "react";
 
 export function ConnectionDialog({
@@ -277,7 +277,7 @@ export function ConnectionDialog({
   });
   const [cdnDeployments, setCdnDeployments] = useState<JsonObject[]>(
     () =>
-      cdnDeploymentsForTransport(existingTransport).map((deployment) => {
+      cdnDeploymentsForTransport(existingTransport, locale).map((deployment) => {
         const prepared =
           deployment.origin_protection_mode === "secret-header" &&
           !asText(deployment.origin_header_secret_ref, "")
@@ -650,7 +650,7 @@ export function ConnectionDialog({
       setRealityProbeResult(
         warning
           ? tr("SNI и target совместимы. {value1}", { value1: warnings.join(" ") })
-          : tr("SNI и target совместимы с {value1}. Успешно проверено адресов: {value2}. Сертификат: {value3}.", { value1: transportKind === "reality-grpc" ? "gRPC + Reality" : transportKind === "xhttp-reality" ? "XHTTP + Reality" : "VLESS Reality", value2: successfulEndpoints.length, value3: expiryText(probe.certificate_expires_at) }),
+          : tr("SNI и target совместимы с {value1}. Успешно проверено адресов: {value2}. Сертификат: {value3}.", { value1: transportKind === "reality-grpc" ? "gRPC + Reality" : transportKind === "xhttp-reality" ? "XHTTP + Reality" : "VLESS Reality", value2: successfulEndpoints.length, value3: expiryText(probe.certificate_expires_at, locale) }),
       );
       return true;
     } catch (error) {
@@ -704,9 +704,9 @@ export function ConnectionDialog({
       setCdnProbeResults((current) => ({
         ...current,
         [deploymentId]:
-          tr("Домен CDN: {value1} · {value2} · {value3} | ", { value1: asStringList(publicProbe.addresses).join(", "), value2: asText(publicProbe.tls_version, "TLS"), value3: expiryText(publicProbe.certificate_expires_at) }) +
-          `origin: ${asStringList(originProbe.addresses).join(", ")} · ${asText(originProbe.tls_version, "TLS")} · ${expiryText(originProbe.certificate_expires_at)} ` +
-          "Proxy/CDN, Full strict и правила origin проверяются в аккаунте провайдера.",
+          tr("Домен CDN: {value1} · {value2} · {value3} | ", { value1: asStringList(publicProbe.addresses).join(", "), value2: asText(publicProbe.tls_version, "TLS"), value3: expiryText(publicProbe.certificate_expires_at, locale) }) +
+          `origin: ${asStringList(originProbe.addresses).join(", ")} · ${asText(originProbe.tls_version, "TLS")} · ${expiryText(originProbe.certificate_expires_at, locale)} ` +
+          tr("Proxy/CDN, Full strict и правила origin проверяются в аккаунте провайдера."),
       }));
     } catch (error) {
       setCdnProbeResults((current) => ({
@@ -2170,7 +2170,7 @@ export function ConnectionDialog({
                                         value={asText(profile.id, "")}
                                         key={asText(profile.id, "")}
                                       >
-                                        {itemName(profile)}
+                                        {tlsProfileName(profile, locale)}
                                         {asText(profile.certificate_secret_ref, "")
                                           ? tr(" · настроен")
                                           : tr(" · нужна пара")}
@@ -2206,7 +2206,7 @@ export function ConnectionDialog({
                                   </select>
                                   <small>
                                     {asText(deployment.origin_protection_mode, "") === "auto-cidr"
-                                      ? automaticCidrHint(deploymentProvider)
+                                      ? tr(automaticCidrHint(deploymentProvider))
                                       : asText(deployment.origin_protection_mode, "") === "manual-cidr"
                                         ? tr("Расширенный fallback, если провайдер не умеет добавлять секретный header и не публикует машинный feed.")
                                         : tr("Добавьте этот header в настройках CDN-запроса к origin. Прямой запрос без секрета получит 404.")}
@@ -2728,7 +2728,9 @@ export function ConnectionDialog({
                                   <small>
                                     {endpoint.ok === true
                                       ? `${asText(endpoint.tls_version, tr("TLS не определён"))} · ${asText(endpoint.alpn, tr("ALPN не согласован"))}`
-                                      : asText(endpoint.error_message, tr("TLS-handshake не выполнен"))}
+                                      : errorMessage(new GatewayApiError(tr("TLS-handshake не выполнен"), {
+                                          code: asText(endpoint.error_code, ""),
+                                        }), locale)}
                                   </small>
                                 </span>
                               ))}
@@ -3065,7 +3067,7 @@ export function ConnectionDialog({
                             value={asText(profile.id, "")}
                             key={asText(profile.id, "")}
                           >
-                            {itemName(profile)}
+                            {tlsProfileName(profile, locale)}
                             {asText(profile.certificate_secret_ref, "")
                               ? tr(" · настроен")
                               : tr(" · нужна пара")}

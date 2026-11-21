@@ -9,12 +9,12 @@ import (
 	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
-//go:embed watchdog.rsc cloudflare-update.rsc container-startup.rsc
+//go:embed watchdog.rsc cloudflare-update.rsc container-startup.rsc uninstall.rsc
 var scripts embed.FS
 
 var resolvedScripts = sync.OnceValue(func() map[string]string {
 	result := make(map[string]string, 3)
-	for _, name := range []string{"watchdog.rsc", "cloudflare-update.rsc", "container-startup.rsc"} {
+	for _, name := range []string{"watchdog.rsc", "cloudflare-update.rsc", "container-startup.rsc", "uninstall.rsc"} {
 		source, err := scripts.ReadFile(name)
 		if err != nil {
 			panic(err)
@@ -28,6 +28,18 @@ var resolvedScripts = sync.OnceValue(func() map[string]string {
 // find returns, and never invokes remove with an empty item list.
 func ManagedConnectionCleanupSource() string {
 	return managedidentity.Literal(`:foreach sbFlow in=[/ip/firewall/connection/find where connection-mark="xroute-managed"] do={ :do { /ip/firewall/connection/remove $sbFlow } on-error={} }`)
+}
+
+// GuidedManagementCleanupSource is shared by manual and scheduled removal.
+// The caller supplies the already validated storageRoot local variable.
+func GuidedManagementCleanupSource() string {
+	return scriptBody("uninstall.rsc", "# Guided management cleanup: begin\n", "# Guided management cleanup: end")
+}
+
+// ManagedBackupCleanupSource shares ownership checks between manual and
+// scheduled removal, including installer files and retained Apply backups.
+func ManagedBackupCleanupSource() string {
+	return scriptBody("uninstall.rsc", "# Managed backup cleanup: begin\n", "# Managed backup cleanup: end")
 }
 
 // ContainerStartupInstallSource installs the same storage gate as fresh installs.

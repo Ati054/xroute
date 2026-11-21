@@ -27,30 +27,9 @@ func UpgradeNginxSubscriptionRefreshTimeout(config string) (string, error) {
 	if err != nil {
 		return config, err
 	}
-	management := -1
-	for index, block := range blocks {
-		if len(block.words) != 1 || block.words[0] != "server" {
-			continue
-		}
-		if block.parent < 1 || len(blocks[block.parent].words) != 1 || blocks[block.parent].words[0] != "http" {
-			continue
-		}
-		for _, directive := range block.directives {
-			if len(directive.words) >= 2 && directive.words[0] == "listen" && (directive.words[1] == "9443" || strings.HasSuffix(directive.words[1], ":9443")) {
-				if management >= 0 && management != index {
-					return config, errors.New("cannot upgrade ambiguous Nginx management servers")
-				}
-				management = index
-			}
-		}
-	}
-	if management < 0 {
-		return config, nil
-	}
-	for _, directive := range blocks[management].directives {
-		if directive.words[0] == "include" {
-			return config, errors.New("cannot upgrade Nginx management routing from an external include")
-		}
+	management, err := nginxManagementServer(blocks)
+	if err != nil || management < 0 {
+		return config, err
 	}
 	api, refresh := -1, -1
 	for index, block := range blocks {
@@ -138,6 +117,36 @@ func UpgradeNginxSubscriptionRefreshTimeout(config string) (string, error) {
 	}
 	location := "location ~ " + nginxSubscriptionRefreshPattern + " {" + body + "}\n\n        "
 	return config[:block.start] + location + config[block.start:], nil
+}
+
+func nginxManagementServer(blocks []nginxRefreshBlock) (int, error) {
+	management := -1
+	for index, block := range blocks {
+		if len(block.words) != 1 || block.words[0] != "server" {
+			continue
+		}
+		if block.parent < 1 || len(blocks[block.parent].words) != 1 || blocks[block.parent].words[0] != "http" {
+			continue
+		}
+		for _, directive := range block.directives {
+			if len(directive.words) < 2 || directive.words[0] != "listen" ||
+				directive.words[1] != "9443" && !strings.HasSuffix(directive.words[1], ":9443") {
+				continue
+			}
+			if management >= 0 && management != index {
+				return -1, errors.New("cannot upgrade ambiguous Nginx management servers")
+			}
+			management = index
+		}
+	}
+	if management >= 0 {
+		for _, directive := range blocks[management].directives {
+			if directive.words[0] == "include" {
+				return -1, errors.New("cannot upgrade Nginx management routing from an external include")
+			}
+		}
+	}
+	return management, nil
 }
 
 func nginxRefreshBlocks(config string) ([]nginxRefreshBlock, error) {

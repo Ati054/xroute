@@ -116,7 +116,7 @@ test("Reverse VLESS offers only the three direct REALITY transports", async () =
   assert.doesNotMatch(kinds, /"ws"|"grpc"|"httpupgrade"|"xhttp"/);
 });
 
-test("builds the Russian static management panel", async () => {
+test("builds the static panel without flashing a session form in the wrong language", async () => {
   const html = await readFile(
     process.env.XROUTE_STATIC_PANEL_HTML || new URL("../out/index.html", import.meta.url),
     "utf8",
@@ -125,29 +125,26 @@ test("builds the Russian static management panel", async () => {
     html,
     /<title>XRoute — управление VLESS на MikroTik<\/title>/i,
   );
-  assert.match(html, /Проверяем локальный сеанс/);
+  assert.doesNotMatch(html, /class="login-card"|language-choice-shell/);
   assert.doesNotMatch(html, /Отказ панели не отключает интернет/);
-  assert.match(html, /HTTPS · локальная сеть/);
   assert.doesNotMatch(html, /Интернет работает штатно/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
-test("offers a persistent five-language choice before the first browser session", async () => {
-  const [page, i18n, css] = await Promise.all([
+test("opens the first session in the browser or saved language without a selection page", async () => {
+  const [page, i18n] = await Promise.all([
     readConsoleSource().then(normalizeLocalizedSource),
     readFile(new URL("../app/i18n.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(page, /<LanguageProvider>/);
   assert.match(page, /<LanguageSelector\s*\/>/);
   assert.match(i18n, /sb-gateway:locale/);
-  assert.match(i18n, /if \(isLocale\(saved\)\)/);
+  assert.match(i18n, /isLocale\(saved\) \? saved : browserLocale\(navigator.language\)/);
   assert.match(i18n, /SUPPORTED_LOCALES\.map/);
   assert.match(i18n, /document\.documentElement\.dir = LOCALE_DETAILS\[locale\]\.direction/);
-  assert.match(i18n, /setNeedsChoice\(true\)/);
-  assert.match(i18n, /Выберите язык \/ Choose language/);
+  assert.match(i18n, /localeReady \? children : null/);
+  assert.doesNotMatch(i18n, /LanguageChoice|needsChoice/);
   assert.match(i18n, /document\.documentElement\.lang = locale/);
-  assert.match(css, /\.language-choice-shell \{[\s\S]*position: fixed;/);
 });
 
 test("ships without starter artifacts and encodes the outage policy", async () => {
@@ -545,29 +542,26 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.match(page, /management_ingress_suggestions/);
   assert.match(
     page,
-    /allowed_ingress_interfaces:\s*\[managementIngressInterface\]/,
+    /allowed_ingress_interfaces:\s*managementInterfaces/,
   );
   assert.match(page, /Принять как внутреннюю/);
   assert.match(page, /Принять видимые/);
   assert.match(page, /Игнорировать видимые/);
   assert.match(page, /Игнорировать/);
   assert.match(page, /Все подсказки классифицированы/);
-  assert.match(page, /Выберите bridge или введите точное имя/);
+  assert.match(page, /Укажите интерфейс LAN или VPN/);
   assert.match(page, /Интерфейс введён вручную/);
-  assert.match(page, /www-ssl, не api-ssl/);
   assert.match(page, /172\.31\.255\.1:59443/);
-  assert.match(page, /явным портом www-ssl/);
-  assert.match(page, /без 0\.0\.0\.0\/0/);
+  assert.match(page, /Укажите HTTPS-адрес RouterOS с портом службы www-ssl/);
   assert.match(page, /explicitPort >= 1/);
   assert.match(page, /explicitPort <= 65535/);
   assert.doesNotMatch(page, /Boolean\(url\.port\)/);
   assert.match(page, /isIpv4Cidr\(managementCidr, false\)/);
-  assert.match(page, /TCP 443 нельзя считать/);
   assert.match(page, /topology_suggestions/);
   assert.match(page, /management_network_suggestions/);
   assert.match(page, /if \(!current\.trim\(\) && candidate\)/);
   assert.match(page, /Предложенные параметры:/);
-  assert.match(page, /Проверьте параметры перед сохранением/);
+  assert.match(page, /Проверка перед применением/);
   assert.match(page, /addresses_confirmed:\s*false/);
   assert.match(page, /address_confirmed:\s*false/);
   assert.match(page, /bridge_name:\s*bridgeName/);
@@ -575,8 +569,6 @@ test("ships without starter artifacts and encodes the outage policy", async () =
   assert.match(page, /container_dns:\s*internalDns/);
   assert.match(page, /networkReviewPending > 0/);
   assert.match(page, /status:\s*networkReviewStatus\(networkDecisions\[cidr\]\)/);
-  assert.match(page, /status_hostname:\s*""/);
-  assert.match(page, /subscription_hostname:\s*subscriptionHost/);
   assert.doesNotMatch(page, /Публичный health выключен/);
   assert.match(page, /HTTPS-ссылка клиентской подписки/);
   assert.match(page, /HTTPS-ссылка клиентской подписки/);

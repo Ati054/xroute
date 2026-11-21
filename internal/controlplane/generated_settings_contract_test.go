@@ -44,8 +44,10 @@ func TestSyntheticCDNAndSystemSettingsReachGeneratedArtifacts(t *testing.T) {
 		}
 		switch transport["kind"] {
 		case "ws":
+			transport["enabled"] = true
 			transport["path_secret_ref"] = "transport/ws-path"
 		case "grpc":
+			transport["enabled"] = true
 			transport["service_name_secret_ref"] = "transport/grpc-name"
 		}
 	}

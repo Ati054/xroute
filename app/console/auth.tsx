@@ -55,13 +55,11 @@ function BootstrapPanel({
           <BrandMark />
           <div>
             <BrandName />
-            <small>{t("bootstrap.brand")}</small>
           </div>
         </div>
-        <p className="eyebrow">{t("bootstrap.eyebrow")}</p>
         <h1 id="bootstrap-title">{t("bootstrap.title")}</h1>
         <p className="login-lead">
-          {t("bootstrap.leadBefore")} <code>admin</code>. {t("bootstrap.leadAfter")}
+          {t("bootstrap.lead")}
         </p>
         <form className="login-form" onSubmit={submit}>
           <label className="field">
@@ -95,13 +93,6 @@ function BootstrapPanel({
             {busy ? t("bootstrap.creating") : t("bootstrap.create")}
           </button>
         </form>
-        <aside className="notice notice-safe">
-          <span className="notice-icon">✓</span>
-          <div>
-            <strong>{t("bootstrap.once")}</strong>
-            <p>{t("bootstrap.onceText")}</p>
-          </div>
-        </aside>
       </section>
     </main>
   );
@@ -173,6 +164,7 @@ function LoginPanel({
               <input dir="auto"
                 id="username"
                 name="username"
+                defaultValue="admin"
                 type="text"
                 autoComplete={rememberCredentials ? "username" : "off"}
                 autoCapitalize="none"

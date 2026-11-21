@@ -37,7 +37,8 @@
 :if ([:len $fasttrack] = 0) do={
   :log warning "XROUTE: no enabled FastTrack rule; nothing to patch"
 } else={
-  :local current [/ip/firewall/filter/get $fasttrack connection-mark]
+  # RouterOS returns nil when the matcher is unset.
+  :local current [:tostr [/ip/firewall/filter/get $fasttrack connection-mark]]
   :if (($current != "") && ($current != "no-mark")) do={ :error ("XROUTE: incompatible existing FastTrack connection-mark=" . $current) }
 
   :if ($current = "") do={

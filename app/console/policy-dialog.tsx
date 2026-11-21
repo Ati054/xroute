@@ -179,15 +179,13 @@ export function PolicyDialog({
         if (cancelled) return;
         const liveNodes = results.flatMap((result) => asObjectList(result.nodes));
         setSubscriptionNodes(liveNodes);
+        setNodesError("");
         const savedOrder = initialSelectionOrderKey.split("\n").filter(Boolean);
         if (savedOrder.length && liveNodes.length) {
           const mirrors = policySelectionMirrorsFromOrder(savedOrder, liveNodes);
           setSelectedCountries(mirrors.countries);
           setSelectedLocations(mirrors.locations);
           setSelectionOrder(savedOrder);
-        }
-        if (!subscriptionIds.length) {
-          setNodesError(tr("Сначала добавьте и обновите хотя бы одну подписку."));
         }
       })
       .catch((error) => {
@@ -202,7 +200,7 @@ export function PolicyDialog({
     return () => {
       cancelled = true;
     };
-  }, [config.subscriptions, initialSelectionOrderKey, tr]);
+  }, [config.subscriptions, initialSelectionOrderKey]);
 
   const selectedExceptionServices = [
     ...new Set([
@@ -486,7 +484,8 @@ export function PolicyDialog({
                   <div className="subscription-discovery-empty">{tr("Загружаю расположения из подписок…")}</div>
                 ) : nodesError ? (
                   <div className="inline-result inline-result-error" role="alert"><span>!</span>{nodesError}</div>
-                ) : (
+                ) : null}
+                {!nodesBusy || wireguardExits.length > 0 || reverseVlessExits.length > 0 ? (
                   <SubscriptionLocationPicker
                     nodes={subscriptionNodes}
                     nodeGroups={nodeGroups}
@@ -516,7 +515,7 @@ export function PolicyDialog({
                         : [...current, pack]);
                     }}
                   />
-                )}
+                ) : null}
               </section>
               <CustomRouteEditor rules={customRoutes} onChange={setCustomRoutes} />
               <DirectServicePackPicker

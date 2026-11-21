@@ -8,9 +8,14 @@ test("installation guides match the release and include storage-aware startup", 
     const source = await readFile(new URL("../docs/" + file, import.meta.url), "utf8");
     assert.ok(source.includes("xroute-" + version + "-routeros-bundle.zip"), file);
     assert.ok(source.includes("xroute-" + version + "-linux-arm64.tar"), file);
-    for (const referenced of source.matchAll(/xroute-([0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?)-(?:routeros-bundle|linux-arm64)/g)) {
+    assert.ok(source.includes("xroute-" + version + "-linux-amd64.tar"), file);
+    for (const referenced of source.matchAll(/xroute-([0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?)-(?:routeros(?:-amd64)?-bundle|linux-(?:arm64|amd64))/g)) {
       assert.equal(referenced[1], version, file + ": stale release reference");
     }
+    const updates = source.match(/## (?:Update and recovery|Обновление и восстановление)\r?\n([\s\S]*)/);
+    assert.ok(updates, file + ": update instructions are missing");
+    assert.match(updates[1], /linux\/arm64/);
+    assert.match(updates[1], /linux\/amd64/);
     assert.match(source, /  bootstrap\.rsc\r?\n  container-startup\.rsc/);
   }
 });

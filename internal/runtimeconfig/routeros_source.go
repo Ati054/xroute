@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/cdnfeed"
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 type RouterOSWireGuardExit struct {
@@ -209,11 +209,14 @@ func BuildRouterOSRenderModel(config map[string]any, nodes []map[string]any) (Ro
 		return RouterOSRenderModel{}, errors.New("system.networking.container_address must be a valid IPv4 interface")
 	}
 	model.ContainerIP, model.ContainerNetwork = container.Addr().String(), container.Masked().String()
-	tun, err := netip.ParsePrefix(textValue(networking["tun_address"]))
-	if err != nil || !tun.Addr().Is4() {
-		return RouterOSRenderModel{}, errors.New("system.networking.tun_address must be a valid IPv4 interface")
+	// Keep the reserved subnet from older installations when present.
+	if legacyTUN := textValue(networking["tun_address"]); legacyTUN != "" {
+		tun, err := netip.ParsePrefix(legacyTUN)
+		if err != nil || !tun.Addr().Is4() {
+			return RouterOSRenderModel{}, errors.New("system.networking.tun_address must be a valid IPv4 interface")
+		}
+		model.TunNetwork = tun.Masked().String()
 	}
-	model.TunNetwork = tun.Masked().String()
 	gateway, err := netip.ParseAddr(textValue(networking["routeros_gateway"]))
 	if err != nil || !gateway.Is4() {
 		return RouterOSRenderModel{}, errors.New("system.networking.routeros_gateway must be a valid IPv4 address")

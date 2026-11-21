@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/Ati054/xroute/internal/storagebudget"
@@ -87,36 +86,83 @@ func (server *Server) downloadRecoveryBackup(response http.ResponseWriter, reque
 	http.ServeContent(response, request, info.Name(), info.ModTime(), file)
 }
 
+func (server *Server) preflightRecoveryUpload(response http.ResponseWriter, request *http.Request) {
+	if _, ok := server.requireCSRF(response, request); !ok {
+		return
+	}
+	body, ok := server.readObject(response, request, maxRequestBytes)
+	if !ok {
+		return
+	}
+	name, _ := body["filename"].(string)
+	size, valid := numberToInt64(body["size_bytes"])
+	if !valid || size <= 0 {
+		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_archive", "Choose a nonempty XRoute recovery archive.")
+		return
+	}
+	if _, _, ok := server.checkRecoveryUpload(response, request, name, size); ok {
+		server.writeJSON(response, http.StatusOK, map[string]any{"ok": true})
+	}
+}
+
+func (server *Server) checkRecoveryUpload(response http.ResponseWriter, request *http.Request, name string, size int64) (root, target string, ready bool) {
+	_, root, _ = server.recoveryRoots()
+	target, err := recoveryArchivePath(root, name)
+	if err != nil {
+		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_filename", "Choose an XRoute .sbgw recovery archive.")
+		return "", "", false
+	}
+	if size > recoveryMaxArchiveBytes {
+		server.writeErrorResponse(response, request, http.StatusRequestEntityTooLarge, "recovery_upload_too_large", "Recovery archive exceeds the safety limit.")
+		return "", "", false
+	}
+	if !server.recoveryUploadTargetAvailable(response, request, target, request.Method == http.MethodPut) {
+		return "", "", false
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		server.internalStateError(response, request, err)
+		return "", "", false
+	}
+	if size > 0 {
+		if err := storagebudget.Check(root, uint64(size)+recoveryStorageHeadroom+recoveryTarOverheadBytes); err != nil {
+			server.writeErrorResponse(response, request, http.StatusInsufficientStorage, "persistent_storage_full", "Storage headroom is insufficient or could not be verified. No archive was stored.")
+			return "", "", false
+		}
+	}
+	return root, target, true
+}
+
+func (server *Server) recoveryUploadTargetAvailable(response http.ResponseWriter, request *http.Request, target string, drainDuplicate bool) bool {
+	_, err := os.Lstat(target)
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if err != nil {
+		server.internalStateError(response, request, err)
+		return false
+	}
+	if drainDuplicate {
+		// Older panels can send a duplicate directly. Read the bounded body
+		// before replying so a streaming proxy can forward the 409.
+		_, err := io.Copy(io.Discard, http.MaxBytesReader(response, request.Body, recoveryMaxArchiveBytes))
+		var limit *http.MaxBytesError
+		if errors.As(err, &limit) {
+			server.writeErrorResponse(response, request, http.StatusRequestEntityTooLarge, "recovery_upload_too_large", "Recovery archive exceeds the safety limit.")
+			return false
+		}
+	}
+	server.writeErrorResponse(response, request, http.StatusConflict, "recovery_archive_exists", "This recovery archive is already stored.")
+	return false
+}
+
 func (server *Server) uploadRecoveryBackup(response http.ResponseWriter, request *http.Request) {
 	payload, ok := server.requireCSRF(response, request)
 	if !ok {
 		return
 	}
 	name := request.Header.Get("X-SB-Recovery-Filename")
-	if !recoveryArchiveName.MatchString(name) || filepath.Base(name) != name {
-		server.writeErrorResponse(response, request, http.StatusUnprocessableEntity, "invalid_recovery_filename", "Choose an XRoute .sbgw recovery archive.")
-		return
-	}
-	server.recoveryMu.Lock()
-	defer server.recoveryMu.Unlock()
-	_, root, _ := server.recoveryRoots()
-	if err := os.MkdirAll(root, 0o700); err != nil {
-		server.internalStateError(response, request, err)
-		return
-	}
-	if request.ContentLength > recoveryMaxArchiveBytes {
-		server.writeErrorResponse(response, request, http.StatusRequestEntityTooLarge, "recovery_upload_too_large", "Recovery archive exceeds the safety limit.")
-		return
-	}
-	if request.ContentLength > 0 {
-		if err := storagebudget.Check(root, uint64(request.ContentLength)+recoveryStorageHeadroom+recoveryTarOverheadBytes); err != nil {
-			server.writeErrorResponse(response, request, http.StatusInsufficientStorage, "persistent_storage_full", "Storage headroom is insufficient or could not be verified. No archive was stored.")
-			return
-		}
-	}
-	target, _ := recoveryArchivePath(root, name)
-	if _, err := os.Lstat(target); err == nil {
-		server.writeErrorResponse(response, request, http.StatusConflict, "recovery_archive_exists", "This recovery archive is already stored.")
+	root, target, ok := server.checkRecoveryUpload(response, request, name, request.ContentLength)
+	if !ok {
 		return
 	}
 	temporary, err := os.CreateTemp(root, ".upload-*.tmp")
@@ -174,6 +220,11 @@ func (server *Server) uploadRecoveryBackup(response http.ResponseWriter, request
 	metadata.Name = name
 	metadata.Size = written
 	metadata.SHA256 = hex.EncodeToString(digest.Sum(nil))
+	server.recoveryMu.Lock()
+	defer server.recoveryMu.Unlock()
+	if !server.recoveryUploadTargetAvailable(response, request, target, false) {
+		return
+	}
 	if err := os.Rename(temporaryPath, target); err != nil {
 		server.internalStateError(response, request, err)
 		return

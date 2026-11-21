@@ -57,7 +57,7 @@ func renderRouterOSManagedDNS(model RouterOSRenderModel) []string {
 			managedidentity.Literal(`:if ([:len $dnsNat] != 1) do={ :error "XROUTE managed DNS NAT missing or ambiguous" }`),
 			`/ip/firewall/nat/unset $dnsNat dst-address-type`,
 			`/ip/firewall/nat/set $dnsNat `+fields,
-			`:local firstDNSNat [/ip/firewall/nat/find]; :if (([:len $firstDNSNat] > 0) && ([:pick $firstDNSNat 0 1] != $dnsNat)) do={ /ip/firewall/nat/move $dnsNat destination=[:pick $firstDNSNat 0 1] }`,
+			`:local firstDNSNat [/ip/firewall/nat/find where dynamic=no]; :if (([:len $firstDNSNat] > 0) && ([:pick $firstDNSNat 0 1] != $dnsNat)) do={ /ip/firewall/nat/move $dnsNat destination=[:pick $firstDNSNat 0 1] }`,
 		)
 	}
 	return lines

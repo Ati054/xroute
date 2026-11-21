@@ -155,7 +155,7 @@
   "transports": [
     {
       "cdn_provider": "cloudflare",
-      "enabled": true,
+      "enabled": false,
       "id": "websocket",
       "kind": "ws",
       "listen_port": 443,
@@ -164,7 +164,7 @@
     },
     {
       "cdn_provider": "cloudflare",
-      "enabled": true,
+      "enabled": false,
       "id": "grpc",
       "kind": "grpc",
       "listen_port": 443,

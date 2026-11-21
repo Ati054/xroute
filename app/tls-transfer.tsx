@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { apiRequest, isUncertainOperationError } from "./api-client";
+import { useLanguage } from "./i18n";
 
 // Operate: extend the existing TLS list, not a new visual world. A focused
 // password/file dialog has one action; import never replaces a live profile.
@@ -11,6 +12,7 @@ export function TlsTransferDialog({ profile, onClose, onImported }: {
   onClose: () => void;
   onImported: () => Promise<void>;
 }) {
+  const { tr } = useLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -65,28 +67,28 @@ export function TlsTransferDialog({ profile, onClose, onImported }: {
     <dialog ref={dialog} className="modal tls-transfer-dialog" aria-labelledby="tls-transfer-title"
       onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
       <form onSubmit={submit} aria-busy={busy}>
-        <h2 id="tls-transfer-title">{profile ? "Экспорт TLS-профиля" : "Импорт TLS-профиля"}</h2>
+        <h2 id="tls-transfer-title">{profile ? tr("Экспорт TLS-профиля") : tr("Импорт TLS-профиля")}</h2>
         {profile ? <p className="tls-transfer-name">{profile.name}</p> : null}
         {!done ? <>
           <p className="field-help">{profile
-            ? "Архив содержит приватный ключ и, для ACME, доступ к DNS API. Он защищён паролем."
-            : "Будет создан новый выключенный профиль. Существующие подключения не изменятся."}</p>
-          {!profile ? <label className="field">Архив профиля
+            ? tr("Архив защищён паролем. В нём хранится приватный ключ, а для ACME также данные доступа к DNS API.")
+            : tr("Профиль появится в списке выключенным. Вы сможете проверить его перед включением.")}</p>
+          {!profile ? <label className="field">{tr("Архив профиля")}
             <input type="file" name="archive" accept=".sbtls" required disabled={busy || uncertain} />
           </label> : null}
-          <label className="field">Пароль архива
+          <label className="field">{tr("Пароль архива")}
             <input type="password" name="password" autoComplete={profile ? "new-password" : "off"} minLength={12} maxLength={256} required disabled={busy || uncertain} />
-            {profile ? <span className="field-help">Не менее 12 символов.</span> : null}
+            {profile ? <span className="field-help">{tr("Не менее 12 символов.")}</span> : null}
           </label>
-          {profile ? <label className="field">Повторите пароль
+          {profile ? <label className="field">{tr("Повторите пароль")}
             <input type="password" name="confirmation" autoComplete="new-password" minLength={12} maxLength={256} required disabled={busy} />
           </label> : null}
         </> : null}
-        {message ? <p role={done ? "status" : "alert"} className={done ? "field-help" : "form-error"}>{message}</p> : null}
+        {message ? <p role={done ? "status" : "alert"} className={done ? "field-help" : "form-error"}>{tr(message)}</p> : null}
         <div className="modal-actions">
-          <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>{done || uncertain ? "Закрыть" : "Отмена"}</button>
+          <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>{done || uncertain ? tr("Закрыть") : tr("Отмена")}</button>
           {!done ? <button type="submit" className="button button-primary" disabled={busy || uncertain}>
-            {busy ? "Выполняется…" : profile ? "Скачать архив" : "Импортировать"}
+            {busy ? tr("Выполняется…") : profile ? tr("Скачать архив") : tr("Импортировать")}
           </button> : null}
         </div>
       </form>

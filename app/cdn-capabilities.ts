@@ -9,7 +9,7 @@ export function supportsAutomaticCidr(provider: string): boolean {
 }
 
 export function automaticCidrHint(provider: string): string {
-  return provider === "cloudflare"
+  return provider.trim().toLowerCase() === "cloudflare"
     ? "Автообновление. При ошибке сохраняется предыдущий список."
     : "Обновление каждые 15 минут. При ошибке сохраняется предыдущий список.";
 }

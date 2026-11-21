@@ -84,7 +84,7 @@ func (client *Client) ScheduleFullUninstall(ctx context.Context, storageRoot str
 	}
 	if _, err := client.request(ctx, http.MethodPut, "/rest/system/scheduler", map[string]any{
 		"name": fullUninstallScheduler, "interval": "10s", "on-event": "/system/script/run " + fullUninstallWorker,
-		"policy": "read,write,test,policy", "comment": comment, "disabled": "false",
+		"policy": "ftp,read,write,test,policy,sensitive", "comment": comment, "disabled": "false",
 	}); err != nil {
 		return nil, err
 	}
@@ -127,6 +127,8 @@ func renderFullUninstallWorker(root string) string {
 		`:if ([:len $sbScheduler] = 1) do={ /system/scheduler/remove $sbScheduler }`,
 		`:local storageEntry [/file/find where name="` + root + `"]`,
 		managedidentity.Literal(`:if ([:len $storageEntry] != 1) do={ :error "XROUTE exact project storage directory is missing or ambiguous" }`),
+		`:local storageRoot "` + root + `"`,
+		routerosassets.GuidedManagementCleanupSource(),
 		managedidentity.Literal(`:local gate [/ip/firewall/mangle/find where comment="XROUTE diversion-gate"]`),
 		`:if ([:len $gate] = 1) do={ /ip/firewall/mangle/disable $gate }`,
 		routerosassets.ManagedConnectionCleanupSource(),
@@ -174,12 +176,14 @@ func renderFullUninstallWorker(root string) string {
 		managedidentity.Literal(`/interface/bridge/remove [find where comment~"^XROUTE "]`),
 		managedidentity.Literal(`/interface/list/remove [find where comment~"^XROUTE "]`),
 		managedidentity.Literal(`/routing/table/remove [find where comment="XROUTE routing table"]`),
-		managedidentity.Literal(`/user/remove [find where comment="XROUTE control-plane REST user"]`),
-		managedidentity.Literal(`/user/group/remove [find where comment="XROUTE REST group"]`),
-		`/file/remove [find where name~"^sb-gateway-(before-|pre-)"]`,
+		routerosassets.ManagedBackupCleanupSource(),
 		`/file/remove $storageEntry`,
 		managedidentity.Literal(`:log warning "XROUTE: full uninstall complete; foreign RouterOS objects were preserved"`),
 		managedidentity.Literal(`:foreach scriptId in=[/system/script/find where comment~"^XROUTE "] do={ /system/script/remove $scriptId }`),
+		// Removing the executing account's group revokes its remaining file and
+		// script permissions. Keep account removal as the final operation.
+		managedidentity.Literal(`/user/remove [find where comment="XROUTE control-plane REST user"]`),
+		managedidentity.Literal(`/user/group/remove [find where comment="XROUTE REST group"]`),
 	}
 	return strings.Join(withStorageRootGuard(root, lines), "\n")
 }

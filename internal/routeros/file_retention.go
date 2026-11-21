@@ -14,12 +14,12 @@ import (
 const managedRouterOSBackupRetention = 3
 
 var (
-	managedBackupFilePattern  = regexp.MustCompile(managedidentity.Literal(`^(XROUTE-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12})(?:-export\.rsc|\.backup)$`))
-	managedStorageRootPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$`)
-	managedImageArchiveName   = regexp.MustCompile(`^(?:sb-gateway|xroute)-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?-linux-(?:arm64|amd64)\.tar(?:\.sha256)?$`)
+	managedBackupFilePattern = regexp.MustCompile(managedidentity.Literal(`^(XROUTE-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12})(?:-export\.rsc|\.backup)$`))
+	managedImageArchiveName  = regexp.MustCompile(`^(?:sb-gateway|xroute)-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?-linux-(?:arm64|amd64)\.tar(?:\.sha256)?$`)
 )
 
 var managedBootstrapArtifacts = map[string]bool{
+	"setup.rsc":             true,
 	"bootstrap.rsc":         true,
 	"fasttrack-patch.rsc":   true,
 	"install.rsc":           true,
@@ -38,16 +38,22 @@ type ManagedFilePruneResult struct {
 // PruneManagedFiles removes only exact XRoute-owned files. The newest
 // three RouterOS backup/export generations are retained, while one-shot
 // bootstrap scripts and extracted local image archives are removed from the
-// confirmed external-storage project root. Unknown files and nested runtime
-// data are never selected.
+// confirmed project directory. A system-disk directory requires x86 CHR.
+// Unknown files and nested runtime data are never selected.
 func (client *Client) PruneManagedFiles(ctx context.Context, storageRoot string) (ManagedFilePruneResult, error) {
-	storageRoot = strings.Trim(strings.TrimSpace(storageRoot), "/")
-	if !managedStorageRootPattern.MatchString(storageRoot) {
-		return ManagedFilePruneResult{}, errors.New("managed storage root is invalid")
+	root, err := ValidateStorageRoot(storageRoot, true)
+	if err != nil {
+		return ManagedFilePruneResult{}, err
 	}
-	for _, part := range strings.Split(storageRoot, "/") {
-		if part == "." || part == ".." {
-			return ManagedFilePruneResult{}, errors.New("managed storage root is invalid")
+	storageRoot = root
+	if !strings.Contains(root, "/") {
+		resources, err := client.listWithHTTP(ctx, client.actionHTTP, "/rest/system/resource?.proplist=architecture-name,board-name")
+		if err != nil {
+			return ManagedFilePruneResult{}, err
+		}
+		if len(resources) != 1 || !strings.HasPrefix(text(resources[0]["board-name"]), "CHR") ||
+			(text(resources[0]["architecture-name"]) != "x86" && text(resources[0]["architecture-name"]) != "x86_64") {
+			return ManagedFilePruneResult{}, errors.New("system-disk file retention requires x86 CHR")
 		}
 	}
 	// A populated disk inventory can exceed the short status-request timeout.

@@ -13,6 +13,30 @@ import (
 var containerMemoryWorker = managedidentity.Literal("XROUTE-container-memory-worker")
 var ContainerMemoryScheduler = managedidentity.Literal("XROUTE-container-memory-once")
 
+// The one-shot deletes its scheduler before changing container properties.
+// A running worker still owns the operation after the scheduler disappears.
+func (client *Client) ContainerMemoryUpdatePending(ctx context.Context) (bool, error) {
+	schedulers, err := client.List(ctx, "/rest/system/scheduler?.proplist=name")
+	if err != nil {
+		return false, err
+	}
+	for _, scheduler := range schedulers {
+		if text(scheduler["name"]) == ContainerMemoryScheduler {
+			return true, nil
+		}
+	}
+	jobs, err := client.List(ctx, "/rest/system/script/job?.proplist=script")
+	if err != nil {
+		return false, err
+	}
+	for _, job := range jobs {
+		if text(job["script"]) == containerMemoryWorker {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func ValidContainerMemoryLimits(high, maximum int64) bool {
 	return high >= 16<<20 && high <= maximum && maximum <= 8<<30
 }

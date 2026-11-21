@@ -1,5 +1,7 @@
 "use client";
 
+import { projectRootFromContainer } from "../storage-root";
+
 import { validWatchdogSettings } from "../settings-validation";
 
 import { JsonObject, changeAdministratorPassword, saveCurrentDraft } from "../api-client";
@@ -64,7 +66,9 @@ export function Settings({
   const [guardRate, setGuardRate] = useState(Number(guardFromDraft.new_connection_rate ?? 40));
   const [guardBurst, setGuardBurst] = useState(Number(guardFromDraft.burst ?? 80));
   const [guardTimeout, setGuardTimeout] = useState(Number(guardFromDraft.quarantine_seconds ?? 600));
-  const [storageRoot, setStorageRoot] = useState(asText(asObject(config.storage).root, ""));
+  const detectedStorageRoot = projectRootFromContainer(asObject(routeros.container).root_dir);
+  const [storageRootOverride, setStorageRoot] = useState<string | null>(null);
+  const storageRoot = storageRootOverride ?? (asText(asObject(config.storage).root, "") || detectedStorageRoot);
   const [keepPreviousVersion, setKeepPreviousVersion] = useState(Number(asObject(config.updates).retain_previous_images ?? 0) === 1);
   const managementSourcesText =
     managementSourcesOverride ?? configuredManagementSources.join("\n");
@@ -325,7 +329,7 @@ export function Settings({
               <strong>{tr("LAN и OpenVPN · IP/CIDR + интерфейс")}</strong>
             </div>
             <StatusPill tone={managementAccessValid ? "ok" : "danger"}>
-              {managementSources.length} IP · {managementIngressInterfaces.length}  {tr("входа")} </StatusPill>
+              {tr("{sources} IP · интерфейсов: {interfaces}", { sources: managementSources.length, interfaces: managementIngressInterfaces.length })} </StatusPill>
           </div>
           <div className="locked-setting">
             <div>
@@ -488,6 +492,10 @@ export function Settings({
           <label className="field">
              {tr("Root-dir контейнера")} <input value={usbPath} readOnly />
           </label>
+          <label className="field">
+             {tr("Каталог проекта")} <input dir="ltr" value={storageRoot} onChange={(event) => setStorageRoot(event.target.value)} placeholder="usb1/xroute" />
+             <small>{tr("На CHR: xroute, slot1/xroute или disk1/xroute. На аппаратном роутере используйте внешний диск.")}</small>
+          </label>
           <ContainerMemory container={liveContainer} onChanged={onRouterOSChanged} />
         </article>
 
@@ -519,10 +527,6 @@ export function Settings({
                {tr("Карантин · сек.")} <input type="number" min="60" max="86400" value={guardTimeout} onChange={(event) => setGuardTimeout(Number(event.target.value))} />
             </label>
           </div>
-          <label className="field">
-             {tr("Каталог проекта")} <input dir="ltr" value={storageRoot} onChange={(event) => setStorageRoot(event.target.value)} placeholder="usb1/xroute" />
-             <small>{tr("На CHR: xroute, slot1/xroute или disk1/xroute. На аппаратном роутере используйте внешний диск.")}</small>
-          </label>
         </article>
       </section>
       <div className="settings-save-actions">

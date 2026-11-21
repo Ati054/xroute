@@ -97,6 +97,7 @@
 :if (($"SB_ROUTEROS_REST_PORT" < 1) || ($"SB_ROUTEROS_REST_PORT" > 65535)) do={ :error "XROUTE: select and confirm the existing www-ssl TCP port; zero/default placeholders are rejected" }
 :foreach interfaceName in=$"SB_MANAGEMENT_INGRESS_INTERFACES" do={
   :if ([:len [/interface/find where name=$interfaceName]] != 1) do={ :error ("XROUTE: trusted ingress interface is missing or ambiguous: " . $interfaceName) }
+  :if ([:len [/interface/list/member/find where list="WAN" and interface=$interfaceName]] > 0) do={ :error ("XROUTE: trusted ingress interface belongs to WAN: " . $interfaceName) }
 }
 
 :local sbWanList [/interface/list/find where name="WAN"]
@@ -133,7 +134,7 @@
 :local fasttrack [/ip/firewall/filter/find where action="fasttrack-connection" and disabled=no]
 :if ([:len $fasttrack] > 1) do={ :error "XROUTE: multiple enabled FastTrack rules are ambiguous; no patch was applied" }
 :if ([:len $fasttrack] = 1) do={
-  :local mark [/ip/firewall/filter/get $fasttrack connection-mark]
+  :local mark [:tostr [/ip/firewall/filter/get $fasttrack connection-mark]]
   :if (($mark != "") && ($mark != "no-mark")) do={ :error ("XROUTE: FastTrack already has an incompatible connection-mark matcher: " . $mark) }
 }
 :if ([:len $fasttrack] = 0) do={ :log warning "XROUTE: no enabled FastTrack rule found; no FastTrack patch is needed" }

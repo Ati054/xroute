@@ -4,6 +4,8 @@ import { resolve, extname, sep, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { verifyConsoleWorkflows } from "../tests/browser/console-workflows.mjs";
 import { verifyWizardRoundtrip } from "../tests/browser/wizard-roundtrip.mjs";
+import { verifyFirstVisit } from "../tests/browser/first-visit.mjs";
+import { verifyPanelReview } from "../tests/browser/panel-review.mjs";
 
 const root = resolve("out");
 await stat(resolve(root, "index.html"));
@@ -24,9 +26,11 @@ await new Promise((resolve, reject) => {server.once("error", reject); server.lis
 let browser;
 try {
   browser = await chromium.launch({headless: true, ...(process.env.SB_BROWSER_CHANNEL ? {channel: process.env.SB_BROWSER_CHANNEL} : {})});
+  console.log(JSON.stringify(await verifyFirstVisit(browser, `http://127.0.0.1:${server.address().port}`)));
   const results = await verifyConsoleWorkflows(browser, `http://127.0.0.1:${server.address().port}`);
   console.log(JSON.stringify(results));
   console.log(JSON.stringify(await verifyWizardRoundtrip(browser, `http://127.0.0.1:${server.address().port}`)));
+  console.log(JSON.stringify(await verifyPanelReview(browser, `http://127.0.0.1:${server.address().port}`)));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

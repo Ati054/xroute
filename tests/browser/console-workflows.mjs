@@ -17,11 +17,19 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
     config.system.networking.addresses_confirmed = true;
     config.system.networking.bridge_name = "bridge-container";
     config.system.networking.veth_name = "veth-test";
-    config.networks = [{id: "test-lan", kind: "internal", enabled: true, cidrs: ["10.90.0.0/24"]}];
+    config.system.networking.container_address = "172.31.255.2/30";
+    config.system.networking.wireguard_egress_enabled = true;
+    config.system.networking.wireguard_egress_exits = [{id: "wg-exit", interface: "wg-exit", enabled: true}];
+    config.routeros.import_review.networks = [{cidr: "10.66.0.0/24", status: "ignored"}];
+    config.networks = [
+      {id: "management-lan", kind: "management", enabled: true, cidrs: ["10.90.0.0/24"]},
+      {id: "wizard-internal-1", kind: "internal", enabled: true, cidrs: ["10.88.0.0/24"]},
+      {id: "wizard-internal-2", kind: "internal", enabled: true, cidrs: ["172.31.255.0/30"]},
+    ];
     config.policies = [{id: "test-route", display_name: "Test route", enabled: true, mode: "priority", traffic_mode: "vless_with_wan_exceptions", outbounds: [], locations: [], selection_order: []}];
     config.local_clients = ["lan", "wireguard", "ppp-vpn"].map((kind, index) => ({
       id: `test-${kind}`, name: `Test ${kind}`, enabled: true, source_kind: kind,
-      source_cidrs: [`10.90.${index}.2/32`], source_peer_refs: kind === "wireguard" ? ["*TEST"] : [],
+      source_cidrs: [kind === "lan" ? "10.100.100.101/32" : `10.90.${index}.2/32`], source_peer_refs: kind === "wireguard" ? ["*TEST"] : [],
       policy_id: "test-route", container_outage: "direct",
     }));
     config.remote_users = [{id: "test-remote", display_name: "Test remote", enabled: true, role: "trusted-full", policy_id: "test-route", client_tun_address: "10.99.0.2/30", subscription_format: "xray"}];
@@ -44,7 +52,7 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(String(error)));
     const envelope = () => ({config: draft, revision: String(revision), has_active_configuration: true, pending_config_change_count: revision === activeRevision ? 0 : 1});
-    const overview = () => ({build: {container_version: "test", active_core_name: "Xray"}, active_revision: String(activeRevision), draft_revision: String(revision), pending_config_change_count: revision === activeRevision ? 0 : 1, status: {state: firstLaunch ? "unconfigured" : "healthy"}, routeros: {}});
+    const overview = () => ({build: {container_version: "test", active_core_name: "Xray"}, active_revision: String(activeRevision), draft_revision: String(revision), pending_config_change_count: revision === activeRevision ? 0 : 1, status: {state: firstLaunch ? "unconfigured" : "healthy"}, applied_transports: firstLaunch ? [] : active.transports, routeros: {}});
     await context.route("**/api/v1/**", async route => {
       const request = route.request(), pathname = new URL(request.url()).pathname.slice(7), method = request.method();
       const body = request.postDataJSON();
@@ -54,17 +62,23 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
       else if (pathname === "/overview") response = overview();
       else if (pathname === "/status") {
         if (holdStatus) await new Promise(resolve => heldStatus.push(resolve));
-        response = {state: firstLaunch ? "unconfigured" : "healthy", active_revision: String(activeRevision), selector_health: {}, subscriptions: {}, acme: {}};
+        response = {state: firstLaunch ? "unconfigured" : "healthy", active_revision: String(activeRevision), last_apply: {previous_revision: "test-predecessor"}, selector_health: {}, subscriptions: {}, acme: {}};
       }
       else if (pathname === "/client-telemetry") response = {sampled_at: "test", clients: []};
       else if (pathname === "/routeros/discover") response = {routeros: {
-        live_available: true, wireguard_egress_inventory_complete: true, wireguard_egress_candidates: [],
+        live_available: true, wireguard_egress_inventory_complete: true, wireguard_egress_candidates: [{interface: "wg-exit", eligible: true}],
         client_source_inventory_complete: {lan: true, wireguard: true, "ppp-vpn": true},
         lan_source_inventory_complete: true, lan_source_cidrs: ["10.90.0.0/24"],
+        access_destination_inventory_complete: true,
+        access_destinations: ["10.90.0.0/24", "10.77.0.0/24", "10.66.0.0/24", "172.31.255.0/30"].map(cidr => ({cidr})),
         client_sources: Object.fromEntries(config.local_clients.map(client => [client.source_kind, [{name: client.name, cidrs: client.source_cidrs, source_cidrs: client.source_cidrs, peer_ref: client.source_peer_refs[0], valid: true}]])),
       }};
       else if (pathname === "/routeros/container-status") response = {container: {running: true, restart_count: 0}};
       else if (pathname === "/routeros/container/memory") response = {container: {inventory_available: true, memory_high: "224MiB", memory_max: "256MiB"}};
+      else if (pathname === "/network/tls-probe" && method === "POST") response = {endpoint_results: [
+        {address: "192.0.2.10", ok: true, tls_version: "TLSv1.3", alpn: "h2"},
+        {address: "2001:db8::10", ok: false, error_code: "tls_probe_handshake_failed", error_message: "TLS handshake failed for [2001:db8::10]:443."},
+      ]};
       else if (pathname === "/drafts/current" && method === "GET") response = envelope();
       else if (pathname === "/drafts/current" && method === "PUT") {
         if (failNextSave) {
@@ -105,12 +119,30 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
         await page.waitForURL(url => url.hash === `#/${screen}`);
       };
       await navigate(0);
+      assert.equal(await page.locator(".overview-transport-chip").count(), 0);
+      await page.setViewportSize({width: 1366, height: 768});
+      const headers = await page.locator(".overview-device-table th").evaluateAll(elements => elements.map(element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const cell = element.getBoundingClientRect();
+        return {fits: Array.from(range.getClientRects()).every(rect => rect.left >= cell.left && rect.right <= cell.right), label: element.textContent};
+      }));
+      assert.ok(headers.length > 0);
+      assert.ok(headers.every(header => header.fits), JSON.stringify(headers));
       await page.getByRole("button", {name: locale === "ru" ? "Настроить шлюз" : "Set up gateway", exact: true}).click();
       const wizard = page.locator(".setup-modal");
-      assert.equal(await wizard.locator('input[autocomplete="username"]').inputValue(), locale === "en" ? "xroute-api" : "sb-gateway-api");
-      await wizard.locator(".modal-close").click();
+      assert.equal(await wizard.locator('input[autocomplete="username"]').getAttribute("placeholder"), locale === "en" ? "xroute-api" : "sb-gateway-api");
+      await page.keyboard.press("Escape");
+      await wizard.waitFor({state: "hidden"});
       firstLaunch = false;
       await page.reload({waitUntil: "networkidle"});
+      await page.setViewportSize({width: 1440, height: 900});
+      const clientAddress = page.locator('.overview-device-identity small[title="10.100.100.101/32"]');
+      assert.equal(await clientAddress.innerText(), "10.100.100.101/32");
+      assert.ok(await clientAddress.evaluate(label => label.scrollWidth <= label.clientWidth));
+      const ingress = page.locator(".overview-transport-chip");
+      assert.equal(await ingress.count(), 1);
+      assert.ok(await ingress.evaluate(chip => chip.offsetWidth === chip.parentElement.clientWidth));
       await navigate(2);
       const ping = page.locator(".routing-behavior-settings input[type=checkbox]").filter({visible: true}).first();
       await ping.waitFor();
@@ -126,6 +158,25 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
       assert.equal(draft.system.networking.allow_wan_ping, false);
       assert.deepEqual(draft.policies, originalPolicies);
       await navigate(2);
+      await page.locator(".routing-policy-section .button-primary").first().click();
+      const routeEditor = page.locator(".policy-editor-modal");
+      const routeBody = routeEditor.locator(".policy-editor-body");
+      for (const [group, option] of [["WireGuard", "WG · wg-exit"], ["Reverse VLESS", "Test reverse"]]) {
+        const expander = routeEditor.getByRole("button", {name: new RegExp(`${group}$`)});
+        if (await expander.getAttribute("aria-expanded") === "false") await expander.click();
+        const exit = routeEditor.getByRole("checkbox", {name: new RegExp(option)});
+        await exit.check();
+        assert.equal(await exit.isChecked(), true);
+      }
+      await routeEditor.getByRole("button", {name: "RU", exact: true}).click();
+      await routeEditor.locator(".service-pack-geoip-note").evaluate(note => note.scrollIntoView({block: "end"}));
+      assert.ok(await routeBody.evaluate(body => {
+        const note = body.querySelector(".service-pack-geoip-note").getBoundingClientRect();
+        const viewport = body.getBoundingClientRect();
+        const footer = body.nextElementSibling.getBoundingClientRect();
+        return note.top >= viewport.top && note.bottom + 16 <= footer.top;
+      }));
+      await routeEditor.locator(".modal-close").click();
       assert.equal(await ping.isChecked(), false);
       const reverseName = page.locator(".reverse-vless-settings input").first();
       const longName = `Reverse ${locale} complete name`;
@@ -150,18 +201,54 @@ export async function verifyConsoleWorkflows(browser, baseURL, { screenshotDirec
         await page.locator(".user-card").first().locator(".user-card-actions button").last().click();
         const dialog = page.getByRole("dialog");
         await dialog.locator('input[name="name"]').fill(`Edited remote ${locale} ${format}`);
-        await dialog.locator('select[name="role"]').selectOption(format === "auto" ? "trusted-full" : "internet-only");
+        await dialog.locator('select[name="role"]').selectOption(format === "auto" ? "trusted-limited" : "internet-only");
+        if (format === "auto") {
+          const cidrs = dialog.locator('input[name="allowed_cidrs"]');
+          await cidrs.filter({visible: true}).first().waitFor();
+          await dialog.locator('input[name="allowed_cidrs"][value="10.77.0.0/24"]').waitFor();
+          assert.deepEqual((await cidrs.evaluateAll(items => items.map(item => item.value))).sort(), ["10.77.0.0/24", "10.88.0.0/24", "10.90.0.0/24"]);
+          assert.doesNotMatch(await dialog.locator(".lan-network-list").innerText(), /wizard-internal|management-lan/);
+          await dialog.locator('input[name="allowed_cidrs"][value="10.88.0.0/24"]').check();
+        }
         await dialog.locator('select[name="subscription_format"]').selectOption(format);
         await dialog.locator('input[name="client_tun_address"]').fill("10.99.0.9/30");
         await dialog.locator(".modal-actions .button-primary").click();
         await dialog.locator(".modal-success .button-primary").click();
         assert.equal(draft.remote_users[0].display_name, `Edited remote ${locale} ${format}`);
         assert.equal(draft.remote_users[0].subscription_format, format);
+        if (format === "auto") assert.deepEqual(draft.remote_users[0].allowed_cidrs, ["10.88.0.0/24"]);
         assert.equal(draft.remote_users[0].client_tun_address, "10.99.0.9/30");
       }
       await navigate(3);
+      const connectionOrder = await page.locator(".subscriptions-grid").evaluate(element => {
+        const inputs = document.querySelector(".transport-groups");
+        return !!inputs && !!(element.compareDocumentPosition(inputs) & Node.DOCUMENT_POSITION_FOLLOWING);
+      });
+      assert.equal(connectionOrder, true);
+      const reality = page.locator(".transport-card").filter({has: page.getByRole("heading", {name: "VLESS + XHTTP + REALITY", exact: true})});
+      await reality.getByRole("button").click();
+      const transportEditor = page.getByRole("dialog");
+      await transportEditor.locator('input[name="server_name"]').fill("target.example.test");
+      await transportEditor.locator('input[name="handshake_server"]').fill("target.example.test");
+      await transportEditor.locator(".reality-target-check button").click();
+      const failedAddress = transportEditor.locator(".reality-probe-endpoints .is-warning");
+      await failedAddress.waitFor();
+      assert.match(await failedAddress.innerText(), /2001:db8::10/);
+      assert.match(await failedAddress.innerText(), locale === "ru" ? /TLS-рукопожатие не прошло/ : /The TLS handshake failed/);
+      assert.doesNotMatch(await failedAddress.innerText(), /TLS handshake failed for/);
+      await transportEditor.locator(".modal-close").click();
       await navigate(4);
+      await page.locator(".versions-card .panel-heading button").click();
+      const rollback = page.getByRole("dialog");
+      const confirmation = rollback.locator(".checkbox-field span");
+      assert.ok(await confirmation.evaluate(label => (
+        label.querySelector("small").getBoundingClientRect().top >= label.querySelector("strong").getBoundingClientRect().bottom
+      )));
+      await page.keyboard.press("Escape");
+      await rollback.waitFor({state: "hidden"});
       await navigate(5);
+      const storage = page.locator('.settings-card:has(input[placeholder="usb1/xroute"])');
+      assert.ok(await storage.locator(".container-memory-fields").count());
       await page.locator(".panel-address-fields input[type=number]").fill("18443");
       const settingsSaved = page.waitForResponse(response => response.url().endsWith("/api/v1/drafts/current") && response.request().method() === "GET");
       await page.locator(".settings-save-actions .button-primary").click();

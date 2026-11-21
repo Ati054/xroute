@@ -7,7 +7,7 @@ import { mergeSubscriptionMetadata } from "../subscription-metadata";
 import { disableSubscriptionPublication } from "../subscription-publication";
 import { hostnameAfterTLSProfileChange, hostnameForTLSProfileInitialization, subscriptionEndpointUsesTLSHostname, subscriptionEndpointValueAfterConfigRefresh, tlsConcreteHostnames } from "../tls-hostnames";
 import { TlsTransferDialog } from "../tls-transfer";
-import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, RevisionState, SectionTitle, StatusPill, Toggle, Tone, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, cdnProviderName, configuredItemStatus, configuredItemTone, entityIdFromName, expiryText, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, resultMessage, localizedCount, subscriptionIntervalText, tlsProfileExpiry, transportKindLabel, useConnectionHostname, withDeploymentReadiness } from "./shared";
+import { CDN_PROVIDERS, CLOUDFLARE_HTTPS_PORTS, RevisionState, SectionTitle, StatusPill, Toggle, Tone, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, cdnProviderName, configuredItemStatus, configuredItemTone, entityIdFromName, expiryText, generateOriginHeaderSecret, isErrorMessage, itemName, prefixedErrorMessage, resultMessage, localizedCount, subscriptionIntervalText, tlsProfileExpiry, tlsProfileName, transportKindLabel, useConnectionHostname, withDeploymentReadiness } from "./shared";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -431,7 +431,7 @@ export function Connections({
       ["ws", "grpc", "httpupgrade", "xhttp"].includes(
         asText(transport.kind, ""),
       )
-        ? cdnDeploymentsForTransport(transport)
+        ? cdnDeploymentsForTransport(transport, locale)
             .filter(
               (deployment) =>
                 deployment.enabled !== false &&
@@ -548,11 +548,15 @@ export function Connections({
     ? configuredTransports.map((transport) => {
         const kind = asText(transport.kind, "");
         const enabled = transport.enabled !== false;
-        const cdnDeployments = ["ws", "grpc", "httpupgrade", "xhttp"].includes(kind)
-          ? cdnDeploymentsForTransport(transport).filter(
+        const usesCdn = ["ws", "grpc", "httpupgrade", "xhttp"].includes(kind);
+        const cdnDeployments = usesCdn
+          ? cdnDeploymentsForTransport(transport, locale).filter(
               (deployment) => deployment.enabled !== false,
             )
           : [];
+        const cdnDeploymentCount = usesCdn ? localizedCount(cdnDeployments.length, [
+          tr("CDN-развёртывание"), tr("CDN-развёртывания"), tr("CDN-развёртываний"),
+        ], locale) : "";
         const profile = tlsProfilesById.get(
           asText(transport.tls_profile_id, ""),
         );
@@ -568,7 +572,7 @@ export function Connections({
           ...new Set(
             cdnProfiles
               .filter((item): item is JsonObject => Boolean(item))
-              .map((item) => itemName(item)),
+              .map((item) => tlsProfileName(item, locale)),
           ),
         ];
         const tlsKind = [
@@ -595,7 +599,7 @@ export function Connections({
             ? cdnProfileNames.join(" + ")
             : tr("профиль не выбран")
           : profile
-            ? itemName(profile)
+            ? tlsProfileName(profile, locale)
             : tr("профиль не выбран");
         const port = asText(
           transport.listen_port,
@@ -623,6 +627,7 @@ export function Connections({
         const xhttpVision = transport.vless_encryption_enabled === true;
         return {
           id: asText(transport.id, kind || "transport"),
+          enabled,
           name: kindNames[kind] ?? itemName(transport),
           host: cdnDeployments.length
             ? cdnDeployments
@@ -651,22 +656,22 @@ export function Connections({
                   : kind === "xhttp-reality"
                     ? `XHTTP ${xhttpMode} + REALITY · ${xhttpUplinkMethod} uplink${xhttpVision ? tr(" · Vision с VLESS Encryption") : ""}`
                     : kind === "hysteria2"
-                      ? `QUIC/UDP · ${profile ? itemName(profile) : tr("профиль не выбран")}`
+                      ? `QUIC/UDP · ${profile ? tlsProfileName(profile, locale) : tr("профиль не выбран")}`
                       : kind === "xhttp"
-                        ? tr("{value1} · {value2} CDN-развёрт. · TLS · XHTTP {value3} · {value4}", { value1: cdnProvider, value2: cdnDeployments.length, value3: xhttpMode, value4: tlsSummary })
+                        ? tr("{value1} · {value2} · TLS · XHTTP {value3} · {value4}", { value1: cdnProvider, value2: cdnDeploymentCount, value3: xhttpMode, value4: tlsSummary })
                         : kind === "httpupgrade"
-                          ? tr("{value1} · {value2} CDN-развёрт. · TLS · HTTPUpgrade · {value3}", { value1: cdnProvider, value2: cdnDeployments.length, value3: tlsSummary })
+                          ? tr("{value1} · {value2} · TLS · HTTPUpgrade · {value3}", { value1: cdnProvider, value2: cdnDeploymentCount, value3: tlsSummary })
                           : kind === "grpc"
-                            ? tr("{value1} · {value2} CDN-развёрт. · TLS · HTTP/2 · {value3}", { value1: cdnProvider, value2: cdnDeployments.length, value3: tlsSummary })
+                            ? tr("{value1} · {value2} · TLS · HTTP/2 · {value3}", { value1: cdnProvider, value2: cdnDeploymentCount, value3: tlsSummary })
                             : kind === "ws"
-                              ? tr("{value1} · {value2} CDN-развёрт. · TLS · {value3}", { value1: cdnProvider, value2: cdnDeployments.length, value3: tlsSummary })
+                              ? tr("{value1} · {value2} · TLS · {value3}", { value1: cdnProvider, value2: cdnDeploymentCount, value3: tlsSummary })
                               : tr("Прямое подключение"),
-          group: ["ws", "grpc", "httpupgrade", "xhttp"].includes(kind)
+          group: usesCdn
             ? "cdn"
             : ["reality", "reality-grpc", "xhttp-reality"].includes(kind)
               ? "reality"
               : "direct-tls",
-          tlsProfile: cdnDeployments.length ? tlsSummary : profile ? itemName(profile) : "",
+          tlsProfile: cdnDeployments.length ? tlsSummary : profile ? tlsProfileName(profile, locale) : "",
           tlsExpiry:
             cdnProfiles.length === 1 && cdnProfiles[0]
               ? tlsProfileExpiry(cdnProfiles[0], locale)
@@ -711,7 +716,7 @@ export function Connections({
       if (transport.enabled === false) return [];
       const kind = asText(transport.kind, "");
       if (["ws", "grpc", "httpupgrade", "xhttp"].includes(kind)) {
-        return cdnDeploymentsForTransport(transport)
+        return cdnDeploymentsForTransport(transport, locale)
           .filter((deployment) =>
             deployment.enabled !== false &&
             asText(
@@ -740,9 +745,10 @@ export function Connections({
     );
     return {
       id,
-      name: itemName(profile),
+      name: tlsProfileName(profile, locale),
       ready,
       expiry: tlsProfileExpiry(profile, locale),
+      expiryKnown: Boolean(asText(metadata.not_after, "")),
       renewalFailed: asObject(certificateStatus[id]).enabled === true && asObject(certificateStatus[id]).state === "failed" && asText(profile.certificate_secret_ref, "").endsWith("/acme-bundle.pem"),
       dnsNames: asStringList(metadata.dns_names),
       usedByLabels,
@@ -1015,7 +1021,7 @@ export function Connections({
           target.serverName,
         );
         results.push(
-          tr("{value1}: {value2} · {value3} · сертификат: {value4}", { value1: target.label, value2: asStringList(probe.addresses).join(", "), value3: asText(probe.tls_version, "TLS"), value4: expiryText(probe.certificate_expires_at) }),
+          tr("{value1}: {value2} · {value3} · сертификат: {value4}", { value1: target.label, value2: asStringList(probe.addresses).join(", "), value3: asText(probe.tls_version, "TLS"), value4: expiryText(probe.certificate_expires_at, locale) }),
         );
       }
       setSubscriptionProbeResult(tr("{value1} Настройки аккаунта CDN проверяются отдельно через API провайдера.", { value1: results.join(" | ") }));
@@ -1173,150 +1179,6 @@ export function Connections({
         title={tr("Подключения")}
       />
 
-      <div className="transport-groups">
-        {!configuredTransports.length ? (
-          <aside className="notice notice-neutral">
-            <span className="notice-icon">i</span>
-            <div>
-              <strong>{tr("Транспорты ещё не сохранены")}</strong>
-              <p>{tr("Запустите мастер первого запуска, чтобы создать фактический набор серверных протоколов.")}</p>
-            </div>
-          </aside>
-        ) : null}
-        {transportGroups.map((group) => {
-          const rows = transportRows.filter(
-            (transport) => transport.group === group.id,
-          );
-          if (!rows.length && group.id !== "cdn") return null;
-          return (
-            <section className="transport-group" key={group.id}>
-              <div className="transport-group-heading">
-                <h3>{group.title}</h3>
-              </div>
-              {group.id === "cdn" ? (
-                <article className="card transport-card settings-launch-card">
-                  <div className="transport-summary">
-                    <div className="transport-title">
-                      <h3>{tr("HTTPS-ссылка клиентской подписки")}</h3>
-                      <code>{subscriptionEndpointSummaryHost}</code>
-                    </div>
-                    <div className="transport-detail">
-                      <span
-                        className={`signal-dot signal-${configuredSubscriptionHostname ? "ok" : "warn"}`}
-                        aria-hidden="true"
-                      />
-                      <span>
-                        {configuredSubscriptionEndpointMode === "reuse-cdn"
-                          ? tr("Домен существующего CDN-развёртывания")
-                          : configuredSubscriptionEndpointMode === "direct"
-                            ? tr("Прямая HTTPS-ссылка")
-                            : configuredSubscriptionEndpointMode === "direct-and-cdn"
-                              ? tr("Два адреса · CDN и прямой HTTPS")
-                              : tr("Отдельный CDN-домен · {value1}", { value1: cdnProviderName(configuredSubscriptionCdnProvider) })}
-                        {` · ${configuredSubscriptionDisplayName}`}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="transport-actions">
-                    <StatusPill tone={!subscriptionEndpointSummaryHost.includes(tr("не ")) && !subscriptionEndpointSummaryHost.includes(tr("не выбран")) ? "ok" : "warn"}>
-                      {!subscriptionEndpointSummaryHost.includes(tr("не ")) && !subscriptionEndpointSummaryHost.includes(tr("не выбран")) ? tr("Настроено") : tr("Не настроено")}
-                    </StatusPill>
-                    <button
-                      className="button button-tertiary"
-                      type="button"
-                      onClick={openSubscriptionEndpointDialog}
-                    >
-                       {tr("Настроить")} </button>
-                  </div>
-                </article>
-              ) : null}
-              <div className="transport-grid">
-                {rows.map((transport) => (
-                  <article
-                    className="card transport-card"
-                    key={transport.id}
-                  >
-                    <div className="transport-summary">
-                      <div className="transport-title">
-                        <h3>{transport.name}</h3>
-                        <code>{transport.host}</code>
-                      </div>
-                      <div className="transport-detail">
-                        <span
-                          className={`signal-dot signal-${transport.tone}`}
-                          aria-hidden="true"
-                        />
-                        <span>{transport.detail}</span>
-                      </div>
-                    </div>
-                    <div className="transport-actions">
-                      <StatusPill tone={transport.tone}>
-                        {transport.status}
-                      </StatusPill>
-                      <button
-                        className="button button-tertiary"
-                        onClick={() => onConfigureTransport(transport.id)}
-                      >
-                        {transport.status === "Выключен"
-                          ? tr("Подготовить")
-                          : tr("Настроить")}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-
-      <section className="tls-profile-panel">
-        <div className="entity-section-heading">
-          <div>
-            <h3>{tr("TLS-профили")}</h3>
-          </div>
-          <div className="panel-heading-actions">
-            <button className="button button-secondary button-compact" type="button" onClick={() => setTlsTransfer("import")}>
-               {tr("Импорт")} </button>
-            <button className="button button-secondary button-compact" type="button" onClick={onAddTlsProfile}>
-               {tr("+ Добавить TLS-профиль")} </button>
-          </div>
-        </div>
-        <div className="transport-grid">
-          {tlsProfileRows.map((profile) => (
-            <article className="card transport-card settings-launch-card" key={profile.id}>
-              <div className="transport-summary">
-                <div className="transport-title">
-                  <h3>{profile.name}</h3>
-                  <code>{profile.dnsNames.length ? profile.dnsNames.join(", ") : tr("Домены не определены")}</code>
-                </div>
-                <div className="transport-detail">
-                  <span className={`signal-dot signal-${profile.ready ? "ok" : "warn"}`} aria-hidden="true" />
-                  <span>
-                    {profile.usedByLabels.length
-                      ? tr("Используется: {value1}", { value1: localizedCount(profile.usedByLabels.length, [tr("подключение"), tr("подключения"), tr("подключений")], locale) })
-                      : tr("Не используется")}
-                  </span>
-                </div>
-              </div>
-              <div className="transport-actions">
-                <StatusPill tone={profile.renewalFailed ? "danger" : profile.ready ? "ok" : "warn"}>
-                  {profile.renewalFailed ? tr("Ошибка продления") : profile.ready
-                    ? profile.expiry === "срок не определён"
-                      ? tr("Срок не определён")
-                      : tr("До {value1}", { value1: profile.expiry })
-                    : tr("Нужна TLS-пара")}
-                </StatusPill>
-                <button className="button button-tertiary" type="button" onClick={() => onEditTlsProfile(profile.id)}>
-                   {tr("Настроить")} </button>
-              </div>
-            </article>
-          ))}
-          {!tlsProfileRows.length ? <div className="empty-result">{tr("TLS-профилей пока нет.")}</div> : null}
-        </div>
-      </section>
-
-      {tlsTransfer ? <TlsTransferDialog profile={tlsTransfer === "import" ? undefined : tlsTransfer} onClose={() => setTlsTransfer(null)} onImported={onDraftChanged} /> : null}
       <section className="subscriptions-grid">
         <article className="card panel-card">
           <div className="panel-heading">
@@ -1555,6 +1417,152 @@ export function Connections({
         </article>
       </section>
 
+      <div className="transport-groups">
+        {!configuredTransports.length ? (
+          <aside className="notice notice-neutral">
+            <span className="notice-icon">i</span>
+            <div>
+              <strong>{tr("Транспорты ещё не сохранены")}</strong>
+              <p>{tr("Запустите мастер первого запуска, чтобы создать фактический набор серверных протоколов.")}</p>
+            </div>
+          </aside>
+        ) : null}
+        {transportGroups.map((group) => {
+          const rows = transportRows.filter(
+            (transport) => transport.group === group.id,
+          );
+          if (!rows.length && group.id !== "cdn") return null;
+          return (
+            <section className="transport-group" key={group.id}>
+              <div className="transport-group-heading">
+                <h3>{group.title}</h3>
+              </div>
+              {group.id === "cdn" ? (
+                <article className="card transport-card settings-launch-card">
+                  <div className="transport-summary">
+                    <div className="transport-title">
+                      <h3>{tr("HTTPS-ссылка клиентской подписки")}</h3>
+                      <code>{subscriptionEndpointSummaryHost}</code>
+                    </div>
+                    <div className="transport-detail">
+                      <span
+                        className={`signal-dot signal-${configuredSubscriptionHostname ? "ok" : "warn"}`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {configuredSubscriptionEndpointMode === "reuse-cdn"
+                          ? tr("Домен существующего CDN-развёртывания")
+                          : configuredSubscriptionEndpointMode === "direct"
+                            ? tr("Прямая HTTPS-ссылка")
+                            : configuredSubscriptionEndpointMode === "direct-and-cdn"
+                              ? tr("Два адреса · CDN и прямой HTTPS")
+                              : tr("Отдельный CDN-домен · {value1}", { value1: cdnProviderName(configuredSubscriptionCdnProvider) })}
+                        {` · ${configuredSubscriptionDisplayName}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="transport-actions">
+                    <StatusPill tone={!subscriptionEndpointSummaryHost.includes(tr("не ")) && !subscriptionEndpointSummaryHost.includes(tr("не выбран")) ? "ok" : "warn"}>
+                      {!subscriptionEndpointSummaryHost.includes(tr("не ")) && !subscriptionEndpointSummaryHost.includes(tr("не выбран")) ? tr("Настроено") : tr("Не настроено")}
+                    </StatusPill>
+                    <button
+                      className="button button-tertiary"
+                      type="button"
+                      onClick={openSubscriptionEndpointDialog}
+                    >
+                       {tr("Настроить")} </button>
+                  </div>
+                </article>
+              ) : null}
+              <div className="transport-grid">
+                {rows.map((transport) => (
+                  <article
+                    className="card transport-card"
+                    key={transport.id}
+                  >
+                    <div className="transport-summary">
+                      <div className="transport-title">
+                        <h3>{transport.name}</h3>
+                        <code>{transport.host}</code>
+                      </div>
+                      <div className="transport-detail">
+                        <span
+                          className={`signal-dot signal-${transport.tone}`}
+                          aria-hidden="true"
+                        />
+                        <span>{transport.detail}</span>
+                      </div>
+                    </div>
+                    <div className="transport-actions">
+                      <StatusPill tone={transport.tone}>
+                        {transport.status}
+                      </StatusPill>
+                      <button
+                        className="button button-tertiary"
+                        onClick={() => onConfigureTransport(transport.id)}
+                      >
+                        {!transport.enabled
+                          ? tr("Подготовить")
+                          : tr("Настроить")}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      <section className="tls-profile-panel">
+        <div className="entity-section-heading">
+          <div>
+            <h3>{tr("TLS-профили")}</h3>
+          </div>
+          <div className="panel-heading-actions">
+            <button className="button button-secondary button-compact" type="button" onClick={() => setTlsTransfer("import")}>
+               {tr("Импорт")} </button>
+            <button className="button button-secondary button-compact" type="button" onClick={onAddTlsProfile}>
+               {tr("+ Добавить TLS-профиль")} </button>
+          </div>
+        </div>
+        <div className="transport-grid">
+          {tlsProfileRows.map((profile) => (
+            <article className="card transport-card settings-launch-card" key={profile.id}>
+              <div className="transport-summary">
+                <div className="transport-title">
+                  <h3>{profile.name}</h3>
+                  <code>{profile.dnsNames.length ? profile.dnsNames.join(", ") : tr("Домены не определены")}</code>
+                </div>
+                <div className="transport-detail">
+                  <span className={`signal-dot signal-${profile.ready ? "ok" : "warn"}`} aria-hidden="true" />
+                  <span>
+                    {profile.usedByLabels.length
+                      ? tr("Используется: {value1}", { value1: localizedCount(profile.usedByLabels.length, [tr("подключение"), tr("подключения"), tr("подключений")], locale) })
+                      : tr("Не используется")}
+                  </span>
+                </div>
+              </div>
+              <div className="transport-actions">
+                <StatusPill tone={profile.renewalFailed ? "danger" : profile.ready ? "ok" : "warn"}>
+                  {profile.renewalFailed ? tr("Ошибка продления") : profile.ready
+                    ? !profile.expiryKnown
+                      ? tr("Срок не определён")
+                      : tr("До {value1}", { value1: profile.expiry })
+                    : tr("Нужна TLS-пара")}
+                </StatusPill>
+                <button className="button button-tertiary" type="button" onClick={() => onEditTlsProfile(profile.id)}>
+                   {tr("Настроить")} </button>
+              </div>
+            </article>
+          ))}
+          {!tlsProfileRows.length ? <div className="empty-result">{tr("TLS-профилей пока нет.")}</div> : null}
+        </div>
+      </section>
+
+      {tlsTransfer ? <TlsTransferDialog profile={tlsTransfer === "import" ? undefined : tlsTransfer} onClose={() => setTlsTransfer(null)} onImported={onDraftChanged} /> : null}
+
+
       {subscriptionEndpointDialogOpen
         ? createPortal(
             <div className="modal-backdrop subscription-endpoint-backdrop" role="presentation" onMouseDown={() => setSubscriptionEndpointDialogOpen(false)}>
@@ -1676,7 +1684,7 @@ export function Connections({
                       </label>
                       <label className="field">
                          {tr("TLS-профиль origin")} <select value={subscriptionTlsProfileId} onChange={(event) => selectSubscriptionTlsProfile(event.target.value)}>
-                          {configuredTlsProfiles.map((profile) => <option value={asText(profile.id, "")} key={asText(profile.id, "")}>{itemName(profile)}</option>)}
+                          {configuredTlsProfiles.map((profile) => <option value={asText(profile.id, "")} key={asText(profile.id, "")}>{tlsProfileName(profile, locale)}</option>)}
                         </select>
                       </label>
                       <label className="field">
@@ -1698,7 +1706,7 @@ export function Connections({
                       </label>
                       <label className="field">
                          {tr("TLS-профиль")} <select value={subscriptionTlsProfileId} onChange={(event) => selectSubscriptionTlsProfile(event.target.value)}>
-                          {configuredTlsProfiles.map((profile) => <option value={asText(profile.id, "")} key={asText(profile.id, "")}>{itemName(profile)}</option>)}
+                          {configuredTlsProfiles.map((profile) => <option value={asText(profile.id, "")} key={asText(profile.id, "")}>{tlsProfileName(profile, locale)}</option>)}
                         </select>
                       </label>
                     </div>
@@ -1717,7 +1725,7 @@ export function Connections({
                             {supportsAutomaticCidr(subscriptionCdnProvider) ? <option value="auto-cidr">{tr("Официальные CIDR · автоматически")}</option> : null}
                             <option value="secret-header">{tr("Секретный HTTP-заголовок")}</option>
                           </select>
-                          {subscriptionOriginProtectionMode === "auto-cidr" ? <small>{automaticCidrHint(subscriptionCdnProvider)}</small> : null}
+                          {subscriptionOriginProtectionMode === "auto-cidr" ? <small>{tr(automaticCidrHint(subscriptionCdnProvider))}</small> : null}
                         </label>
                       ) : null}
                       {subscriptionHasEditablePublicCdnPort ? (

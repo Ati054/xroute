@@ -99,7 +99,7 @@ export function Overview({
         active: false,
         policy_name: policy
           ? itemName(policy)
-          : asText(client.policy_id, tr("Маршрут не назначен")),
+          : asText(client.policy_id, tr("Не назначен")),
       };
     }),
     ...asObjectList(config.remote_users).map((client): JsonObject => {
@@ -111,7 +111,7 @@ export function Overview({
         active: false,
         policy_name: policy
           ? itemName(policy)
-          : asText(client.policy_id, tr("Маршрут не назначен")),
+          : asText(client.policy_id, tr("Не назначен")),
       };
     }),
   ];
@@ -155,7 +155,7 @@ export function Overview({
         ...mergedClient,
         policy_name: policy
           ? itemName(policy)
-          : asText(mergedClient.policy_name, asText(mergedClient.policy_id, tr("Маршрут не назначен"))),
+          : asText(mergedClient.policy_name, asText(mergedClient.policy_id, tr("Не назначен"))),
         outbound_name: asText(
           asObject(policyHealth.candidate_labels)[selectedOutbound],
           selectedOutbound === "block"
@@ -164,7 +164,7 @@ export function Overview({
         ),
       };
     });
-  const overviewTransports = asObjectList(config.transports).map((transport) => {
+  const overviewTransports = asObjectList(overview?.applied_transports).map((transport) => {
     const kind = asText(transport.kind, "");
     return {
       id: asText(transport.id, kind || "transport"),
@@ -174,8 +174,8 @@ export function Overview({
       enabled: transport.enabled !== false,
     };
   });
-  const enabledTransports = overviewTransports.filter((transport) => transport.enabled);
-  const disabledTransportCount = overviewTransports.length - enabledTransports.length;
+  const enabledTransports = overviewTransports.filter((transport) => transport.enabled && healthy && !runtimeError);
+  const disabledTransportCount = overviewTransports.filter((transport) => !transport.enabled).length;
   const ingressHosts = Array.from(
     new Set(enabledTransports.map((transport) => transport.hostname).filter(Boolean)),
   );
@@ -287,11 +287,13 @@ export function Overview({
               </span>
             ))}
             {!enabledTransports.length ? (
-              <span className="overview-ingress-empty">{tr("Публичные входы выключены")}</span>
+              <span className="overview-ingress-empty">{overviewTransports.some((transport) => transport.enabled)
+                ? tr("Получаем состояние шлюза") : tr("Публичные входы выключены")}</span>
             ) : null}
           </div>
           <div className="overview-ingress-footer">
-            <span>{disabledTransportCount ? tr("+ {value1} входа выключено", { value1: disabledTransportCount }) : tr("Все входы активны")}</span>
+            <span>{disabledTransportCount ? tr("Выключенные входы: {value1}", { value1: disabledTransportCount })
+              : enabledTransports.length ? tr("Все входы активны") : tr("Не настроено")}</span>
             <button className="text-button" onClick={() => onNavigate("connections")}>
                {tr("Настроить входы →")} </button>
           </div>
@@ -352,7 +354,7 @@ export function Overview({
                         />
                         <div>
                           <strong>{itemName(client)}</strong>
-                          <small>{clientAddress}</small>
+                          <small title={clientAddress}>{clientAddress}</small>
                         </div>
                       </div>
                     </td>
@@ -364,7 +366,7 @@ export function Overview({
                     <td data-label={tr("Маршрутный лист")}>
                       <span className="overview-policy-chip">
                         <i aria-hidden="true" />
-                        {policyName}
+                        <span title={policyName}>{policyName}</span>
                       </span>
                     </td>
                     <td data-label={tr("Выходной узел")}>

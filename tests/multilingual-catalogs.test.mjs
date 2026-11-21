@@ -19,6 +19,31 @@ const catalog = loadSource("i18n-text.ts");
 const { SUPPORTED_LOCALES, LOCALE_DETAILS, isLocale } = loadSource("locales.ts");
 const placeholders = value => [...value.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map(match => match[1]).sort();
 
+test("draft section summaries use complete translated messages", () => {
+  const source = readFileSync(new URL("../app/console/shared.tsx", import.meta.url), "utf8");
+  const tree = ts.createSourceFile("shared.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const fn = tree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "pendingChangeText");
+  assert.ok(fn);
+  const code = ts.transpileModule(fn.getText(tree), {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}}).outputText;
+  const exports = {};
+  vm.runInNewContext(code, {exports, localizedText: catalog.localizedText, formatLocalizedText: catalog.formatLocalizedText,
+    asText: (value, fallback = "") => typeof value === "string" ? value : fallback});
+  for (const [section, expected] of [
+    ["public_exposure", "Изменён публичный доступ"],
+    ["routeros", "Изменена интеграция с RouterOS"],
+    ["routing", "Изменена маршрутизация"],
+    ["dns", "Изменены настройки DNS"],
+    ["security", "Изменены настройки безопасности"],
+    ["service_packs", "Изменены наборы сервисов"],
+  ]) {
+    for (const locale of SUPPORTED_LOCALES) {
+      assert.equal(exports.pendingChangeText({collection: section, op: "replace"}, locale), catalog.localizedText(expected, locale));
+    }
+  }
+  assert.equal(exports.pendingChangeText({collection: "networks", op: "add", entity_id: "office"}), "Добавлена подсеть «office»");
+  assert.equal(exports.pendingChangeText({collection: "networks", op: "remove", display_name: "Guest"}, "en"), "Removed subnet “Guest”");
+});
+
 test("dynamic card and editor metadata is present in every language catalog", () => {
   const fields = new Set(["label", "title", "name", "note", "description", "help", "hint", "category"]);
   const source = readFileSync(new URL("../app/console/shared.tsx", import.meta.url), "utf8");

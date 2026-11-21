@@ -4,7 +4,7 @@ import { AcmeFields, useAcmeProfile } from "../acme-fields";
 import { JsonObject, createCollectionItem, deleteCollectionItem, updateCollectionItem } from "../api-client";
 import { useLanguage } from "../i18n";
 import { TlsTransferDialog } from "../tls-transfer";
-import { Toggle, asObject, asObjectList, asText, cdnDeploymentsForTransport, entityIdFromName, errorMessage, itemName, tlsProfileExpiry, transportKindLabel } from "./shared";
+import { Toggle, asObject, asObjectList, asText, cdnDeploymentsForTransport, entityIdFromName, errorMessage, tlsProfileExpiry, tlsProfileName, transportKindLabel } from "./shared";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 export function TlsProfileDialog({
@@ -41,10 +41,13 @@ export function TlsProfileDialog({
     void onSaved().catch(() => { refreshedCertificate.current = ""; });
   }, [acme.status.state, issuedFingerprint, onSaved]);
   const editing = Boolean(profileId);
+  const profileName = tlsProfileName(existing, locale);
+  const storedName = asText(existing.display_name, "");
+  const [initialName] = useState(storedName ? profileName : "");
   const usedByLabels = asObjectList(config.transports).flatMap((transport) => {
     const kind = asText(transport.kind, "");
     if (["ws", "grpc", "httpupgrade", "xhttp"].includes(kind)) {
-      return cdnDeploymentsForTransport(transport)
+      return cdnDeploymentsForTransport(transport, locale)
         .filter((deployment) =>
           asText(
             deployment.tls_profile_id,
@@ -108,7 +111,7 @@ export function TlsProfileDialog({
       const item: JsonObject = {
         ...existing,
         id,
-        display_name: displayName,
+        display_name: storedName && displayName === initialName ? storedName : displayName,
         enabled: data.get("enabled") === "on",
         certificate_source: acme.mode,
         ...(acme.mode === "local-ca"
@@ -154,10 +157,10 @@ export function TlsProfileDialog({
         ) : (
           <form onSubmit={submit}>
             <p className="eyebrow">{tr("Сертификат подключений")}</p>
-            <h2 id="tls-profile-title">{editing ? tr("Настроить · {value1}", { value1: itemName(existing) }) : tr("Добавить TLS-профиль")}</h2>
+            <h2 id="tls-profile-title">{editing ? tr("Настроить · {value1}", { value1: profileName }) : tr("Добавить TLS-профиль")}</h2>
             <div className="form-grid">
               <label className="field">
-                 {tr("Имя профиля")} <input dir="auto" name="display_name" defaultValue={asText(existing.display_name, "")} placeholder={tr("Основной")} maxLength={96} required />
+                 {tr("Имя профиля")} <input dir="auto" name="display_name" defaultValue={initialName} placeholder={tr("Основной")} maxLength={96} required />
               </label>
               <label className="field">{tr("Сертификат")} <select value={acme.mode} disabled={!acme.loaded} onChange={(event) => acme.setMode(event.target.value)}>
                   <option value="manual">{tr("Загрузить файлы")}</option>
@@ -204,7 +207,7 @@ export function TlsProfileDialog({
                 </div>
               </aside>
               </>}
-              {acme.loadError ? <div className="inline-result inline-result-error form-span" role="alert">{acme.loadError}<button className="button button-tertiary" type="button" onClick={acme.retry}>{tr("Повторить")}</button></div> : null}
+              {acme.loadError ? <div className="inline-result inline-result-error form-span" role="alert">{tr(acme.loadError)}<button className="button button-tertiary" type="button" onClick={acme.retry}>{tr("Повторить")}</button></div> : null}
               {acme.mode === "acme" ? <p className="field-hint form-span">{tr("Первое подключение сертификата — после Apply. Последующие продления выполняются автоматически.")}</p> : null}
               {editing ? (
                 <div className="tls-profile-usage-strip form-span">
@@ -265,7 +268,7 @@ export function TlsProfileDialog({
           </form>
         )}
       </section>
-      {exportOpen && workingId ? <TlsTransferDialog profile={{ id: workingId, name: itemName(existing) }} onClose={() => setExportOpen(false)} onImported={onSaved} /> : null}
+      {exportOpen && workingId ? <TlsTransferDialog profile={{ id: workingId, name: profileName }} onClose={() => setExportOpen(false)} onImported={onSaved} /> : null}
     </div>
   );
 }

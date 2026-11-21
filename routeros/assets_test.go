@@ -2,11 +2,48 @@ package routerosassets
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/Ati054/xroute/internal/managedidentity"
 )
+
+func TestManagedBackupCleanupMatchesOwnedFilesAndPreservesNearMatches(t *testing.T) {
+	cleanup := ManagedBackupCleanupSource()
+	patterns := regexp.MustCompile(`name~"([^"]+)"`).FindAllStringSubmatch(cleanup, -1)
+	if len(patterns) != 2 || !strings.HasPrefix(cleanup, `:foreach backupFile in=[/file/find where `) || !strings.HasSuffix(cleanup, ` do={ /file/remove $backupFile }`) {
+		t.Fatal("backup cleanup must enumerate exact matches before removal")
+	}
+	match := func(name string) bool {
+		for _, pattern := range patterns {
+			if regexp.MustCompile(strings.ReplaceAll(pattern[1], `\$`, `$`)).MatchString(name) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, name := range []string{
+		"xroute-before-install.backup", "sb-gateway-pre-install.rsc",
+		managedidentity.Literal("XROUTE-20260101T120000Z-012345abcdef.backup"),
+		managedidentity.Literal("XROUTE-20260101T120000Z-012345abcdef-export.rsc"),
+	} {
+		if !match(name) {
+			t.Fatalf("managed backup not selected: %s", name)
+		}
+	}
+	for _, name := range []string{
+		"other-before-install.backup", "docs/xroute-before-install.backup",
+		managedidentity.Literal("XROUTE-20260101T120000Z-012345abcdef-notes.txt"),
+		managedidentity.Literal("XROUTE-20260101T120000Z-012345abcde.backup"),
+		managedidentity.Literal("XROUTE-20260101T120000Z-012345abcdef.backup.keep"),
+		managedidentity.Literal("other/XROUTE-20260101T120000Z-012345abcdef.backup"),
+	} {
+		if match(name) {
+			t.Fatalf("unowned file selected: %s", name)
+		}
+	}
+}
 
 func TestManagedConntrackCleanupHandlesEmptyAndExpiredRecords(t *testing.T) {
 	cleanup := ManagedConnectionCleanupSource()

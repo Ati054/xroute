@@ -337,7 +337,7 @@
 /ip/firewall/mangle/set $endpointBypass chain="xroute-divert" action=return dst-address-list="SB_BYPASS_ENDPOINTS" disabled=no
 /ip/firewall/mangle/set $markConnection chain="xroute-divert" action=mark-connection connection-state=new connection-mark=no-mark new-connection-mark="xroute-managed" passthrough=yes disabled=no
 /ip/firewall/mangle/set $markRouting chain="xroute-divert" action=mark-routing connection-mark="xroute-managed" new-routing-mark=$"SB_ROUTING_TABLE" passthrough=no disabled=no
-:local firstMangleRules [/ip/firewall/mangle/find]
+:local firstMangleRules [/ip/firewall/mangle/find where dynamic=no]
 :if (([:len $firstMangleRules] > 0) && ([:pick $firstMangleRules 0 1] != $diversionGate)) do={ /ip/firewall/mangle/move $diversionGate destination=[:pick $firstMangleRules 0 1] }
 /ip/firewall/mangle/move $markConnection destination=$markRouting
 /ip/firewall/mangle/move $endpointBypass destination=$markConnection
@@ -358,7 +358,7 @@
   :if ([:len $dnsNat] != 1) do={ :error "XROUTE managed DNS NAT missing or ambiguous" }
   /ip/firewall/nat/unset $dnsNat dst-address-type
   /ip/firewall/nat/set $dnsNat chain=dstnat action=dst-nat src-address-list="SB_MANAGED_CLIENTS" in-interface-list=!WAN connection-mark="xroute-managed" protocol=$dnsProtocol dst-port=53 to-addresses=$"SB_CONTAINER_IP" to-ports=1053 disabled=no
-  :local firstDNSNat [/ip/firewall/nat/find]
+  :local firstDNSNat [/ip/firewall/nat/find where dynamic=no]
   :if (([:len $firstDNSNat] > 0) && ([:pick $firstDNSNat 0 1] != $dnsNat)) do={ /ip/firewall/nat/move $dnsNat destination=[:pick $firstDNSNat 0 1] }
 }
 :foreach bypassKind in={"local";"internal"} do={
@@ -391,13 +391,13 @@
 /ip/firewall/nat/set $containerMasquerade chain=srcnat action=masquerade src-address=$"SB_CONTAINER_NETWORK" out-interface-list=WAN disabled=no
 /ip/firewall/nat/set $containerLanMasquerade chain=srcnat action=masquerade src-address=$"SB_CONTAINER_NETWORK" dst-address-list="SB_CONTAINER_ALLOWED_INTERNAL" disabled=no
 /ip/firewall/nat/set $wireguardPanelDstnat chain=dstnat action=dst-nat in-interface-list="SB_WIREGUARD_INGRESS" dst-address-type=local protocol=tcp dst-port=9443 to-addresses=$"SB_CONTAINER_IP" to-ports=9443 disabled=no
-:local firstNatRules [/ip/firewall/nat/find]
+:local firstNatRules [/ip/firewall/nat/find where dynamic=no]
 :if (([:len $firstNatRules] > 0) && ([:pick $firstNatRules 0 1] != $wireguardPanelDstnat)) do={ /ip/firewall/nat/move $wireguardPanelDstnat destination=[:pick $firstNatRules 0 1] }
 
 # A single scoped jump is placed before existing user rules. Its custom chain
 # returns unmatched packets, preserving the user's firewall and VPN policy.
 :if ([:len [/ip/firewall/filter/find where comment="XROUTE forward policy jump"]] = 0) do={
-  :local firstForward [/ip/firewall/filter/find where chain=forward]
+  :local firstForward [/ip/firewall/filter/find where chain=forward and dynamic=no]
   :if ([:len $firstForward] > 0) do={
     /ip/firewall/filter/add chain=forward action=jump jump-target="xroute-forward" place-before=[:pick $firstForward 0 1] comment="XROUTE forward policy jump"
   } else={
@@ -444,7 +444,7 @@
 /ip/firewall/filter/set $containerWanAllow chain="xroute-forward" action=accept in-interface=$"SB_BRIDGE" out-interface-list=WAN disabled=no
 /ip/firewall/filter/set $failClosedDrop chain="xroute-forward" action=drop src-address-list="SB_FAIL_CLOSED_CLIENTS" dst-address-list="!SB_INTERNAL_NETWORKS" disabled=no
 /ip/firewall/filter/set $forwardReturn chain="xroute-forward" action=return disabled=no
-:local firstFilterRules [/ip/firewall/filter/find]
+:local firstFilterRules [/ip/firewall/filter/find where dynamic=no]
 :if (([:len $firstFilterRules] > 0) && ([:pick $firstFilterRules 0 1] != $forwardJump)) do={ /ip/firewall/filter/move $forwardJump destination=[:pick $firstFilterRules 0 1] }
 /ip/firewall/filter/move $containerWanAllow destination=$forwardReturn
 /ip/firewall/filter/move $failClosedDrop destination=$forwardReturn
@@ -459,7 +459,7 @@
 /ip/firewall/filter/move $wireguardPanelAllow destination=$managementAllow
 
 :if ([:len [/ip/firewall/filter/find where comment="XROUTE input policy jump"]] = 0) do={
-  :local firstInput [/ip/firewall/filter/find where chain=input]
+  :local firstInput [/ip/firewall/filter/find where chain=input and dynamic=no]
   :if ([:len $firstInput] > 0) do={
     /ip/firewall/filter/add chain=input action=jump jump-target="xroute-input" place-before=[:pick $firstInput 0 1] comment="XROUTE input policy jump"
   } else={
@@ -498,7 +498,7 @@
 /ip/firewall/filter/set $containerEstablishedInput chain="xroute-input" action=accept in-interface=$"SB_BRIDGE" src-address=$"SB_CONTAINER_IP" connection-state=established,related disabled=no
 /ip/firewall/filter/set $routerManagementDeny chain="xroute-input" action=drop src-address=$"SB_CONTAINER_IP" disabled=no
 /ip/firewall/filter/set $inputReturn chain="xroute-input" action=return disabled=no
-:set firstFilterRules [/ip/firewall/filter/find]
+:set firstFilterRules [/ip/firewall/filter/find where dynamic=no]
 :if (([:len $firstFilterRules] > 0) && ([:pick $firstFilterRules 0 1] != $inputJump)) do={ /ip/firewall/filter/move $inputJump destination=[:pick $firstFilterRules 0 1] }
 /ip/firewall/filter/move $routerManagementDeny destination=$inputReturn
 /ip/firewall/filter/move $containerEstablishedInput destination=$routerManagementDeny
@@ -527,7 +527,7 @@
   :local managedIpv6Block [/ipv6/firewall/filter/find where comment="XROUTE managed IPv6 WAN block"]
   :if ([:len $managedIpv6Block] != 1) do={ :error "XROUTE: managed IPv6 WAN block is missing or ambiguous" }
   /ipv6/firewall/filter/set $managedIpv6Block chain=forward action=drop src-address-list="SB_MANAGED_CLIENTS_V6" dst-address-list="!SB_INTERNAL_NETWORKS_V6" out-interface-list=WAN disabled=no
-  :local firstIpv6FilterRules [/ipv6/firewall/filter/find]
+  :local firstIpv6FilterRules [/ipv6/firewall/filter/find where dynamic=no]
   :if (([:len $firstIpv6FilterRules] > 0) && ([:pick $firstIpv6FilterRules 0 1] != $managedIpv6Block)) do={ /ipv6/firewall/filter/move $managedIpv6Block destination=[:pick $firstIpv6FilterRules 0 1] }
 }
 

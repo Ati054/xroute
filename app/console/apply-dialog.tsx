@@ -329,7 +329,7 @@ export function ApplyDialog({
                   <span className="notice-icon">↺</span>
                   <div>
                     <strong>{tr("RouterOS изменяется — включена полная защита")}</strong>
-                    <p>{tr("Будут созданы export и зашифрованный backup. Планировщик вернёт прежнюю проверенную конфигурацию, а при первом применении оставит маршрутизацию напрямую через WAN.")}</p>
+                    <p>{tr("Создаются текстовый экспорт и зашифрованная резервная копия. При сбое RouterOS восстановит прежние правила.")}</p>
                   </div>
                 </aside>
               ) : null
@@ -442,7 +442,7 @@ export function ApplyDialog({
                           ? tr("Панель проверит TUN, DNS и маршруты. При ошибке восстановит рабочие настройки.")
                         : isUnchanged
                           ? tr("Панель только повторно проверит текущее состояние.")
-                          : tr("Изменения RouterOS защищены резервной копией и автоматическим откатом.")}  {tr("Галочка действует только для этой попытки Apply.")} </small>
+                          : tr("Изменения RouterOS защищены резервной копией и автоматическим откатом.")} </small>
                   </span>
                 </label>
               </>
@@ -578,7 +578,7 @@ export function RollbackDialog({
                 required
               />
             </label>
-            <label className="check-row">
+            <label className="checkbox-field">
               <input
                 type="checkbox"
                 checked={confirmed}

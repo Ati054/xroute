@@ -2,8 +2,7 @@
 
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { formatLocalizedText, localizedText } from "./i18n-text";
-import { BrandMark } from "./brand";
-import { isLocale, LOCALE_DETAILS, SUPPORTED_LOCALES, type Locale } from "./locales";
+import { browserLocale, isLocale, LOCALE_DETAILS, SUPPORTED_LOCALES, type Locale } from "./locales";
 
 export type { Locale } from "./locales";
 
@@ -67,17 +66,12 @@ const messages = {
     "transport.baseSafe": "Выберите изменения. Они выполнятся после сохранения.",
     "transport.reset": "Базовые параметры",
     "transport.resetStatus": "Будет выполнено:",
-    "bootstrap.brand": "Первый защищённый запуск",
-    "bootstrap.eyebrow": "Однократная настройка администратора",
-    "bootstrap.title": "Создайте пароль локальной панели",
-    "bootstrap.leadBefore": "Пользователь фиксирован:",
-    "bootstrap.leadAfter": "Пароль хешируется локальным control plane и не возвращается в браузер.",
+    "bootstrap.title": "Создание пароля",
+    "bootstrap.lead": "Задайте пароль администратора для входа в панель (логин: admin).",
     "bootstrap.password": "Новый пароль · минимум 12 символов",
     "bootstrap.confirm": "Подтверждение пароля",
-    "bootstrap.creating": "Создаю защищённый сеанс…",
-    "bootstrap.create": "Создать администратора",
-    "bootstrap.once": "Bootstrap работает только один раз",
-    "bootstrap.onceText": "После создания пароля endpoint блокируется; дальнейший вход выполняется обычной формой.",
+    "bootstrap.creating": "Сохраняем пароль…",
+    "bootstrap.create": "Создать пароль",
     "bootstrap.shortPassword": "Пароль должен содержать не менее 12 символов.",
     "bootstrap.mismatch": "Пароль и подтверждение не совпадают.",
     "login.invalid": "Неверный пользователь или пароль.",
@@ -155,17 +149,12 @@ const messages = {
     "transport.baseSafe": "Choose the changes to apply when you save.",
     "transport.reset": "Default parameters",
     "transport.resetStatus": "Pending:",
-    "bootstrap.brand": "First secure launch",
-    "bootstrap.eyebrow": "One-time administrator setup",
-    "bootstrap.title": "Create a local panel password",
-    "bootstrap.leadBefore": "The username is fixed:",
-    "bootstrap.leadAfter": "The local control plane hashes the password and never returns it to the browser.",
+    "bootstrap.title": "Create a password",
+    "bootstrap.lead": "Set the administrator password to sign in to the panel (username: admin).",
     "bootstrap.password": "New password · at least 12 characters",
     "bootstrap.confirm": "Confirm password",
-    "bootstrap.creating": "Creating secure session…",
-    "bootstrap.create": "Create administrator",
-    "bootstrap.once": "Bootstrap runs only once",
-    "bootstrap.onceText": "After the password is created, the endpoint is disabled and the regular sign-in form is used.",
+    "bootstrap.creating": "Saving password…",
+    "bootstrap.create": "Create password",
     "bootstrap.shortPassword": "The password must contain at least 12 characters.",
     "bootstrap.mismatch": "The password and confirmation do not match.",
     "login.invalid": "Incorrect username or password.",
@@ -199,29 +188,9 @@ type LanguageContextValue = {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
-function LanguageChoice({ onChoose }: { onChoose: (locale: Locale) => void }) {
-  return (
-    <main className="language-choice-shell">
-      <section className="language-choice-card" aria-labelledby="language-choice-title">
-        <BrandMark />
-        <h1 id="language-choice-title">Выберите язык / Choose language</h1>
-        <p>Язык можно изменить позже. You can change it later.</p>
-        <div className="language-choice-actions">
-          {SUPPORTED_LOCALES.map((locale) => (
-            <button key={locale} className="button button-secondary" type="button" lang={locale}
-              dir={LOCALE_DETAILS[locale].direction} onClick={() => onChoose(locale)}>
-              {LOCALE_DETAILS[locale].name}
-            </button>
-          ))}
-        </div>
-      </section>
-    </main>
-  );
-}
-
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("ru");
-  const [needsChoice, setNeedsChoice] = useState(false);
+  const [locale, setLocaleState] = useState<Locale>("en");
+  const [localeReady, setLocaleReady] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -229,11 +198,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       let saved: string | null = null;
       try { saved = window.localStorage.getItem(LOCALE_STORAGE_KEY); } catch { /* Storage may be disabled. */ }
-      if (isLocale(saved)) {
-        setLocaleState(saved);
-        return;
-      }
-      setNeedsChoice(true);
+      setLocaleState(isLocale(saved) ? saved : browserLocale(navigator.language));
+      setLocaleReady(true);
     });
     return () => {
       active = false;
@@ -244,7 +210,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     if (!isLocale(nextLocale)) return;
     try { window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale); } catch { /* Keep the choice for this session. */ }
     setLocaleState(nextLocale);
-    setNeedsChoice(false);
   }, []);
 
   useEffect(() => {
@@ -254,7 +219,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document
       .querySelector<HTMLMetaElement>('meta[name="description"]')
       ?.setAttribute("content", locale === "ru" || locale === "en" ? messages[locale]["document.description"] : localizedText(messages.ru["document.description"], locale));
-  }, [locale, setLocale]);
+  }, [locale]);
 
   const value = useMemo<LanguageContextValue>(() => {
     return {
@@ -267,8 +232,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   return (
     <LanguageContext.Provider value={value}>
-      {children}
-      {needsChoice ? <LanguageChoice onChoose={setLocale} /> : null}
+      {localeReady ? children : null}
     </LanguageContext.Provider>
   );
 }

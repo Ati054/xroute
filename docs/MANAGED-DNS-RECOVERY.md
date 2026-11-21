@@ -31,11 +31,12 @@ an ignored packet never produces an empty TCP frame. These rules also apply to
 the temporary fresh resolver used for ACME pre-checks; its TCP session and worker
 limits remain bounded, with at most 64 messages per TCP connection.
 
-DoH retires failed HTTP/2 transports on recognized stream/connection failures.
-An ordinary QUERY can retry once inside its existing deadline; healthy in-flight
-requests on the previous transport still drain. TLS trust errors and HTTP error
-responses do not trigger that retry. NOTIFY, UPDATE, AXFR and IXFR are not marked
-replayable and do not automatically retry or switch to the encrypted fallback.
+DoH retires a failed connection pool and lets healthy requests on it finish.
+An ordinary QUERY can retry once on the same resolver within its original
+deadline after a stream or connection failure. The first attempt reserves time
+to retry if the TLS handshake stalls or a reused connection stops responding.
+TLS trust errors and HTTP error responses do not trigger a retry. NOTIFY,
+UPDATE, AXFR and IXFR do not retry or switch to the encrypted fallback.
 UDP truncation can request TCP only when the response ID and opcode match.
 
 The RouterOS-local UDP forwarding path and configured encrypted resolver paths

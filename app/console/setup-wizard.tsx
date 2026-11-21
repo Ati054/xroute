@@ -1,18 +1,20 @@
 "use client";
 
-import { JsonObject, createCollectionItem, getCurrentDraft, importRouterOsExport, provisionRouterOsCredentials, saveCurrentDraft, updateCollectionItem } from "../api-client";
+import { JsonObject, getCurrentDraft, importRouterOsExport, provisionRouterOsCredentials, saveCurrentDraft } from "../api-client";
 import { useLanguage } from "../i18n";
 import { initialWizardInternalCidrs, retainedWizardNetworks, wizardInternalNetworks } from "../wizard-networks";
-import { NetworkReviewStatus, StatusPill, asObject, asObjectList, asStringList, asText, cdnDeploymentsForTransport, errorMessage, importedNetworkKind, isExplicitRouterHttpsOrigin, isIpv4Cidr, networkReviewStatus, routerImportWarningText, withDeploymentReadiness } from "./shared";
+import { NetworkReviewStatus, StatusPill, asObject, asObjectList, asStringList, asText, errorMessage, importedNetworkKind, isExplicitRouterHttpsOrigin, isIpv4Cidr, networkReviewStatus, routerImportWarningText, withDeploymentReadiness } from "./shared";
 import { useEffect, useRef, useState } from "react";
 
 export function SetupWizard({
   onClose,
   onDraftChanged,
+  onApply,
   config: initialConfig,
 }: {
   onClose: () => void;
   onDraftChanged: () => Promise<void>;
+  onApply: () => void;
   config: JsonObject;
 }) {
   const { locale, tr } = useLanguage();
@@ -27,6 +29,8 @@ export function SetupWizard({
     typeof initialRouteros.password_secret_ref === "string" &&
     typeof initialRouteros.backup_password_secret_ref === "string";
   const initialImportReview = asObject(initialRouteros.import_review);
+  const initialManagedPanelAccess = asObject(initialImportReview.managed_panel_access);
+  const [installedPanelAccess, setInstalledPanelAccess] = useState(initialManagedPanelAccess);
   const initialTopologySuggestions = asObject(
     initialImportReview.topology_suggestions,
   );
@@ -35,7 +39,11 @@ export function SetupWizard({
   );
   const initialReviewNetworks = asObjectList(initialImportReview.networks);
   const configuredManagementCidr =
-    asStringList(initialManagement.allowed_source_cidrs)[0] ?? "";
+    asStringList(initialManagement.allowed_source_cidrs)[0] ??
+    asStringList(initialManagedPanelAccess.allowed_source_cidrs)[0] ?? "";
+  const configuredManagementInterface =
+    asStringList(initialManagement.allowed_ingress_interfaces)[0] ??
+    asStringList(initialManagedPanelAccess.allowed_ingress_interfaces)[0] ?? "";
   const configuredBridgeName = asText(initialNetworking.bridge_name, "");
   const configuredVethName = asText(initialNetworking.veth_name, "");
   const configuredRouterGateway = asText(
@@ -46,7 +54,6 @@ export function SetupWizard({
     initialNetworking.container_address,
     "",
   );
-  const configuredTunAddress = asText(initialNetworking.tun_address, "");
   const configuredInternalDns =
     asText(initialDns.internal_server, "") ||
     asText(initialNetworking.container_dns, "");
@@ -71,14 +78,6 @@ export function SetupWizard({
     asText(initialTopologySuggestions.container_address, "")
       ? "container_address"
       : "",
-    !configuredTunAddress &&
-    asText(initialTopologySuggestions.tun_address, "")
-      ? "tun_address"
-      : "",
-    !configuredInternalDns &&
-    asText(initialTopologySuggestions.container_dns, "")
-      ? "container_dns"
-      : "",
   ].filter(Boolean);
   const hasInitialOfflineAddressPrefill = initialOfflinePrefilledFields.some(
     (field) =>
@@ -86,23 +85,22 @@ export function SetupWizard({
         "management_cidr",
         "routeros_gateway",
         "container_address",
-        "tun_address",
-        "container_dns",
       ].includes(field),
   );
   const [step, setStep] = useState(0);
-  const [exportName, setExportName] = useState("");
   const [exportFile, setExportFile] = useState<File | null>(null);
-  const [channel, setChannel] = useState(
-    asText(initialRouteros.channel, tr("Нет данных в экспорте")),
-  );
   const [managementCidr, setManagementCidr] = useState(
     configuredManagementCidr ||
       initialManagementNetworkSuggestions[0] ||
       "",
   );
   const [managementIngressInterface, setManagementIngressInterface] = useState(
-    asStringList(initialManagement.allowed_ingress_interfaces)[0] ?? "",
+    configuredManagementInterface ||
+      (asStringList(initialImportReview.management_ingress_suggestions).length === 1
+        ? asStringList(initialImportReview.management_ingress_suggestions)[0] : ""),
+  );
+  const [confirmManagementAccess, setConfirmManagementAccess] = useState(
+    !configuredManagementCidr || !configuredManagementInterface,
   );
   const [managementIngressSuggestions, setManagementIngressSuggestions] =
     useState<string[]>(
@@ -131,16 +129,17 @@ export function SetupWizard({
     configuredContainerAddress ||
       asText(initialTopologySuggestions.container_address, ""),
   );
-  const [tunAddress, setTunAddress] = useState(
-    configuredTunAddress || asText(initialTopologySuggestions.tun_address, ""),
+  const [showContainerNetwork, setShowContainerNetwork] = useState(
+    !bridgeName || !vethName || !routerGateway || !containerAddress,
   );
-  const [internalDns, setInternalDns] = useState(
-    configuredInternalDns ||
-      asText(initialTopologySuggestions.container_dns, ""),
+  const [internalDnsOverride] = useState(
+    configuredInternalDns === routerGateway ? "" : configuredInternalDns,
   );
+  const internalDns = internalDnsOverride.trim() || routerGateway.trim();
   const [internalNetworks, setInternalNetworks] = useState<string[]>(
     initialWizardInternalCidrs(asObjectList(initialConfig.networks), initialReviewNetworks),
   );
+  const [showInternalNetworks, setShowInternalNetworks] = useState<boolean | null>(null);
   const [discoveredNetworks, setDiscoveredNetworks] = useState<string[]>(
     initialReviewNetworks
       .map((item) => asText(item.cidr, ""))
@@ -169,12 +168,6 @@ export function SetupWizard({
   const [networkStatusFilter, setNetworkStatusFilter] = useState<
     "all" | NetworkReviewStatus
   >("pending");
-  const [subscriptionHost, setSubscriptionHost] = useState("");
-  const [providerName, setProviderName] = useState(tr("Основной провайдер"));
-  const providerConfigured = asObjectList(initialConfig.subscriptions).some(
-    (provider) => provider.id === "provider-main" &&
-      provider.enabled !== false && asText(provider.url_secret_ref, "") !== "",
-  );
   const [wizardBusy, setWizardBusy] = useState(false);
   const [wizardMessage, setWizardMessage] = useState("");
   const [wizardSaved, setWizardSaved] = useState(false);
@@ -182,8 +175,14 @@ export function SetupWizard({
   const routerSshPortRef = useRef<HTMLInputElement>(null);
   const routerUsernameRef = useRef<HTMLInputElement>(null);
   const routerPasswordRef = useRef<HTMLInputElement>(null);
-  const routerCaRef = useRef<HTMLTextAreaElement>(null);
-  const providerUrlRef = useRef<HTMLInputElement>(null);
+  const routerCaRef = useRef<HTMLInputElement>(null);
+  const routerConnectionDetails = useRef<HTMLDetailsElement>(null);
+  const importedExport = useRef<{file: File; result: JsonObject} | null>(null);
+  const wizardBodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (wizardBodyRef.current) wizardBodyRef.current.scrollTop = 0;
+  }, [step]);
 
   useEffect(() => {
     if (!hasInitialOfflineAddressPrefill) return;
@@ -234,8 +233,6 @@ export function SetupWizard({
   const steps = [
     "MikroTik",
     tr("Сети"),
-    tr("Удалённый вход"),
-    tr("Провайдер"),
     tr("Проверка"),
   ];
   const manualNetworkChoices = internalNetworks.filter(
@@ -296,19 +293,10 @@ export function SetupWizard({
       containerAddress,
       topologySuggestions.container_address,
     ),
-    isOfflinePrefilled(
-      "tun_address",
-      tunAddress,
-      topologySuggestions.tun_address,
-    ),
-    isOfflinePrefilled(
-      "container_dns",
-      internalDns,
-      topologySuggestions.container_dns,
-    ),
   ].filter(Boolean).length;
 
   function decideNetwork(cidr: string, status: "accepted" | "ignored") {
+    setShowInternalNetworks(true);
     setNetworkDecisions((current) => ({ ...current, [cidr]: status }));
     setInternalNetworks((current) => {
       if (status === "accepted") {
@@ -320,6 +308,7 @@ export function SetupWizard({
 
   function decideVisibleNetworks(status: "accepted" | "ignored") {
     if (!visibleDiscoveredNetworks.length) return;
+    setShowInternalNetworks(true);
     const visible = new Set(visibleDiscoveredNetworks);
     setNetworkDecisions((current) => ({
       ...current,
@@ -334,48 +323,87 @@ export function SetupWizard({
     );
   }
 
+  async function analyzeExport(file: File) {
+    const previous = asObject(importedExport.current?.result.setup_connection);
+    const result = importedExport.current?.file === file
+      ? importedExport.current.result
+      : asObject(await importRouterOsExport(file));
+    const connection = asObject(result.setup_connection);
+    const updateHint = (input: HTMLInputElement | null, key: string) => {
+      if (input && (!input.value || input.value === String(previous[key] ?? ""))) {
+        input.value = String(connection[key] ?? "");
+      }
+    };
+    updateHint(routerBaseUrlRef.current, "base_url");
+    updateHint(routerUsernameRef.current, "username");
+    updateHint(routerSshPortRef.current, "ssh_port");
+    if (routerConnectionDetails.current && (!connection.base_url || !connection.username || !connection.ssh_port)) {
+      routerConnectionDetails.current.open = true;
+    }
+    importedExport.current = {file, result};
+    return result;
+  }
+
+  async function selectExport(file: File) {
+    setExportFile(file);
+    setWizardMessage("");
+    setWizardBusy(true);
+    try {
+      await analyzeExport(file);
+    } catch (error) {
+      setWizardMessage(errorMessage(error));
+    } finally {
+      setWizardBusy(false);
+    }
+  }
+
   async function advance() {
     setWizardMessage("");
     if (step === 0) {
       if (!exportFile) {
+        if (importAnalyzed && routerosConnectionSaved) {
+          setStep(1);
+          return;
+        }
         setWizardMessage(
           tr("Выберите обычный экспорт RouterOS без флага show-sensitive."),
         );
         return;
       }
-      const baseUrl = routerBaseUrlRef.current?.value.trim() ?? "";
-      const routerSshPort = Number(routerSshPortRef.current?.value ?? "22");
-      const routerUsername = routerUsernameRef.current?.value.trim() ?? "";
       const routerPassword = routerPasswordRef.current?.value ?? "";
-      const caCertificate = routerCaRef.current?.value.trim() ?? "";
-      if (!isExplicitRouterHttpsOrigin(baseUrl) || !routerUsername) {
-        setWizardMessage(
-          tr("Укажите HTTPS origin RouterOS REST с явным портом www-ssl и отдельного пользователя управления."),
-        );
-        return;
-      }
-      if (!Number.isInteger(routerSshPort) || routerSshPort < 1 || routerSshPort > 65535) {
-        setWizardMessage(tr("Укажите действующий SSH-порт RouterOS."));
-        routerSshPortRef.current?.focus();
-        return;
-      }
+      const caFile = routerCaRef.current?.files?.[0];
       if (routerPassword.length < 16) {
         setWizardMessage(tr("Пароль RouterOS должен содержать не менее 16 символов."));
         routerPasswordRef.current?.focus();
         return;
       }
-      if (routerPasswordRef.current) routerPasswordRef.current.value = "";
-      if (routerCaRef.current) routerCaRef.current.value = "";
       setWizardBusy(true);
       try {
-        const result = await importRouterOsExport(exportFile);
-        const resultObject = asObject(result);
-        const discovered = asObject(resultObject.discovered);
-        if (typeof discovered.channel === "string") {
-          setChannel(discovered.channel);
-        } else {
-          setChannel(tr("Нет данных в экспорте"));
+        const caCertificate = caFile ? (await caFile.text()).trim() : undefined;
+        if (caCertificate !== undefined && !caCertificate.includes("-----BEGIN CERTIFICATE-----")) {
+          setWizardMessage(tr("Выберите файл сертификата CA в формате PEM."));
+          routerCaRef.current?.focus();
+          return;
         }
+        const resultObject = await analyzeExport(exportFile);
+        const connection = asObject(resultObject.setup_connection);
+        const baseUrl = routerBaseUrlRef.current?.value.trim() ?? "";
+        const routerUsername = routerUsernameRef.current?.value.trim() ?? "";
+        const routerSshPort = Number(routerSshPortRef.current?.value || (connection.base_url ? 0 : 22));
+        const invalidRequiredField = !isExplicitRouterHttpsOrigin(baseUrl)
+          ? {input: routerBaseUrlRef.current, message: tr("Укажите HTTPS-адрес RouterOS с портом службы www-ssl.")}
+          : !routerUsername
+            ? {input: routerUsernameRef.current, message: tr("Укажите имя REST-пользователя RouterOS.")}
+            : !Number.isInteger(routerSshPort) || routerSshPort < 1 || routerSshPort > 65535
+              ? {input: routerSshPortRef.current, message: tr("Укажите действующий SSH-порт RouterOS.")}
+              : null;
+        if (invalidRequiredField) {
+          if (routerConnectionDetails.current) routerConnectionDetails.current.open = true;
+          setWizardMessage(invalidRequiredField.message);
+          invalidRequiredField.input?.focus();
+          return;
+        }
+        const discovered = asObject(resultObject.discovered);
         const importedInventory = asObjectList(resultObject.network_inventory);
         const fallbackSuggestions = asStringList(
           resultObject.network_suggestions,
@@ -405,6 +433,15 @@ export function SetupWizard({
           resultObject.management_network_suggestions ??
             discovered.management_network_suggestions,
         );
+        const installedAccess = asObject(resultObject.managed_panel_access);
+        const installedSources = asStringList(installedAccess.allowed_source_cidrs);
+        const installedInterfaces = asStringList(installedAccess.allowed_ingress_interfaces);
+        setInstalledPanelAccess(installedAccess);
+        if (installedSources.length && installedInterfaces.length) {
+          if (!configuredManagementCidr) setManagementCidr(installedSources[0]);
+          if (!configuredManagementInterface) setManagementIngressInterface(installedInterfaces[0]);
+          setConfirmManagementAccess(false);
+        }
         const suggestedTopology = asObject(
           resultObject.topology_suggestions ??
             discovered.topology_suggestions,
@@ -425,9 +462,13 @@ export function SetupWizard({
         prefill(
           "management_cidr",
           managementCidr,
-          suggestedManagementNetworks[0],
+          installedSources[0] ?? suggestedManagementNetworks[0],
           setManagementCidr,
         );
+        if (suggestedIngressInterfaces.length === 1) {
+          prefill("management_ingress_interface", managementIngressInterface,
+            installedInterfaces[0] ?? suggestedIngressInterfaces[0], setManagementIngressInterface);
+        }
         prefill(
           "bridge_name",
           bridgeName,
@@ -452,18 +493,6 @@ export function SetupWizard({
           suggestedTopology.container_address,
           setContainerAddress,
         );
-        prefill(
-          "tun_address",
-          tunAddress,
-          suggestedTopology.tun_address,
-          setTunAddress,
-        );
-        prefill(
-          "container_dns",
-          internalDns,
-          suggestedTopology.container_dns,
-          setInternalDns,
-        );
         setInternalNetworks((current) => {
           const retained = current.filter(
             (cidr) => !discoveredNetworks.includes(cidr),
@@ -478,10 +507,17 @@ export function SetupWizard({
           return [...new Set([...retained, ...newlyAccepted])];
         });
         setDiscoveredNetworks(suggestedNetworks);
+        setShowInternalNetworks(null);
         setNetworkDecisions(importedDecisions);
         setManagementIngressSuggestions(suggestedIngressInterfaces);
         setManagementNetworkSuggestions(suggestedManagementNetworks);
         setTopologySuggestions(suggestedTopology);
+        setShowContainerNetwork(![
+          bridgeName || asText(suggestedTopology.bridge_name, ""),
+          vethName || asText(suggestedTopology.veth_name, ""),
+          routerGateway || asText(suggestedTopology.routeros_gateway, ""),
+          containerAddress || asText(suggestedTopology.container_address, ""),
+        ].every(Boolean));
         setOfflinePrefilledFields((current) => [
           ...new Set([...current, ...newlyPrefilled]),
         ]);
@@ -493,8 +529,6 @@ export function SetupWizard({
               "management_cidr",
               "routeros_gateway",
               "container_address",
-              "tun_address",
-              "container_dns",
             ].includes(field),
           )
         ) {
@@ -530,8 +564,9 @@ export function SetupWizard({
           username: routerUsername,
           password: routerPassword,
           ssh_port: routerSshPort,
-          ca_certificate: caCertificate || undefined,
+          ca_certificate: caCertificate,
         });
+        if (routerPasswordRef.current) routerPasswordRef.current.value = "";
         await onDraftChanged();
         setStep(1);
       } catch (error) {
@@ -579,67 +614,6 @@ export function SetupWizard({
         );
         return;
       }
-      if (!tunAddress.trim() || !tunAddress.includes("/")) {
-        setWizardMessage(
-          tr("Укажите подтверждённый TUN IPv4/CIDR, который не пересекается с вашими сетями."),
-        );
-        return;
-      }
-      if (!internalDns.trim() || internalDns.includes("/")) {
-        setWizardMessage(
-          tr("Укажите фактический IP внутреннего DNS; обычно это RouterOS на container bridge."),
-        );
-        return;
-      }
-    }
-    if (step === 2 && subscriptionHost && !subscriptionHost.includes(".")) {
-      setWizardMessage(
-        tr("Укажите фактическое DNS-имя клиентской HTTPS-подписки."),
-      );
-      return;
-    }
-    if (step === 3) {
-      const providerUrl = providerUrlRef.current?.value.trim() ?? "";
-      if (providerUrlRef.current) providerUrlRef.current.value = "";
-      if (!providerUrl) {
-        setStep(4);
-        return;
-      }
-      if (!providerUrl.startsWith("https://")) {
-        setWizardMessage(
-          tr("Подписка должна использовать HTTPS. Введите URL ещё раз."),
-        );
-        return;
-      }
-      setWizardBusy(true);
-      try {
-        const draft = await getCurrentDraft<{ config?: JsonObject }>();
-        const config = asObject(draft.config);
-        const provider = {
-          id: "provider-main",
-          display_name: providerName,
-          enabled: true,
-          url: providerUrl,
-          refresh_minutes: 360,
-          allowed_locations: [],
-        };
-        const providerExists = asObjectList(config.subscriptions).some(
-          (item) => item.id === "provider-main",
-        );
-        if (providerExists) {
-          await updateCollectionItem("subscriptions", "provider-main", provider);
-        } else {
-          await createCollectionItem("subscriptions", provider);
-        }
-        await onDraftChanged();
-        setStep(4);
-      } catch (error) {
-        setWizardMessage(errorMessage(error));
-        await onDraftChanged();
-      } finally {
-        setWizardBusy(false);
-      }
-      return;
     }
     if (step < steps.length - 1) {
       setStep(step + 1);
@@ -661,6 +635,16 @@ export function SetupWizard({
       const existingNetworks = asObjectList(config.networks);
       const retainedNetworks = retainedWizardNetworks(existingNetworks);
       const wizardNetworks = wizardInternalNetworks(existingNetworks, internalNetworks);
+      const savedManagementSources = asStringList(management.allowed_source_cidrs);
+      const savedManagementInterfaces = asStringList(management.allowed_ingress_interfaces);
+      const managementSources = Array.from(new Set([
+        managementCidr,
+        ...(savedManagementSources.length ? savedManagementSources : asStringList(installedPanelAccess.allowed_source_cidrs)).slice(1),
+      ]));
+      const managementInterfaces = Array.from(new Set([
+        managementIngressInterface,
+        ...(savedManagementInterfaces.length ? savedManagementInterfaces : asStringList(installedPanelAccess.allowed_ingress_interfaces)).slice(1),
+      ]));
       const nextNetworks = [
         ...retainedNetworks,
         ...wizardNetworks,
@@ -668,11 +652,14 @@ export function SetupWizard({
           id: "management-lan",
           enabled: true,
           kind: "management",
-          cidrs: [managementCidr],
+          cidrs: managementSources,
         },
       ];
 
-      const currentTransports = asObjectList(config.transports);
+      const unconfiguredSubscription =
+        !asText(ingress.subscription_hostname, "").trim() &&
+        !asText(ingress.subscription_deployment_id, "") &&
+        (!ingress.subscription_endpoint_mode || ingress.subscription_endpoint_mode === "separate");
       await saveCurrentDraft({
         config: withDeploymentReadiness({
           ...config,
@@ -693,8 +680,8 @@ export function SetupWizard({
             ...system,
             management: {
               ...management,
-              allowed_source_cidrs: [managementCidr],
-              allowed_ingress_interfaces: [managementIngressInterface],
+              allowed_source_cidrs: managementSources,
+              allowed_ingress_interfaces: managementInterfaces,
             },
             networking: {
               ...networking,
@@ -703,7 +690,6 @@ export function SetupWizard({
               routeros_gateway: routerGateway,
               container_address: containerAddress,
               container_dns: internalDns,
-              tun_address: tunAddress,
               addresses_confirmed: true,
             },
           },
@@ -712,36 +698,15 @@ export function SetupWizard({
             internal_server: internalDns,
             address_confirmed: true,
           },
-          ingress: {
+          ingress: unconfiguredSubscription ? {
             ...ingress,
-            status_hostname: "",
-            subscription_endpoint_enabled: Boolean(subscriptionHost),
-            subscription_hostname: subscriptionHost,
-            subscription_listen_port: Number(
-              ingress.subscription_listen_port ?? ingress.public_listen_port ?? 443,
-            ),
-            subscription_public_port: Number(
-              ingress.subscription_public_port ?? ingress.subscription_listen_port ?? ingress.public_listen_port ?? 443,
-            ),
-            subscription_tls_profile_id: asText(
-              ingress.tls_profile_id,
-              "cdn-default",
-            ),
-          },
+            subscription_endpoint_enabled: false,
+          } : ingress,
           networks: nextNetworks,
-          transports: currentTransports.map((transport) => ({
-            ...transport,
-            enabled: false,
-            cdn_deployments: cdnDeploymentsForTransport(transport).map((deployment) => ({
-              ...deployment,
-              enabled: false,
-            })),
-          })),
-          tls_profiles: asObjectList(config.tls_profiles).filter(
-            (profile) =>
-              Boolean(asText(profile.certificate_secret_ref, "")) ||
-              Boolean(asText(profile.private_key_secret_ref, "")),
-          ),
+          tls_profiles: asObjectList(config.tls_profiles).filter((profile) => !(
+            profile.id === "cdn-default" && profile.certificate_source === "manual" &&
+            !profile.certificate_secret_ref && !profile.private_key_secret_ref
+          )),
         }, false),
       });
       await onDraftChanged();
@@ -792,30 +757,31 @@ export function SetupWizard({
           ))}
         </ol>
 
-        <div className="wizard-body">
+        <div className="wizard-body" ref={wizardBodyRef}>
           {step === 0 ? (
             <div>
-              <h3>{tr("Сначала разберём офлайн-снимок конфигурации")}</h3>
+              <h3>{tr("Импорт конфигурации RouterOS")}</h3>
               <p>
-                 {tr("Загрузите обычный")} <code>{tr("/export file=имя")}</code>  {tr("без флага show-sensitive. Панель прочитает интерфейсы, маршруты, VPN и FastTrack из файла. Перед применением она проверит текущую архитектуру, пакеты, device-mode, накопители и доступность REST.")} </p>
+                {tr("Выберите готовый экспорт RouterOS или создайте его командой")} <code dir="ltr">/export file=routeros-export</code>.
+              </p>
               <label className="drop-zone">
                 <input
                   type="file"
                   accept=".rsc,.txt"
+                  disabled={wizardBusy}
                   onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    setExportFile(file);
-                    setExportName(file?.name ?? "");
-                    setWizardMessage("");
+                    const file = event.currentTarget.files?.[0];
+                    if (file) void selectExport(file);
                   }}
                 />
                 <span className="drop-icon">⇧</span>
-                <strong>{exportName || tr("Выберите экспорт MikroTik")}</strong>
-                <small>{tr("Секреты в экспорт включать нельзя")}</small>
+                <strong>{exportFile?.name || tr("Выберите экспорт MikroTik")}</strong>
               </label>
-              <div className="form-grid">
+              <details className="wizard-rest-help" ref={routerConnectionDetails}>
+                <summary>{tr("Ручная настройка REST")}</summary>
+                <div className="wizard-advanced-fields form-grid">
                 <label className="field">
-                  RouterOS REST HTTPS URL
+                  {tr("Адрес RouterOS REST (HTTPS)")}
                   <input
                     ref={routerBaseUrlRef}
                     type="url"
@@ -824,8 +790,6 @@ export function SetupWizard({
                     placeholder="https://172.31.255.1:59443"
                     required
                   />
-                  <small>
-                     {tr("RouterOS REST обслуживается службой www-ssl, не api-ssl. В URL укажите выбранный свободный порт; TCP 443 нельзя считать свободным по умолчанию. В Available From оставьте ровно выбранные management CIDR и container /32, без 0.0.0.0/0. Только HTTPS, проверка сертификата не отключается.")} </small>
                 </label>
                 <label className="field">
                    {tr("SSH-порт RouterOS")} <input
@@ -834,23 +798,25 @@ export function SetupWizard({
                     min={1}
                     max={65535}
                     defaultValue={
-                      typeof initialRouteros.ssh_port === "number"
+                      routerosConnectionSaved && typeof initialRouteros.ssh_port === "number"
                         ? initialRouteros.ssh_port
-                        : 22
+                        : ""
                     }
+                    placeholder="22"
                     required
                   />
-                  <small>
-                     {tr("Панель применяет изменения по SSH. Локальная задача RouterOS вернёт прежние правила, если применение не завершится успешно.")} </small>
                 </label>
                 <label className="field">
                    {tr("Отдельный REST-пользователь")} <input
                     ref={routerUsernameRef}
-                    defaultValue={initialSystem.object_comment_prefix === "XROUTE" ? "xroute-api" : "sb-gateway-api"}
+                    placeholder={initialSystem.object_comment_prefix === "XROUTE" ? "xroute-api" : "sb-gateway-api"}
                     autoComplete="username"
                     required
                   />
                 </label>
+                </div>
+              </details>
+              <div className="form-grid">
                 <label className="field">
                    {tr("Пароль RouterOS · минимум 16 символов")} <input
                     ref={routerPasswordRef}
@@ -860,53 +826,34 @@ export function SetupWizard({
                     required
                   />
                 </label>
-                <div className="locked-field">
-                  <span>{tr("Шифрование резервных копий")}</span>
-                  <strong>{tr("Пароль администратора панели")}</strong>
-                  <small>{tr("Отдельный пароль не требуется")}</small>
-                </div>
                 <label className="field form-span">
-                   {tr("Сертификат CA для RouterOS (PEM)")} <textarea
+                  {tr("Сертификат CA для RouterOS (PEM)")}
+                  <input
                     ref={routerCaRef}
-                    rows={5}
-                    autoComplete="off"
-                    placeholder="-----BEGIN CERTIFICATE-----"
+                    name="routeros-ca"
+                    className="wizard-certificate-file"
+                    type="file"
+                    accept=".pem,.crt,.cer,application/x-pem-file"
                   />
                   <small>
-                     {tr("Для локального сертификата вставьте публичный сертификат CA. Для сертификата из доверенного системного хранилища оставьте поле пустым.")} </small>
+                    {tr("После setup.rsc выберите файл routeros-ca.crt. Если панель уже доверяет сертификату RouterOS, оставьте поле пустым.")}
+                  </small>
                 </label>
               </div>
-              <div className="wizard-inline-fields">
-                <label className="field">
-                   {tr("Канал обновлений из экспорта")} <input
-                    value={channel}
-                    readOnly
-                  />
-                  <small>
-                     {tr("Панель проверит необходимые функции RouterOS и сохранит выбранный канал обновлений.")} </small>
-                </label>
-                <div className="locked-field">
-                  <span>{tr("Проверка версии")}</span>
-                  <strong>{tr("Совместимость с RouterOS 7")}</strong>
-                  <small>{tr("Версию и необходимые функции проверим перед применением.")}</small>
-                </div>
-              </div>
-              {importAnalyzed ? (
+              {importWarnings.length > 0 ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
                     <strong>{tr("Требуется проверка RouterOS")}</strong>
                     <p>
                        {tr("При применении панель подключится к RouterOS и проверит версию, пакеты и настройки сети.")} </p>
-                    {importWarnings.length ? (
-                      <ul>
-                        {importWarnings.map((warning) => (
-                          <li key={warning}>
-                            {routerImportWarningText(warning, locale)}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
+                    <ul>
+                      {importWarnings.map((warning) => (
+                        <li key={warning}>
+                          {routerImportWarningText(warning, locale)}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </aside>
               ) : null}
@@ -915,16 +862,6 @@ export function SetupWizard({
                   <span className="notice-icon">✓</span>
                   <div>
                     <strong>{tr("Подключение к RouterOS сохранено")}</strong>
-                    <p>
-                       {tr("Продолжите настройку с сохранёнными параметрами. Панель проверит подключение перед применением.")} </p>
-                    <div className="card-actions">
-                      <button
-                        className="button button-primary"
-                        type="button"
-                        onClick={() => setStep(1)}
-                      >
-                         {tr("Продолжить с сохранённым снимком")} </button>
-                    </div>
                   </div>
                 </aside>
               ) : null}
@@ -937,8 +874,8 @@ export function SetupWizard({
               <p>
                  {tr("Добавьте только свои сети LAN и VPN. Для них XRoute сохранит обычные маршруты RouterOS.")} </p>
               {activeOfflinePrefillCount ? (
-                <aside className="notice notice-danger">
-                  <span className="notice-icon">!</span>
+                <aside className="notice notice-neutral">
+                  <span className="notice-icon" aria-hidden="true">i</span>
                   <div>
                     <strong>
                        {tr("Предложенные параметры:")} {activeOfflinePrefillCount}
@@ -948,6 +885,9 @@ export function SetupWizard({
                   </div>
                 </aside>
               ) : null}
+              <details className="wizard-advanced" open={confirmManagementAccess}>
+                <summary>{tr("Доступ к панели")}</summary>
+                <div className="wizard-advanced-fields">
               <label className="field">
                  {tr("Интерфейс доступа к панели")} <input
                   list="management-ingress-options"
@@ -955,7 +895,7 @@ export function SetupWizard({
                   onChange={(event) =>
                     setManagementIngressInterface(event.target.value)
                   }
-                  placeholder={tr("Выберите bridge или введите точное имя")}
+                  placeholder={tr("Укажите интерфейс LAN или VPN")}
                   required
                 />
                 <datalist id="management-ingress-options">
@@ -966,15 +906,15 @@ export function SetupWizard({
                   ))}
                 </datalist>
                 <small>
-                   {tr("Выберите LAN-мост для доступа к панели. Если его нет в списке, введите имя вручную. WAN использовать нельзя.")} </small>
+                   {tr("Выберите LAN-интерфейс или мост для доступа к панели. Если его нет в списке, введите имя вручную. WAN использовать нельзя.")} </small>
               </label>
-              {!managementIngressSuggestions.length ? (
+              {!managementIngressInterface && !managementIngressSuggestions.length ? (
                 <aside className="notice notice-danger">
                   <span className="notice-icon">!</span>
                   <div>
                     <strong>{tr("Выберите интерфейс доступа")}</strong>
                     <p>
-                       {tr("Введите имя своего LAN-моста. Панель проверит интерфейс перед применением.")} </p>
+                       {tr("Укажите порт, мост, VLAN или VPN-интерфейс, через который вы открываете панель.")} </p>
                   </div>
                 </aside>
               ) : null}
@@ -992,7 +932,7 @@ export function SetupWizard({
                 </aside>
               ) : null}
               <label className="field">
-                Management CIDR
+                {tr("Подсеть доступа к панели (CIDR)")}
                 <input
                   value={managementCidr}
                   onChange={(event) => setManagementCidr(event.target.value)}
@@ -1008,7 +948,11 @@ export function SetupWizard({
                     : tr("Отсюда будет доступна панель на порту 9443.")}
                 </small>
               </label>
-              <div className="form-grid">
+                </div>
+              </details>
+              <details className="wizard-advanced" open={showContainerNetwork}>
+                <summary>{tr("Сеть контейнера")}</summary>
+                <div className="wizard-advanced-fields form-grid">
                 <label className="field">
                    {tr("Мост контейнера")} <input
                     value={bridgeName}
@@ -1058,7 +1002,7 @@ export function SetupWizard({
                   </small>
                 </label>
                 <label className="field">
-                  Container IPv4/CIDR
+                  {tr("IPv4-адрес контейнера (CIDR)")}
                   <input
                     value={containerAddress}
                     onChange={(event) => setContainerAddress(event.target.value)}
@@ -1074,65 +1018,15 @@ export function SetupWizard({
                       : tr("Укажите свободный адрес в той же подсети, что и RouterOS.")}
                   </small>
                 </label>
-                <label className="field">
-                  TUN IPv4/CIDR
-                  <input
-                    value={tunAddress}
-                    onChange={(event) => setTunAddress(event.target.value)}
-                    placeholder={tr("Выберите свободную непересекающуюся подсеть")}
-                  />
-                  <small>
-                    {isOfflinePrefilled(
-                      "tun_address",
-                      tunAddress,
-                      topologySuggestions.tun_address,
-                    )
-                      ? tr("Панель проверит, что эта подсеть не пересекается с сетями LAN и VPN.")
-                      : tr("Apply проверит пересечение с импортированными LAN/VPN сетями.")}
-                  </small>
-                </label>
-                <label className="field form-span">
-                   {tr("Внутренний DNS")} <input
-                    value={internalDns}
-                    onChange={(event) => setInternalDns(event.target.value)}
-                    placeholder={tr("Фактический IP RouterOS или другого DNS")}
-                  />
-                  <small>
-                    {isOfflinePrefilled(
-                      "container_dns",
-                      internalDns,
-                      topologySuggestions.container_dns,
-                    )
-                      ? tr("Проверьте адрес DNS-сервера вашей локальной сети.")
-                      : tr("Внутренние зоны не отправляются внешнему DNS-провайдеру.")}
-                  </small>
-                </label>
-              </div>
-              <div className="wizard-inline-fields">
-                <label className="field">
-                   {tr("Добавить внутренний CIDR вручную")} <input
-                    value={manualNetworkCidr}
-                    onChange={(event) => setManualNetworkCidr(event.target.value)}
-                    placeholder={tr("Введите точный IPv4/IPv6 CIDR")}
-                  />
-                </label>
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  disabled={
-                    !manualNetworkCidr.trim() ||
-                    !manualNetworkCidr.includes("/")
-                  }
-                  onClick={() => {
-                    const cidr = manualNetworkCidr.trim();
-                    setInternalNetworks((current) =>
-                      current.includes(cidr) ? current : [...current, cidr],
-                    );
-                    setManualNetworkCidr("");
-                  }}
-                >
-                   {tr("Добавить CIDR")} </button>
-              </div>
+                </div>
+              </details>
+              <details
+                className="wizard-advanced"
+                open={showInternalNetworks ?? (pendingNetworks.length > 0)}
+                onToggle={(event) => setShowInternalNetworks(event.currentTarget.open)}
+              >
+                <summary>{tr("Внутренние сети")} · {internalNetworks.length}</summary>
+                <div className="wizard-advanced-fields">
               {!discoveredNetworks.length && !manualNetworkChoices.length ? (
                 <aside className="notice notice-neutral">
                   <span className="notice-icon">i</span>
@@ -1168,56 +1062,16 @@ export function SetupWizard({
                       <option value="all">{tr("Все")}</option>
                     </select>
                   </label>
-                  <div className="card-actions network-review-bulk">
-                    <button
-                      className="button button-secondary"
-                      type="button"
-                      disabled={!visibleDiscoveredNetworks.length}
-                      onClick={() => decideVisibleNetworks("accepted")}
-                    >
-                       {tr("Принять видимые ·")} {visibleDiscoveredNetworks.length}
-                    </button>
-                    <button
-                      className="button button-tertiary"
-                      type="button"
-                      disabled={!visibleDiscoveredNetworks.length}
-                      onClick={() => decideVisibleNetworks("ignored")}
-                    >
-                       {tr("Игнорировать видимые ·")} {visibleDiscoveredNetworks.length}
-                    </button>
-                  </div>
                   <small>
-                     {tr("Массовое действие применяется только к текущему фильтру и остаётся явным решением в черновике. Для полного переноса существующих VPN-маршрутов можно показать все и принять их.")} </small>
+                    {tr("Трафик к принятым подсетям идёт по маршрутам RouterOS.")}
+                  </small>
                 </div>
-              ) : null}
-              {discoveredNetworks.length ? (
-                <aside
-                  className={
-                    pendingNetworks.length
-                      ? "notice notice-danger"
-                      : "notice notice-safe"
-                  }
-                >
-                  <span className="notice-icon">
-                    {pendingNetworks.length ? "!" : "✓"}
-                  </span>
-                  <div>
-                    <strong>
-                      {pendingNetworks.length
-                        ? tr("Ожидают решения: {value1}", { value1: pendingNetworks.length })
-                        : tr("Все подсказки классифицированы")}
-                    </strong>
-                    <p>
-                       {tr("Принято:")} {acceptedSuggestionCount}{tr("; проигнорировано:")}{" "}
-                      {ignoredSuggestionCount}{tr(". Простое отсутствие галочки не считается решением.")} </p>
-                  </div>
-                </aside>
               ) : null}
               <div className="discovered-networks">
                 {visibleDiscoveredNetworks.map((cidr) => {
                   const decision = networkReviewStatus(networkDecisions[cidr]);
                   return (
-                    <div className="checkbox-field" key={cidr}>
+                    <div className="checkbox-field network-review-item" key={cidr}>
                       <span aria-hidden="true">
                         {decision === "accepted"
                           ? "✓"
@@ -1286,66 +1140,80 @@ export function SetupWizard({
                   </label>
                 ))}
               </div>
+              {discoveredNetworks.length ? (
+                <div className="card-actions network-review-bulk">
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    disabled={!visibleDiscoveredNetworks.length}
+                    onClick={() => decideVisibleNetworks("accepted")}
+                  >
+                     {tr("Принять видимые ·")} {visibleDiscoveredNetworks.length}
+                  </button>
+                  <button
+                    className="button button-tertiary"
+                    type="button"
+                    disabled={!visibleDiscoveredNetworks.length}
+                    onClick={() => decideVisibleNetworks("ignored")}
+                  >
+                     {tr("Игнорировать видимые ·")} {visibleDiscoveredNetworks.length}
+                  </button>
+                </div>
+              ) : null}
+              {discoveredNetworks.length ? (
+                <aside
+                  className={
+                    pendingNetworks.length
+                      ? "notice notice-danger"
+                      : "notice notice-safe"
+                  }
+                >
+                  <span className="notice-icon">
+                    {pendingNetworks.length ? "!" : "✓"}
+                  </span>
+                  <div>
+                    <strong>
+                      {pendingNetworks.length
+                        ? tr("Ожидают решения: {value1}", { value1: pendingNetworks.length })
+                        : tr("Все подсказки классифицированы")}
+                    </strong>
+                    <p>
+                       {tr("Принято:")} {acceptedSuggestionCount}{tr("; проигнорировано:")}{" "}
+                      {ignoredSuggestionCount} </p>
+                  </div>
+                </aside>
+              ) : null}
+              <div className="wizard-inline-fields">
+                <label className="field">
+                   {tr("Добавить внутренний CIDR вручную")} <input
+                    value={manualNetworkCidr}
+                    onChange={(event) => setManualNetworkCidr(event.target.value)}
+                    placeholder={tr("Введите точный IPv4/IPv6 CIDR")}
+                  />
+                </label>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  disabled={
+                    !manualNetworkCidr.trim() ||
+                    !manualNetworkCidr.includes("/")
+                  }
+                  onClick={() => {
+                    const cidr = manualNetworkCidr.trim();
+                    setInternalNetworks((current) =>
+                      current.includes(cidr) ? current : [...current, cidr],
+                    );
+                    setManualNetworkCidr("");
+                  }}
+                >
+                   {tr("Добавить CIDR")} </button>
+              </div>
+                </div>
+              </details>
             </div>
           ) : null}
 
           {step === 2 ? (
-            <div>
-              <h3>{tr("HTTPS-подписка для удалённых устройств")}</h3>
-              <p>
-                 {tr("Ссылка подписки настраивается отдельно. После мастера включите только нужные транспорты: WebSocket не является обязательным.")} </p>
-              <div className="form-grid">
-                <label className="field form-span">
-                 {tr("DNS-имя клиентской подписки (необязательно)")} <input
-                    value={subscriptionHost}
-                    onChange={(event) => setSubscriptionHost(event.target.value)}
-                    placeholder="sub.example.com"
-                  />
-                  <small>
-                     {tr("Постоянная HTTPS-ссылка нужна VPN-клиентам для импорта и автоматического обновления конфигурации. Контейнер отдельно проверяет сам MikroTik по внутренней сети.")} </small>
-                </label>
-              </div>
-              <aside className="notice notice-neutral">
-                <span className="notice-icon">i</span>
-                <div>
-                  <strong>{tr("Транспорты настраиваются независимо")}</strong>
-                  <p>
-                     {tr("Можно включить только gRPC и XHTTP либо любой другой набор. Все включённые транспорты попадут в ту же постоянную ссылку.")} </p>
-                </div>
-              </aside>
-            </div>
-          ) : null}
-
-          {step === 3 ? (
-            <div>
-              <h3>{tr("Добавьте первого исходящего прокси-провайдера")}</h3>
-              <p>
-                 {tr("Ссылка не записывается в журнал. Изменения проверяются перед заменой рабочей конфигурации.")} </p>
-              <label className="field">
-                 {tr("Понятное название")} <input
-                  value={providerName}
-                  onChange={(event) => setProviderName(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                 {tr("URL подписки (необязательно)")} <input
-                  ref={providerUrlRef}
-                  type="password"
-                  placeholder={tr("Ссылка на подписку провайдера")}
-                  autoComplete="off"
-                />
-                <small>
-                   {tr("После сохранения URL можно только заменить — прочитать его из панели нельзя.")} </small>
-              </label>
-              <div className="wizard-provider-check">
-                <StatusPill tone="info">{tr("Проверка при сохранении")}</StatusPill>
-                <span>
-                   {tr("Поддерживаются ссылки VLESS, REALITY и Hysteria 2, списки Base64 и файлы Xray JSON.")} </span>
-              </div>
-            </div>
-          ) : null}
-
-          {step === 4 ? (
             <div>
               <h3>{tr("Черновик готов к проверке")}</h3>
               <p>
@@ -1363,16 +1231,15 @@ export function SetupWizard({
                   </dd>
                 </div>
                 <div>
-                  <dt>{tr("Контейнер")} / TUN / DNS</dt>
+                  <dt>{tr("Контейнер")}</dt>
                   <dd>
                     {bridgeName} · {vethName} · RouterOS{" "}
-                    {routerGateway} · {tr("Контейнер")} {containerAddress} · TUN{" "}
-                    {tunAddress} · DNS {internalDns}
+                    {routerGateway} · {containerAddress} · DNS {internalDns}
                   </dd>
                 </div>
                 <div>
                   <dt>{tr("Внутренние сети")}</dt>
-                  <dd>{internalNetworks.length}  {tr("точных CIDR")}</dd>
+                  <dd>{tr("Подсети: {value1}", { value1: internalNetworks.length })}</dd>
                 </div>
                 <div>
                   <dt>{tr("Подсказки из .rsc")}</dt>
@@ -1382,40 +1249,14 @@ export function SetupWizard({
                   </dd>
                 </div>
                 <div>
-                  <dt>{tr("Удалённый вход")}</dt>
-                  <dd>{subscriptionHost ? <>{tr("подписка:")} {subscriptionHost} {tr("· транспорты настраиваются отдельно")}</> : tr("клиентский режим · публичная подписка выключена")}</dd>
-                </div>
-                <div>
-                  <dt>{tr("Провайдер")}</dt>
-                  <dd>{providerConfigured ? <>{providerName} {tr("· секрет скрыт")}</> : tr("Не настроено")}</dd>
-                </div>
-                <div>
                   <dt>{tr("Отказ контейнера")}</dt>
                   <dd>{tr("Локальные → WAN; удалённые → блокировка")}</dd>
                 </div>
               </dl>
-              {activeOfflinePrefillCount ? (
-                <aside className="notice notice-danger">
-                  <span className="notice-icon">!</span>
-                  <div>
-                    <strong>{tr("Проверьте параметры перед сохранением")}</strong>
-                    <p>
-                       {tr("Сохранение запишет параметры в черновик. Чтобы включить настройки, нажмите «Применить» и подтвердите изменения.")} </p>
-                  </div>
-                </aside>
-              ) : null}
-              <aside className="notice notice-danger">
-                <span className="notice-icon">!</span>
+              <aside className="notice notice-neutral">
+                <span className="notice-icon" aria-hidden="true">i</span>
                 <div>
                   <strong>{tr("Проверка перед применением")}</strong>
-                  <p>
-                     {tr("При применении панель проверит RouterOS и покажет список изменений. Если проверка не пройдёт, настройки останутся прежними.")} </p>
-                </div>
-              </aside>
-              <aside className="notice notice-safe">
-                <span className="notice-icon">✓</span>
-                <div>
-                  <strong>{tr("Перед применением автоматически")}</strong>
                   <p>
                      {tr("Перед применением панель проверит RouterOS, Xray и веб-сервер. При изменении правил роутера создаст резервную копию и включит автоматический откат.")} </p>
                 </div>
@@ -1446,7 +1287,7 @@ export function SetupWizard({
           </button>
           <button
             className="button button-primary"
-            onClick={wizardSaved ? onClose : advance}
+            onClick={wizardSaved ? onApply : advance}
             disabled={
               wizardBusy ||
               (step === 1 &&
@@ -1460,7 +1301,7 @@ export function SetupWizard({
             {wizardBusy
               ? tr("Сохраняю…")
               : wizardSaved
-                ? tr("Закрыть мастер")
+                ? tr("Перейти к применению")
                 : step === steps.length - 1
                   ? tr("Сохранить черновик")
                   : tr("Продолжить")}

@@ -491,9 +491,9 @@ func (server *Server) draftEnvelope(config map[string]any) (map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
-	pending := 0
-	if active != revision {
-		pending = 1
+	summary, err := server.pendingConfiguration(active, revision, nil, config)
+	if err != nil {
+		return nil, err
 	}
 	validation := server.validationFor(config, revision).payload()
 	metadata, err := server.repository.metadata()
@@ -501,15 +501,15 @@ func (server *Server) draftEnvelope(config map[string]any) (map[string]any, erro
 		return nil, err
 	}
 	runtimeUpdate := managedDNSRulesNeedUpdate(active, metadata)
-	configurationPending := pending
-	if runtimeUpdate {
+	pending := summary.count
+	if runtimeUpdate && pending == 0 {
 		pending = 1
 	}
 	return map[string]any{
 		"config": redactValue(config, "", false), "revision": revision, "validation": validation,
-		"pending_change_count": pending, "pending_config_change_count": configurationPending,
-		"pending_config_path_count": configurationPending, "pending_config_changes": []any{},
-		"runtime_update_required": runtimeUpdate, "runtime_update_only": runtimeUpdate && configurationPending == 0,
+		"pending_change_count": pending, "pending_config_change_count": summary.count,
+		"pending_config_path_count": summary.count, "pending_config_changes": summary.changes,
+		"runtime_update_required": runtimeUpdate, "runtime_update_only": runtimeUpdate && summary.count == 0,
 		"has_active_configuration": active != "",
 	}, nil
 }
@@ -911,15 +911,7 @@ func (server *Server) overviewPayload(config map[string]any) (map[string]any, er
 		items, _ := config[collection].([]any)
 		counts[collection] = len(items)
 	}
-	pending := 0
-	if activeRevision != draftRevision {
-		pending = 1
-	}
-	configurationPending := pending
 	runtimeUpdate := managedDNSRulesNeedUpdate(activeRevision, metadata)
-	if runtimeUpdate {
-		pending = 1
-	}
 	routerOS := cloneJSONValue(objectAt(config, "routeros")).(map[string]any)
 	routerOS["last_tested_baseline"] = "7.21.5"
 	routerOS["summary_source"] = "import"
@@ -932,6 +924,32 @@ func (server *Server) overviewPayload(config map[string]any) (map[string]any, er
 	} else if container["healthy"] == true && watchdogState["state"] != "failed" && watchdogState["state"] != "tripped" {
 		state = "healthy"
 	}
+	// The overview must describe committed listeners, not unsaved draft changes.
+	appliedTransports := make([]any, 0)
+	var active map[string]any
+	if activeRevision != "" {
+		active, err = server.repository.loadGeneration(activeRevision)
+		if err != nil {
+			return nil, err
+		}
+		for _, transport := range objectNodes(active["transports"]) {
+			public := make(map[string]any)
+			for _, key := range []string{"id", "kind", "enabled", "hostname", "hostname_mode", "listen_port"} {
+				if value, exists := transport[key]; exists {
+					public[key] = value
+				}
+			}
+			appliedTransports = append(appliedTransports, public)
+		}
+	}
+	summary, err := server.pendingConfiguration(activeRevision, draftRevision, active, config)
+	if err != nil {
+		return nil, err
+	}
+	pending := summary.count
+	if runtimeUpdate && pending == 0 {
+		pending = 1
+	}
 	compiledOrder := make([]any, 0, len(ruleOrder))
 	for index, item := range ruleOrder {
 		compiledOrder = append(compiledOrder, map[string]any{"priority": (index + 1) * 100, "id": item.id, "description": item.description})
@@ -943,9 +961,10 @@ func (server *Server) overviewPayload(config map[string]any) (map[string]any, er
 			"active_revision": nullableString(activeRevision), "last_apply": metadata,
 		},
 		"counts": counts, "active_revision": nullableString(activeRevision), "draft_revision": draftRevision,
-		"pending_change_count": pending, "pending_config_change_count": configurationPending,
-		"pending_config_path_count": configurationPending, "pending_config_changes": []any{},
-		"runtime_update_required": runtimeUpdate, "runtime_update_only": runtimeUpdate && configurationPending == 0,
+		"applied_transports":   appliedTransports,
+		"pending_change_count": pending, "pending_config_change_count": summary.count,
+		"pending_config_path_count": summary.count, "pending_config_changes": summary.changes,
+		"runtime_update_required": runtimeUpdate, "runtime_update_only": runtimeUpdate && summary.count == 0,
 		"routeros": redactValue(routerOS, "", false), "build": runtimeBuildInfo(),
 		"connection_address": server.connectionAddress(config),
 		"outage_policy":      outagePolicy(config), "rule_order": compiledOrder,

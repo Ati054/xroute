@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -96,6 +97,11 @@ func TestContainerMemoryReadbackRequiresRootLimitsAndHealth(t *testing.T) {
 		for _, operationRoot := range []string{"/usb1/sb-gateway/root", "usb1/sb-gateway/root"} {
 			t.Run(tc.name+"/"+operationRoot, func(t *testing.T) {
 				router := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && r.URL.Path == "/rest/system/script/job" {
+						w.Header().Set("Content-Type", "application/json")
+						_, _ = w.Write([]byte(`[]`))
+						return
+					}
 					if r.Method == "GET" && r.URL.Path == "/rest/system/scheduler" {
 						w.Header().Set("Content-Type", "application/json")
 						if strings.HasPrefix(tc.name, "queued") {
@@ -139,6 +145,74 @@ func TestContainerMemoryReadbackRequiresRootLimitsAndHealth(t *testing.T) {
 	}
 }
 
+func TestContainerMemoryReconcilesWithoutOpeningSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name, state                                     string
+		startup, expired, running, unreachable, pending bool
+	}{
+		{name: "startup-readback", state: "completed", startup: true},
+		{name: "first-mutation-readback", state: "completed"},
+		{name: "expired-without-worker", state: "unconfirmed", expired: true},
+		{name: "expired-with-running-worker", state: "unconfirmed", expired: true, running: true, pending: true},
+		{name: "expired-with-unreachable-router", state: "scheduled", expired: true, unreachable: true, pending: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/rest/system/scheduler":
+					if tc.unreachable {
+						http.Error(w, "unavailable", 503)
+						return
+					}
+					_, _ = w.Write([]byte(`[]`))
+				case "/rest/system/script/job":
+					if tc.running {
+						_, _ = w.Write([]byte(`[{"script":"SB-GATEWAY-container-memory-worker"}]`))
+						return
+					}
+					_, _ = w.Write([]byte(`[]`))
+				case "/rest/container":
+					high := "320MiB"
+					if tc.expired {
+						high = "224MiB"
+					}
+					_ = json.NewEncoder(w).Encode([]map[string]any{{"comment": "SB-GATEWAY container", "root-dir": "/usb1/sb-gateway/root", "memory-high": high, "memory-max": "384MiB", "healthy": "true"}})
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer router.Close()
+			server := newTestServer(t)
+			activateMemoryTestRouter(t, server, router)
+			deadline := server.now().Add(time.Minute)
+			if tc.expired {
+				deadline = server.now().Add(-time.Minute)
+			}
+			if err := server.repository.saveAuxiliary(containerMemoryOperation, map[string]any{"pending": true, "state": "scheduled", "root_dir": "usb1/sb-gateway/root", "high_bytes": 320 << 20, "max_bytes": 384 << 20, "deadline": deadline.UTC().Format(time.RFC3339Nano)}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.startup {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				server.runContainerMemoryReconciliation(ctx)
+			} else {
+				server.mutationMu.Lock()
+				conflict, err := server.stateMutationConflict("")
+				server.mutationMu.Unlock()
+				if err != nil || (conflict == "container-memory") != tc.pending || (conflict != "" && conflict != "container-memory") {
+					t.Fatalf("conflict %q: %v", conflict, err)
+				}
+			}
+			op, err := server.repository.auxiliary(containerMemoryOperation)
+			if err != nil || op["state"] != tc.state || op["pending"] != tc.pending {
+				t.Fatalf("unexpected journal state: %#v, %v", op, err)
+			}
+		})
+	}
+}
+
 func TestContainerMemorySchedulesOwnedOneShotWithoutLivePatch(t *testing.T) {
 	for _, state := range []string{"explicit-false", "omitted-false"} {
 		t.Run(state, func(t *testing.T) {
@@ -153,7 +227,7 @@ func TestContainerMemorySchedulesOwnedOneShotWithoutLivePatch(t *testing.T) {
 						row = strings.Replace(row, `"stopped":"false",`, "", 1)
 					}
 					_, _ = w.Write([]byte(row))
-				case r.Method == "GET" && (r.URL.Path == "/rest/system/script" || r.URL.Path == "/rest/system/scheduler"):
+				case r.Method == "GET" && (r.URL.Path == "/rest/system/script" || r.URL.Path == "/rest/system/scheduler" || r.URL.Path == "/rest/system/script/job"):
 					_, _ = w.Write([]byte(`[]`))
 				case r.Method == "PUT" && r.URL.Path == "/rest/system/script":
 					var body map[string]any

@@ -230,6 +230,10 @@ func TestValidateCurrentConfigRequiresInternalDNSOnlyWhenDeploymentIsReady(t *te
 
 func TestValidateCurrentConfigRequiresActiveTLSMaterialForEveryReadyListener(t *testing.T) {
 	config := currentConfigFixture(t)
+	for _, kind := range []string{"ws", "grpc"} {
+		transport, _ := testTransportByKind(t, config, kind)
+		transport["enabled"] = true
+	}
 	config["system"].(map[string]any)["deployment_ready"] = true
 	config["dns"].(map[string]any)["internal_server"] = "172.19.0.1"
 	profile := config["tls_profiles"].([]any)[0].(map[string]any)
@@ -772,6 +776,7 @@ func TestValidateCurrentConfigRejectsDuplicateOrNonLANAllDeviceScope(t *testing.
 func TestValidateCurrentConfigRejectsCDNControlsTheRuntimeCannotHonor(t *testing.T) {
 	config := currentConfigFixture(t)
 	transport := config["transports"].([]any)[1].(map[string]any)
+	transport["enabled"] = true
 	transport["cdn_deployments"] = []any{
 		map[string]any{
 			"id": "bad-grpc", "enabled": true, "cdn_provider": "unknown",

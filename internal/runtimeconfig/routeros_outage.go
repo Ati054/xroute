@@ -217,7 +217,8 @@ func renderRouterOSOutage(groups []routerOSOutageGroup) []string {
 		fields := fmt.Sprintf(`chain=dstnat action=redirect src-address-list="SB_FAIL_CLOSED_CLIENTS" connection-mark=no-mark dst-address-type=!local protocol=%s dst-port=53 disabled=no`, proto)
 		lines = append(lines, fmt.Sprintf(`:local outageRedirect [/ip/firewall/nat/find where comment="%s"]`, comment),
 			managedidentity.Literal(`:if ([:len $outageRedirect] > 1) do={ :error "XROUTE outage DNS redirect ambiguous" }`),
-			fmt.Sprintf(`:if ([:len $outageRedirect] = 0) do={ /ip/firewall/nat/add %s place-before=0 comment="%s" } else={ /ip/firewall/nat/set $outageRedirect %s }`, fields, comment, fields))
+			fmt.Sprintf(`:if ([:len $outageRedirect] = 0) do={ /ip/firewall/nat/add %s comment="%s"; :set outageRedirect [/ip/firewall/nat/find where comment="%s"] } else={ /ip/firewall/nat/set $outageRedirect %s }`, fields, comment, comment, fields),
+			`:local firstOutageNat [:pick [/ip/firewall/nat/find where dynamic=no] 0 1]; :if (([:len $firstOutageNat] > 0) && ($firstOutageNat != $outageRedirect)) do={ /ip/firewall/nat/move $outageRedirect destination=$firstOutageNat }`)
 	}
 	for _, group := range groups {
 		src, dst := "SB_OUTAGE_SRC_"+group.Key, "SB_OUTAGE_DST_"+group.Key

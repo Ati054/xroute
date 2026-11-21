@@ -42,7 +42,7 @@ grep -Fq 'connection-mark="xroute-managed"' "$root/routeros/watchdog.rsc"
 grep -Fq 'SB_MANAGED_CLIENTS failed open' "$root/routeros/watchdog.rsc"
 grep -Fq 'listen 9443 ssl' "$root/templates/nginx.conf.j2"
 grep -Fq '${DEFAULT_PUBLIC_SERVER}' "$root/templates/nginx.conf.j2"
-grep -Fq 'sb-gateway rulesets --prepare' "$root/Dockerfile"
+grep -Fq './cmd/xroute rulesets --prepare' "$root/Dockerfile"
 grep -Fq 'exec /usr/local/bin/sb-gateway appliance' "$root/entrypoint.sh"
 grep -Fq 'FROM ${RUNTIME_IMAGE} AS runtime' "$root/Dockerfile"
 if grep -Eq '(PYTHON_IMAGE|pip install|supervisord|uvicorn)' "$root/Dockerfile" \

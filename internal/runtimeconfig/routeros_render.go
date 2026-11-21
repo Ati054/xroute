@@ -206,7 +206,7 @@ func renderRouterOSPublicIngress(model RouterOSRenderModel) []string {
 		managedidentity.Literal(`:local allPublicGuardRules [/ip/firewall/filter/find where chain="xroute-public-guard"]`),
 		managedidentity.Literal(`:local ownedPublicGuardRules [/ip/firewall/filter/find where chain="xroute-public-guard" and comment~"^XROUTE public guard "]`),
 		managedidentity.Literal(`:if ([:len $allPublicGuardRules] != [:len $ownedPublicGuardRules]) do={ :error "XROUTE public guard chain contains an unowned rule" }`),
-		`:local firstNatRule [/ip/firewall/nat/find]`,
+		`:local firstNatRule [/ip/firewall/nat/find where dynamic=no]`,
 		managedidentity.Literal(`:foreach rule in=[/ip/firewall/nat/find where comment~"^XROUTE public dstnat "] do={ :if (([:len $firstNatRule] > 0) && ([:pick $firstNatRule 0 1] != $rule)) do={ /ip/firewall/nat/move $rule destination=[:pick $firstNatRule 0 1] } }`),
 		managedidentity.Literal(`:local forwardReturn [/ip/firewall/filter/find where comment="XROUTE forward policy return"]`),
 		managedidentity.Literal(`:if ([:len $forwardReturn] != 1) do={ :error "XROUTE forward return rule missing or ambiguous" }`),
@@ -220,6 +220,9 @@ func renderRouterOSPublicIngress(model RouterOSRenderModel) []string {
 
 func renderRouterOSCore(model RouterOSRenderModel) []string {
 	lines := []string{
+		fmt.Sprintf(`:local wantedIngress %s`, routerOSArray(model.ManagementIngress)),
+		managedidentity.Literal(`:foreach interfaceName in=$wantedIngress do={ :if ([:len [/interface/find where name=$interfaceName]] != 1) do={ :error ("XROUTE trusted ingress interface missing: " . $interfaceName) }; :if ([:len [/interface/list/member/find where list="WAN" and interface=$interfaceName]] > 0) do={ :error ("XROUTE trusted ingress interface belongs to WAN: " . $interfaceName) } }`),
+		managedidentity.Literal(`:foreach member in=[/interface/list/member/find where list="SB_MANAGEMENT_INGRESS"] do={ :if ([/interface/list/member/get $member comment] != "XROUTE management ingress") do={ :error "XROUTE management ingress member is unowned" } }`),
 		managedidentity.Literal(`:local gate [/ip/firewall/mangle/find where comment="XROUTE diversion-gate"]`),
 		managedidentity.Literal(`:if ([:len $gate] != 1) do={ :error "XROUTE diversion gate missing or ambiguous" }`),
 		`/ip/firewall/mangle/disable $gate`,
@@ -228,10 +231,8 @@ func renderRouterOSCore(model RouterOSRenderModel) []string {
 		fmt.Sprintf(managedidentity.Literal(`:if ([:len $managedTable] = 0) do={ /routing/table/add name="%s" fib comment="XROUTE routing table"; :set managedTable [/routing/table/find where name="%s"] }`), model.RoutingTable, model.RoutingTable),
 		managedidentity.Literal(`:if (([:len $managedTable] != 1) || ([/routing/table/get $managedTable comment] != "XROUTE routing table")) do={ :error "XROUTE routing table is missing, ambiguous, or unowned" }`),
 		`/routing/table/set $managedTable fib`,
-		fmt.Sprintf(`:local wantedIngress %s`, routerOSArray(model.ManagementIngress)),
-		managedidentity.Literal(`:foreach member in=[/interface/list/member/find where list="SB_MANAGEMENT_INGRESS"] do={ :if ([/interface/list/member/get $member comment] != "XROUTE management ingress") do={ :error "XROUTE management ingress member is unowned" } }`),
-		managedidentity.Literal(`:foreach member in=[/interface/list/member/find where list="SB_MANAGEMENT_INGRESS" and comment="XROUTE management ingress"] do={ /interface/list/member/remove $member }`),
-		managedidentity.Literal(`:foreach interfaceName in=$wantedIngress do={ :if ([:len [/interface/find where name=$interfaceName]] != 1) do={ :error ("XROUTE trusted ingress interface missing: " . $interfaceName) }; /interface/list/member/add list="SB_MANAGEMENT_INGRESS" interface=$interfaceName comment="XROUTE management ingress" }`),
+		managedidentity.Literal(`:foreach interfaceName in=$wantedIngress do={ :if ([:len [/interface/list/member/find where list="SB_MANAGEMENT_INGRESS" and interface=$interfaceName]] = 0) do={ /interface/list/member/add list="SB_MANAGEMENT_INGRESS" interface=$interfaceName comment="XROUTE management ingress" } }`),
+		managedidentity.Literal(`:foreach member in=[/interface/list/member/find where list="SB_MANAGEMENT_INGRESS" and comment="XROUTE management ingress"] do={ :local entryName [/interface/list/member/get $member interface]; :local keep false; :foreach expected in=$wantedIngress do={ :if ($expected = $entryName) do={ :set keep true } }; :if ($keep = false) do={ /interface/list/member/remove $member } }`),
 		fmt.Sprintf(managedidentity.Literal(`:local sbBridge [/interface/bridge/find where name="%s" and comment="XROUTE container bridge"]`), model.BridgeName),
 		managedidentity.Literal(`:if ([:len $sbBridge] != 1) do={ :error "XROUTE container bridge missing or ambiguous" }`),
 		`:local sbBridgeName [/interface/bridge/get $sbBridge name]`,

@@ -100,7 +100,7 @@ func TestNativeRecoveryUploadStreamsAndValidatesName(t *testing.T) {
 	source, sourceRoot := newRecoveryTestServer(t)
 	sourceCookie, _ := bootstrapSession(t, source)
 	_ = sourceCookie
-	if err := os.WriteFile(filepath.Join(sourceRoot, "state", "marker.json"), []byte("upload\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(sourceRoot, "state", "marker.json"), bytes.Repeat([]byte("a"), 3<<20), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	metadata, err := source.createRecoveryArchive()
@@ -108,9 +108,24 @@ func TestNativeRecoveryUploadStreamsAndValidatesName(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := mustReadFile(t, filepath.Join(sourceRoot, "data", "recovery-backups", metadata.Name))
+	if len(archive) <= maxRequestBytes {
+		t.Fatal("fixture must exceed the ordinary API limit")
+	}
 
 	target, _ := newRecoveryTestServer(t)
 	cookie, csrf := bootstrapSession(t, target)
+	preflight := apiPrefix + "/recovery/backups/upload/preflight"
+	headers := map[string]string{csrfHeader: csrf}
+	file := map[string]any{"filename": metadata.Name, "size_bytes": len(archive)}
+	if r := performRequest(t, target, http.MethodPost, preflight, file, nil, cookie); r.Code != http.StatusForbidden {
+		t.Fatalf("preflight without CSRF = %d", r.Code)
+	}
+	if r := performRequest(t, target, http.MethodPost, preflight, file, headers, cookie); r.Code != http.StatusOK {
+		t.Fatalf("unique archive preflight = %d %s", r.Code, r.Body.String())
+	}
+	if r := performRequest(t, target, http.MethodPost, preflight, map[string]any{"filename": metadata.Name, "size_bytes": recoveryMaxArchiveBytes + 1}, headers, cookie); r.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized preflight = %d %s", r.Code, r.Body.String())
+	}
 	request := httptest.NewRequest(http.MethodPut, apiPrefix+"/recovery/backups/upload", bytes.NewReader(archive))
 	request.Header.Set(csrfHeader, csrf)
 	request.Header.Set("X-SB-Recovery-Filename", metadata.Name)
@@ -119,6 +134,17 @@ func TestNativeRecoveryUploadStreamsAndValidatesName(t *testing.T) {
 	target.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("upload failed: %d %s", response.Code, response.Body.String())
+	}
+	if r := performRequest(t, target, http.MethodPost, preflight, file, headers, cookie); r.Code != http.StatusConflict || objectAt(decodeResponse(t, r), "error")["code"] != "recovery_archive_exists" {
+		t.Fatalf("duplicate preflight = %d %s", r.Code, r.Body.String())
+	}
+	reader := bytes.NewReader(archive)
+	duplicate := httptest.NewRequest(http.MethodPut, apiPrefix+"/recovery/backups/upload", reader)
+	duplicate.Header = request.Header.Clone()
+	conflict := httptest.NewRecorder()
+	target.ServeHTTP(conflict, duplicate)
+	if conflict.Code != http.StatusConflict || reader.Len() != 0 {
+		t.Fatalf("legacy duplicate = %d, unread bytes = %d", conflict.Code, reader.Len())
 	}
 	bad := httptest.NewRequest(http.MethodPut, apiPrefix+"/recovery/backups/upload", bytes.NewReader(archive))
 	bad.Header.Set(csrfHeader, csrf)
@@ -476,12 +502,24 @@ func TestNativeRecoveryCreateFailureReturnsSafeClassifier(t *testing.T) {
 	}
 	body := decodeResponse(t, response)
 	failure := objectAt(body, "error")
-	if failure["code"] != "recovery_create_failed" || strings.Contains(response.Body.String(), "too-large") {
+	if failure["code"] != "recovery_create_failed" || strings.Contains(response.Body.String(), "too-large") ||
+		strings.Contains(response.Body.String(), "Обновление") {
 		t.Fatalf("manual recovery failure exposed the source: %#v", body)
 	}
 	details, _ := failure["details"].([]any)
 	if len(details) != 1 || objectAt(map[string]any{"detail": details[0]}, "detail")["classifier"] != "source_collection" {
 		t.Fatalf("manual recovery diagnostic = %#v", failure)
+	}
+	if err := os.Remove(filepath.Join(root, "state", "too-large.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.repository.saveAuxiliary("apply-operation", map[string]any{"pending": true}); err != nil {
+		t.Fatal(err)
+	}
+	pending := performRequest(t, server, http.MethodPost, apiPrefix+"/recovery/backups", map[string]any{}, map[string]string{csrfHeader: csrf}, cookie)
+	if pending.Code != http.StatusUnprocessableEntity || !strings.Contains(pending.Body.String(), "retry_when_idle") ||
+		strings.Contains(pending.Body.String(), "Обновление") {
+		t.Fatalf("pending Apply backup response = %d %s", pending.Code, pending.Body.String())
 	}
 }
 

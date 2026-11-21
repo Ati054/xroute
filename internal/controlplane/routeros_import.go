@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -18,6 +19,7 @@ var routerOSVersionPattern = regexp.MustCompile(`(?im)^#\s*(?:.*?\bRouterOS\s+)?
 
 type routerOSExportCommand struct {
 	section    string
+	service    string
 	properties map[string]string
 }
 
@@ -29,7 +31,11 @@ type routerOSImportFacts struct {
 	routerAddresses    map[string]bool
 	managementIngress  map[string]bool
 	managementNetworks map[string]bool
+	managedPanelAccess map[string]any
+	internalNetworks   map[string]bool
+	storageRoot        string
 	managedTopology    map[string]any
+	setupConnection    map[string]any
 	warnings           []map[string]any
 	warningCodes       []string
 	managedLines       int
@@ -79,7 +85,7 @@ func (server *Server) importRouterOSExport(response http.ResponseWriter, request
 	for _, cidr := range sortedStrings(facts.networks) {
 		candidate, _ := netip.ParsePrefix(cidr)
 		status := previousStatuses[cidr]
-		if prefixCovered(candidate, existing) {
+		if prefixCovered(candidate, existing) || facts.internalNetworks[cidr] {
 			status = "accepted"
 		} else if status != "accepted" && status != "ignored" {
 			status = "pending"
@@ -90,16 +96,26 @@ func (server *Server) importRouterOSExport(response http.ResponseWriter, request
 		}
 	}
 	topology := suggestRouterOSTopology(facts.networks, facts.interfaces, facts.managedTopology)
+	var connection map[string]any
+	networking := objectAt(objectAt(config, "system"), "networking")
+	if text(networking["routeros_gateway"]) == text(facts.managedTopology["routeros_gateway"]) {
+		connection = facts.setupConnection
+	}
 	router["import_review"] = map[string]any{
 		"source_fingerprint":             facts.fingerprint,
 		"imported_at":                    server.now().UTC().Format("2006-01-02T15:04:05.999999Z"),
 		"networks":                       inventory,
 		"management_ingress_suggestions": sortedStringsAny(facts.managementIngress),
 		"management_network_suggestions": sortedStringsAny(facts.managementNetworks),
+		"managed_panel_access":           facts.managedPanelAccess,
 		"posture_warnings":               stringAnySlice(facts.warningCodes),
 		"topology_suggestions":           topology,
 	}
 	config["routeros"] = router
+	if storage := objectAt(config, "storage"); text(storage["root"]) == "" && facts.storageRoot != "" {
+		storage["root"] = facts.storageRoot
+		config["storage"] = storage
+	}
 	objectAt(config, "system")["deployment_ready"] = false
 	validation := validateCurrentConfig(config)
 	if !validation.Valid {
@@ -132,6 +148,8 @@ func (server *Server) importRouterOSExport(response http.ResponseWriter, request
 		"warnings": warnings, "network_suggestions": suggestions, "network_inventory": inventory,
 		"management_ingress_suggestions": sortedStringsAny(facts.managementIngress),
 		"management_network_suggestions": sortedStringsAny(facts.managementNetworks),
+		"managed_panel_access":           facts.managedPanelAccess,
+		"setup_connection":               connection,
 		"topology_suggestions":           topology, "draft_revision": revision,
 	})
 }
@@ -146,7 +164,7 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 	}
 	facts := &routerOSImportFacts{
 		interfaces: map[string]bool{}, networks: map[string]bool{}, routerAddresses: map[string]bool{},
-		managementIngress: map[string]bool{}, managementNetworks: map[string]bool{}, managedTopology: map[string]any{},
+		managementIngress: map[string]bool{}, managementNetworks: map[string]bool{}, internalNetworks: map[string]bool{}, managedTopology: map[string]any{},
 		fingerprint: fmt.Sprintf("%x", sha256.Sum256([]byte(value))),
 	}
 	warningSet := map[string]bool{}
@@ -161,11 +179,15 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 	interfaceNetworks := map[string]map[string]bool{}
 	wanInterfaces := map[string]bool{}
 	managementSources := map[string]bool{}
+	managedIngress := map[string]bool{}
+	var managedContainers []map[string]any
 	for _, command := range commands {
 		section, properties := command.section, command.properties
 		owned := exportProjectOwned(properties)
 		if owned {
 			switch section {
+			case "/container":
+				managedContainers = append(managedContainers, map[string]any{"comment": managedidentity.Literal("XROUTE container"), "root-dir": properties["root-dir"]})
 			case "/interface bridge":
 				setString(facts.managedTopology, "bridge_name", properties["name"])
 			case "/interface veth":
@@ -183,7 +205,11 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 					setString(facts.managedTopology, "tun_address", properties["value"])
 				}
 			case "/ip firewall address-list", "/ipv6 firewall address-list":
-				if properties["list"] == "SB_MANAGEMENT_SOURCES" && !exportDisabled(properties) {
+				if properties["list"] == "SB_INTERNAL_NETWORKS" && !exportDisabled(properties) {
+					addNetworkTokens(facts.internalNetworks, properties["address"])
+					addNetworkTokens(facts.networks, properties["address"])
+				}
+				if properties["list"] == "SB_MANAGEMENT_SOURCES" && properties["comment"] == managedidentity.Literal("XROUTE management source") && !exportDisabled(properties) {
 					addNetworkTokens(managementSources, properties["address"])
 				}
 			}
@@ -205,7 +231,11 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 		}
 		if section == "/interface list member" && !exportDisabled(properties) {
 			name := properties["interface"]
-			if (strings.EqualFold(properties["list"], "LAN") || owned && properties["list"] == "SB_MANAGEMENT_INGRESS") && resolvedInterfaceName(name) {
+			installed := properties["list"] == "SB_MANAGEMENT_INGRESS" && properties["comment"] == managedidentity.Literal("XROUTE management ingress")
+			if installed && resolvedInterfaceName(name) {
+				managedIngress[name] = true
+			}
+			if (strings.EqualFold(properties["list"], "LAN") || installed) && resolvedInterfaceName(name) {
 				facts.managementIngress[name] = true
 			}
 			if strings.EqualFold(properties["list"], "WAN") && resolvedInterfaceName(name) {
@@ -285,7 +315,31 @@ func parseRouterOSExport(value string) (*routerOSImportFacts, error) {
 			}
 		}
 	}
+	// Only exact, enabled XRoute entries can be reused without asking the
+	// administrator to confirm a guess from the router's generic LAN list.
+	for source := range managementSources {
+		prefix, _ := netip.ParsePrefix(source)
+		if !prefix.Addr().Is4() {
+			delete(managementSources, source)
+		}
+	}
+	for name := range managedIngress {
+		if wanInterfaces[name] || name == facts.managedTopology["bridge_name"] {
+			delete(managedIngress, name)
+		}
+	}
+	if len(managedIngress) > 0 && len(managementSources) > 0 {
+		facts.managedPanelAccess = map[string]any{
+			"allowed_ingress_interfaces": sortedStringsAny(managedIngress),
+			"allowed_source_cidrs":       sortedStringsAny(managementSources),
+		}
+	}
 	facts.managedLines = strings.Count(value, managedidentity.Literal("XROUTE"))
+	if root, err := managedContainerStorageRoot(managedContainers); err == nil {
+		facts.storageRoot = root
+		facts.managedTopology["storage_root"] = root
+	}
+	facts.setupConnection = routerOSSetupConnection(commands, facts.managedTopology)
 	return facts, nil
 }
 
@@ -302,21 +356,33 @@ func (facts *routerOSImportFacts) document() map[string]any {
 func routerOSExportCommands(value string) []routerOSExportCommand {
 	commands := make([]routerOSExportCommand, 0)
 	section := ""
-	parts := make([]string, 0, 2)
-	flush := func() {
-		if section != "" && len(parts) != 0 {
-			commands = append(commands, routerOSExportCommand{section: section, properties: routerOSProperties(strings.Join(parts, " "))})
-		}
-		parts = parts[:0]
-	}
 	verbs := map[string]bool{"add": true, "set": true, "remove": true, "enable": true, "disable": true, "unset": true}
+	// An export may wrap inside an identifier, an assignment or a quoted
+	// value. Preserve the whitespace before the continuation marker; only
+	// discard the indentation RouterOS adds to the next physical line.
+	var logical strings.Builder
+	continuation := false
 	for _, raw := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
-		line := strings.TrimSpace(raw)
+		physical := strings.TrimLeft(raw, " \t")
+		if continuation {
+			physical = strings.TrimPrefix(raw, "    ")
+		} else if strings.HasPrefix(physical, "#") {
+			continue
+		}
+		trimmed := strings.TrimRight(physical, " \t")
+		slashes := len(trimmed) - len(strings.TrimRight(trimmed, "\\"))
+		continuation = slashes%2 == 1
+		if continuation {
+			logical.WriteString(trimmed[:len(trimmed)-1])
+			continue
+		}
+		logical.WriteString(physical)
+		line := strings.TrimSpace(logical.String())
+		logical.Reset()
 		if line == "" {
 			continue
 		}
 		if strings.HasPrefix(line, "/") && !strings.HasPrefix(line, "/ ") {
-			flush()
 			tokens := strings.Fields(line)
 			commandAt := -1
 			for index := 1; index < len(tokens); index++ {
@@ -329,25 +395,89 @@ func routerOSExportCommands(value string) []routerOSExportCommand {
 				section = strings.ToLower(line)
 			} else {
 				section = strings.ToLower(strings.Join(tokens[:commandAt], " "))
-				parts = append(parts, strings.Join(tokens[commandAt:], " "))
-				flush()
+				command := line
+				for _, token := range tokens[:commandAt] {
+					command = strings.TrimLeft(command, " \t")[len(token):]
+				}
+				commands = append(commands, makeRouterOSExportCommand(section, strings.TrimLeft(command, " \t")))
 			}
 			continue
 		}
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-		continued := strings.HasSuffix(line, "\\")
-		if continued {
-			line = strings.TrimSpace(strings.TrimSuffix(line, "\\"))
-		}
-		parts = append(parts, line)
-		if !continued {
-			flush()
+		if section != "" {
+			commands = append(commands, makeRouterOSExportCommand(section, line))
 		}
 	}
-	flush()
 	return commands
+}
+
+func makeRouterOSExportCommand(section, line string) routerOSExportCommand {
+	command := routerOSExportCommand{section: section, properties: routerOSProperties(line)}
+	if section == "/ip service" || section == "/ip/service" {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "set" {
+			command.service = strings.Trim(fields[1], "\"")
+		}
+	}
+	return command
+}
+
+func routerOSSetupConnection(commands []routerOSExportCommand, topology map[string]any) map[string]any {
+	gateway, err := netip.ParseAddr(text(topology["routeros_gateway"]))
+	if err != nil || !gateway.Is4() {
+		return nil
+	}
+	var users []string
+	var restPorts []int
+	sshPort, sshEntries, guidedRecords := 22, 0, 0
+	for _, command := range commands {
+		properties := command.properties
+		if command.service == "ssh" {
+			sshEntries++
+			if exportDisabled(properties) {
+				sshPort = 0
+			} else if value := properties["port"]; value != "" {
+				sshPort, _ = strconv.Atoi(value)
+			}
+		}
+		if exportDisabled(properties) {
+			continue
+		}
+		switch {
+		case command.section == "/system script" &&
+			properties["name"] == managedidentity.Literal("XROUTE-guided-management-state") &&
+			properties["comment"] == managedidentity.Literal("XROUTE guided management restore state"):
+			guidedRecords++
+		case command.section == "/user" && properties["comment"] == managedidentity.Literal("XROUTE control-plane REST user"):
+			if name := properties["name"]; name != "" {
+				users = append(users, name)
+			}
+		case command.section == "/ip firewall filter" && properties["action"] == "accept" && properties["protocol"] == "tcp" && properties["comment"] == managedidentity.Literal("XROUTE RouterOS REST allow"):
+			destination, ok := parsePrefixOrAddress(properties["dst-address"])
+			port, _ := strconv.Atoi(properties["dst-port"])
+			if ok && destination == netip.PrefixFrom(gateway, 32) && port >= 1 && port <= 65535 {
+				restPorts = append(restPorts, port)
+			}
+		}
+	}
+	// RouterOS normally omits /user entries from an export. The guided
+	// installer creates a dedicated account and exports its ownership record.
+	if len(users) == 0 && guidedRecords == 1 {
+		users = append(users, managedidentity.Literal("xroute-api"))
+	}
+	if len(restPorts) != 1 {
+		return nil
+	}
+	connection := map[string]any{"base_url": fmt.Sprintf("https://%s:%d", gateway, restPorts[0])}
+	if len(users) == 1 {
+		connection["username"] = users[0]
+	}
+	if sshEntries <= 1 && sshPort >= 1 && sshPort <= 65535 {
+		connection["ssh_port"] = sshPort
+	}
+	return connection
 }
 
 func routerOSProperties(command string) map[string]string {

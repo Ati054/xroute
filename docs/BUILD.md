@@ -11,6 +11,17 @@ embedded image configuration against the requested architecture; changing a TAR
 filename does not change its platform. GitHub asset packaging accepts the matching
 `-Architecture amd64` switch. ARM64 retains its existing bundle filename; AMD64
 uses a separate `routeros-amd64-bundle.zip` filename.
+The Docker context includes the RouterOS scripts embedded by the controller,
+including the shared guided-uninstall cleanup. The runtime-artifact tests check
+these files against the Docker ignore list before image compilation.
+Run `sh scripts/static-check.sh` to check the runtime shell scripts and Docker
+build steps, including the `cmd/xroute` command that prepares the bundled rule sets.
+Each package includes architecture-specific `SHA256SUMS-arm64` or
+`SHA256SUMS-amd64`. An AMD64-only package does not write the shared `SHA256SUMS`.
+When both complete architecture sets are present in the output directory, the
+packager verifies their manifests and generates one shared file covering both.
+Keep both sets when refreshing that file for publication; an incomplete or
+modified prior set is rejected before checksums are changed.
 
 Before a large local compile or image build, check both the workspace disk and
 the disk containing Docker and temporary files. On Windows with WSL, use:

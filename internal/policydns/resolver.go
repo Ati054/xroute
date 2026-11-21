@@ -488,16 +488,17 @@ func (upstream *dohUpstream) exchange(ctx context.Context, query []byte) ([]byte
 }
 
 func (upstream *dohUpstream) exchangeDoH(ctx context.Context, query []byte) ([]byte, error) {
-	response, err := upstream.exchangeDoHOnce(ctx, query)
+	replayable := replayableDNSQuery(query)
+	response, err := upstream.exchangeDoHOnce(ctx, query, replayable, true)
 	if err == nil {
 		return response, err
 	}
-	if ctx.Err() != nil || !replayableDNSQuery(query) || !dohConnectionClosed(err) {
+	if ctx.Err() != nil || !replayable || !(dohConnectionClosed(err) || errors.Is(err, errDoHPhaseTimeout)) {
 		return nil, err
 	}
 	// A provider can retire a keep-alive connection between requests. Retry
 	// once within the same deadline; never retry HTTP, DNS or TLS trust errors.
-	return upstream.exchangeDoHOnce(ctx, query)
+	return upstream.exchangeDoHOnce(ctx, query, replayable, false)
 }
 
 func dohConnectionClosed(err error) bool {
@@ -560,7 +561,8 @@ func (upstream *dohUpstream) finishDoH(transport *http.Transport, err error) {
 		return
 	}
 	var networkErr net.Error
-	failed := dohConnectionClosed(err) || errors.Is(err, errDoHFallbackWon) || errors.Is(err, context.DeadlineExceeded) ||
+	failed := dohConnectionClosed(err) || errors.Is(err, errDoHFallbackWon) || errors.Is(err, errDoHPhaseTimeout) ||
+		errors.Is(err, context.DeadlineExceeded) ||
 		(errors.As(err, &networkErr) && networkErr.Timeout())
 	upstream.poolMu.Lock()
 	if failed && !upstream.closed && upstream.transport == transport {
@@ -580,10 +582,20 @@ func (upstream *dohUpstream) finishDoH(transport *http.Transport, err error) {
 	}
 }
 
-func (upstream *dohUpstream) exchangeDoHOnce(ctx context.Context, query []byte) (payload []byte, err error) {
+func (upstream *dohUpstream) exchangeDoHOnce(ctx context.Context, query []byte, replayable, first bool) (payload []byte, err error) {
 	client, transport, closed := upstream.dohSnapshot()
 	if closed {
 		return nil, context.Canceled
+	}
+	if first && replayable && transport != nil {
+		// Reserve time for one fresh connection without shortening the DNS
+		// deadline or timing out a slow reply on a newly connected resolver.
+		phaseLimit := client.Timeout * 3 / 5
+		if deadline, ok := ctx.Deadline(); ok && phaseLimit > 0 && time.Until(deadline) > phaseLimit {
+			requestContext, stop := monitorDoHPhases(ctx, phaseLimit)
+			defer stop()
+			ctx = requestContext
+		}
 	}
 	defer func() {
 		failure := err
@@ -604,11 +616,14 @@ func (upstream *dohUpstream) exchangeDoHOnce(ctx context.Context, query []byte) 
 	request.Header.Set("Content-Type", "application/dns-message")
 	// Ordinary DNS queries are replayable. Allow Transport to retry a lost reused
 	// connection without transmitting an idempotency header to the resolver.
-	if replayableDNSQuery(query) {
+	if replayable {
 		request.Header["Idempotency-Key"] = nil
 	}
 	response, err := client.Do(request)
 	if err != nil {
+		if errors.Is(context.Cause(ctx), errDoHPhaseTimeout) {
+			return nil, errDoHPhaseTimeout
+		}
 		return nil, err
 	}
 	defer response.Body.Close()

@@ -8,11 +8,11 @@
 
 I built XRoute so I could manage proxy routing on a MikroTik without editing
 JSON by hand. It puts a web panel, Xray and the routing tools in one container,
-for ARM64 routers. Choose a route for each
+for ARM64 routers and x86_64 CHR. Choose a route for each
 device, send selected services through the
 normal WAN, and add backup servers when you need them.
 
-This release provides ARM64 images. The x86-64 CHR build will follow after separate testing.
+Separate ARM64 and AMD64 images are available. On x86_64 CHR, the installer can use a project folder on the system disk.
 
 [Installation](docs/INSTALL.md) · [Downloads](https://github.com/Ati054/xroute/releases/latest)
 
@@ -24,8 +24,8 @@ Live screenshots from a test installation. Device names and local IP addresses a
 
 ## What you need
 
-- An ARM64 MikroTik, such as hAP ax³, with RouterOS 7 and container support.
-- An external SSD/USB disk with room for the container and its data.
+- An ARM64 MikroTik (such as hAP ax³) or x86_64 CHR, with RouterOS 7 and container support.
+- An external SSD/USB disk on hardware routers, or a CHR disk with at least 1 GiB free.
 - An internet connection and a supported proxy subscription or another exit.
 - A domain and certificate if your incoming connections need them. Outbound-only routing does not require a domain.
 
@@ -49,9 +49,9 @@ are limited to the settings you explicitly select; see
 
 ## Install
 
-1. Download the RouterOS bundle from [Releases](https://github.com/Ati054/xroute/releases/latest) **on your computer**, check its SHA-256 and extract it.
-2. Upload the ready **`xroute` folder** to an external ext4 SSD, for example `usb1/xroute/`.
-3. Run `/import file-name=usb1/xroute/setup.rsc` in the MikroTik terminal. Choose the disk and trusted LAN, then confirm.
+1. Download the bundle for your architecture from [Releases](https://github.com/Ati054/xroute/releases/latest) **on your computer**: ARM64 for hardware routers, AMD64 for x86_64 CHR. Check its SHA-256 and extract it.
+2. Upload the ready **`xroute` folder** to an external ext4 SSD (for example `usb1/xroute/`) or to the root of the CHR system disk (`xroute/`).
+3. Run `/import file-name=usb1/xroute/setup.rsc` in the MikroTik terminal, or `/import file-name=xroute/setup.rsc` for the CHR system disk. Choose the matching storage and trusted LAN, then confirm.
 4. Open the panel at the address printed by the installer and finish setup.
 
 The router does **not** need access to GitHub for this installation. The installer creates the local REST certificate and service account. Existing VPNs remain in place; devices are assigned to XRoute later in the panel.
@@ -128,7 +128,7 @@ and send only selected services and domains through the proxy. See the
 
 ### Where is XRoute stored, and does it change my existing network?
 
-The container image, rule databases and subscription catalog use external
+On hardware routers, the container image, rule databases and subscription catalog use external
 SSD/USB storage to avoid filling or wearing out the router's internal flash.
 XRoute creates marked RouterOS objects. Changes to existing network objects
 require an explicit selection in the setup or Apply plan; XRoute does not

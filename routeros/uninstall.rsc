@@ -53,6 +53,40 @@
   :error "XROUTE: exact project storage directory is missing or ambiguous"
 }
 
+# Guided management cleanup: begin
+:local managementStateId [/system/script/find where name="XROUTE-guided-management-state" and comment="XROUTE guided management restore state"]
+:if ([:len $managementStateId] > 1) do={ :error "XRoute: guided management state is ambiguous" }
+:if ([:len $managementStateId] = 1) do={
+  :local saved [:deserialize [/system/script/get $managementStateId source] from=json]
+  :if ((($saved->"schema") != 1) || (($saved->"root") != $storageRoot) || ([:len ($saved->"ca_fingerprint")] = 0) || ([:len ($saved->"leaf_fingerprint")] = 0) || (($saved->"https_port") < 1) || (($saved->"https_port") > 65535)) do={ :error "XRoute: guided management state is invalid; service settings were preserved" }
+  :local https [/ip/service/find where name="www-ssl" and dynamic=no]
+  :local ssh [/ip/service/find where name="ssh" and dynamic=no]
+  :local ca [/certificate/find where name="xroute-ca" and fingerprint=($saved->"ca_fingerprint")]
+  :local leaf [/certificate/find where name="xroute-local" and fingerprint=($saved->"leaf_fingerprint")]
+  :if (([:len $https] != 1) || ([:len $ssh] != 1)) do={ :error "XRoute: management listeners are ambiguous" }
+  :if (([:len $ca] = 1) && ([:len $leaf] = 1) && ([/ip/service/get $https certificate] = "xroute-local") && ([/ip/service/get $https port] = 59443) && ([:tostr [/ip/service/get $https available-from]] = ($saved->"installed_https_addresses"))) do={
+    /ip/service/set $https disabled=yes certificate=($saved->"https_certificate") port=($saved->"https_port") available-from=($saved->"https_addresses")
+  }
+  :if ([:tostr [/ip/service/get $ssh available-from]] = ($saved->"installed_ssh_addresses")) do={ /ip/service/set $ssh available-from=($saved->"ssh_addresses") }
+  :if (([:len $ca] = 1) && ([:len $leaf] = 1)) do={
+    :local used false
+    :local caKey [/certificate/get $ca skid]
+    :foreach cert in=[/certificate/find] do={
+      :if (($cert != $ca) && ($cert != $leaf) && ([/certificate/get $cert akid] = $caKey)) do={ :set used true }
+    }
+    :foreach certName in={"xroute-local";"xroute-ca"} do={
+      :if ([:len [/ip/service/find where certificate=$certName and dynamic=no]] > 0) do={ :set used true }
+      # Optional package menus must be parsed inside the guarded call, not
+      # while RouterOS parses the entire uninstall script.
+      :foreach probe in={":return ([/interface/sstp-server/server/get certificate] = \$1)";":return ([:len [/interface/ovpn-server/server/find where certificate=\$1]] > 0)";":return ([:len [/interface/sstp-client/find where certificate=\$1]] > 0)";":return ([:len [/interface/ovpn-client/find where certificate=\$1]] > 0)";":foreach row in=[/ip/ipsec/identity/find] do={ :foreach name in=[/ip/ipsec/identity/get \$row certificate] do={ :if (\$name = \$1) do={ :return true } } }; :return false";":return ([:len [/ip/hotspot/profile/find where ssl-certificate=\$1]] > 0)";":return ([:len [/interface/dot1x/client/find where certificate=\$1]] > 0)";":return ([:len [/radius/find where certificate=\$1]] > 0)";":return ([/caps-man/manager/get certificate] = \$1)";":return ([/caps-man/manager/get ca-certificate] = \$1)";":return ([/interface/wifi/capsman/get certificate] = \$1)";":return ([/interface/wifi/capsman/get ca-certificate] = \$1)"} do={
+        :do { :local check [:parse $probe]; :if ([$check $certName] = true) do={ :set used true } } on-error={}
+      }
+    }
+    :if ($used = false) do={ /certificate/remove $ca } else={ :log warning "XRoute: installer certificates are used outside XRoute and were preserved" }
+  }
+}
+# Guided management cleanup: end
+
 :local gate [/ip/firewall/mangle/find where comment="XROUTE diversion-gate"]
 :if ([:len $gate] = 1) do={ /ip/firewall/mangle/disable $gate }
 :foreach sbFlow in=[/ip/firewall/connection/find where connection-mark="xroute-managed"] do={ :do { /ip/firewall/connection/remove $sbFlow } on-error={} }
@@ -80,8 +114,12 @@
 /ip/route/remove [find where comment~"^XROUTE "]
 :do { /interface/list/member/remove [find where comment~"^XROUTE "] } on-error={}
 
-:local containerId [/container/find where comment="XROUTE container"]
-:if ([:len $containerId] = 1) do={
+:foreach containerId in=[/container/find where comment="XROUTE container" or comment="XROUTE container previous"] do={
+  :local containerRoot [:tostr [/container/get $containerId root-dir]]
+  :if ([:pick $containerRoot 0 1] = "/") do={ :set containerRoot [:pick $containerRoot 1 [:len $containerRoot]] }
+  :local rootPrefix ($storageRoot . "/root-")
+  :if (($containerRoot != ($storageRoot . "/root")) && ([:pick $containerRoot 0 [:len $rootPrefix]] != $rootPrefix)) do={ :error "XRoute: container root is outside managed storage" }
+  :if ([:typeof [:find $containerRoot "/" ([:len $storageRoot] + 1)]] != "nil") do={ :error "XRoute: container root is nested" }
   :do { /container/stop $containerId } on-error={}
   :local stopped false
   :local stopAttempt 0
@@ -102,11 +140,14 @@
 /interface/bridge/remove [find where comment~"^XROUTE "]
 /interface/list/remove [find where comment~"^XROUTE "]
 /routing/table/remove [find where comment="XROUTE routing table"]
-/user/remove [find where comment="XROUTE control-plane REST user"]
-/user/group/remove [find where comment="XROUTE REST group"]
-/file/remove [find where name~"^sb-gateway-(before-|pre-)"]
+# Managed backup cleanup: begin
+:foreach backupFile in=[/file/find where name~"^(xroute|sb-gateway)-(before-|pre-)" or name~"^XROUTE-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}(-export[.]rsc|[.]backup)\$"] do={ /file/remove $backupFile }
+# Managed backup cleanup: end
 
 :local storageEntry [/file/find where name=$storageRoot]
 :if ([:len $storageEntry] = 1) do={ /file/remove $storageEntry }
 :log warning "XROUTE: full uninstall complete; foreign RouterOS objects were preserved"
+# Deleting the executing account's group revokes its remaining permissions.
+/user/remove [find where comment="XROUTE control-plane REST user"]
+/user/group/remove [find where comment="XROUTE REST group"]
 }

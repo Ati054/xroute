@@ -26,11 +26,13 @@ func TestGuidedInstallerUsesMatchingOfflineSources(t *testing.T) {
 			if strings.Contains(text, "@@") || strings.Contains(text, "check-certificate=no") || strings.Contains(text, "/disk/format") {
 				t.Fatal("unsafe or incomplete installer")
 			}
-			if !strings.Contains(text, ":if ($offlineImage != true) do={\n:onerror imageLookupError") || !strings.Contains(text, "Using the uploaded release image; no image download is needed.") {
-				t.Fatal("uploaded bundles must not require release lookup or image download")
+			if strings.Contains(text, "api.github.com") || strings.Contains(text, "/releases/download/") {
+				t.Fatal("the installer must use the uploaded archive")
 			}
-			if !strings.Contains(text, `"https://api.github.com/repos/Ati054/xroute/releases/assets/"`) || strings.Contains(text, `"https://github.com/Ati054/xroute/releases/download/`) {
-				t.Fatal("online image downloads must use the RouterOS-compatible GitHub API endpoint")
+			beforeConfirmation, _, found := strings.Cut(text, `:local confirmed [$choose 1]`)
+			if !found || !strings.Contains(beforeConfirmation, `:if ([:len $uploaded] != 1) do={ :error`) ||
+				!strings.Contains(beforeConfirmation, `:if ([/file/get $uploaded size] != $imageBytes) do={ :error`) {
+				t.Fatal("missing or incomplete archive must be rejected before confirmation")
 			}
 			for _, name := range []string{"variables.example.rsc", "bootstrap.rsc", "preflight.rsc", "webfig-bootstrap.rsc", "fasttrack-patch.rsc", "container-startup.rsc", "install.rsc", "watchdog.rsc"} {
 				data, err := os.ReadFile(filepath.Join(root, "routeros", name))

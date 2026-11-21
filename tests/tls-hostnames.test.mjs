@@ -244,6 +244,6 @@ test("SetupWizard retains an explicit separate origin while saving an incomplete
   }
   visit(parsed);
   assert.ok(wizardText, "SetupWizard must exist");
-  assert.match(wizardText, /\.\.\.ingress,[\s\S]*subscription_hostname:\s*subscriptionHost/);
+  assert.doesNotMatch(wizardText, /subscription_hostname\s*:/);
   assert.doesNotMatch(wizardText, /subscription_origin_server_name:\s*""/);
 });

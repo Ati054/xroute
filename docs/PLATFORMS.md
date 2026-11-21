@@ -16,10 +16,23 @@ On CHR, a dedicated project directory such as `xroute` may reside on the system
 disk. A second disk can use `slot1/xroute` or `disk1/xroute`. Bare disk names,
 system directories and traversal components are rejected. Generated workers check
 that a bare project directory runs on x86 CHR before changing RouterOS objects.
+The guided installer offers `System disk: xroute` only on x86 CHR with at least
+1 GiB of free disk space. It also offers mounted ext4 disks with the same minimum
+free space. Hardware routers do not receive the system-disk option. Expanding a
+CHR virtual disk is an administrator operation; the installer never resizes or
+formats disks.
 The storage-aware boot probe accepts this CHR directory as a system-disk path;
 external-volume readiness and mount-source checks remain required elsewhere.
 Fresh installation and manual removal enforce the same device boundary. Boot
 never creates missing folders; only explicit installation may create mount folders.
+Post-Apply file cleanup also accepts the system-disk project directory after
+checking the live RouterOS board and architecture. It removes only known installer
+files and old managed backups; unrelated files and nested runtime data are kept.
+Full removal keeps the service account and its permissions until managed files
+and scripts have been removed, allowing a subsequent guided installation.
+Its fixed worker and scheduler include RouterOS's `ftp` file-operation permission
+and `sensitive` permission for removing generated binary backups. This does not
+enable the FTP service.
 The existing external-storage path remains the default for physical routers;
 internal `flash/` storage is not enabled by this platform change.
 New ARM64 installation examples use `usb1/xroute`. Existing installation paths

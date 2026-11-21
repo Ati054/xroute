@@ -1723,6 +1723,10 @@ button.draft-label:focus-visible {
   background: #16ad81;
 }
 
+.overview-transport-chip:only-child {
+  grid-column: 1 / -1;
+}
+
 .overview-transport-chip strong {
   overflow: hidden;
   color: #142831;
@@ -1809,6 +1813,9 @@ button.draft-label:focus-visible {
 }
 
 .overview-device-table th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
   border-top: 1px solid #edf0ee;
   border-bottom: 1px solid #dfe5e2;
   color: #738298;
@@ -1820,11 +1827,11 @@ button.draft-label:focus-visible {
   text-transform: uppercase;
 }
 
-.overview-device-table th:nth-child(1) { width: 14%; }
-.overview-device-table th:nth-child(2) { width: 11%; }
-.overview-device-table th:nth-child(3) { width: 14%; }
-.overview-device-table th:nth-child(4) { width: 15%; }
-.overview-device-table th:nth-child(5) { width: 20%; }
+.overview-device-table th:nth-child(1) { width: 17%; }
+.overview-device-table th:nth-child(2) { width: 9%; }
+.overview-device-table th:nth-child(3) { width: 16%; }
+.overview-device-table th:nth-child(4) { width: 14%; }
+.overview-device-table th:nth-child(5) { width: 18%; }
 .overview-device-table th:nth-child(6) { width: 14%; }
 .overview-device-table th:nth-child(7) { width: 12%; }
 
@@ -1877,6 +1884,8 @@ button.draft-label:focus-visible {
   color: #647985;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .overview-device-dot {
@@ -1933,6 +1942,12 @@ button.draft-label:focus-visible {
   flex: 0 0 auto;
   border-radius: 50%;
   background: #25a980;
+}
+
+.overview-policy-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overview-outbound-chip {
@@ -4933,11 +4948,11 @@ td small {
   margin-bottom: 0;
 }
 
-.browser-image-upload input[type="file"] {
+.field input[type="file"] {
   cursor: pointer;
 }
 
-.browser-image-upload input[type="file"]::file-selector-button {
+.field input[type="file"]::file-selector-button {
   min-height: 30px;
   margin-inline-end: 10px;
   border: 1px solid var(--line-strong);
@@ -4950,14 +4965,14 @@ td small {
   cursor: pointer;
 }
 
-.browser-image-upload input[type="file"]:hover::file-selector-button {
+.field input[type="file"]:enabled:hover::file-selector-button {
   border-color: var(--green);
   background: var(--green-soft);
   color: var(--green-dark);
 }
 
-.browser-image-upload input[type="file"]:disabled,
-.browser-image-upload input[type="file"]:disabled::file-selector-button {
+.field input[type="file"]:disabled,
+.field input[type="file"]:disabled::file-selector-button {
   cursor: not-allowed;
 }
 
@@ -5976,7 +5991,8 @@ td small {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 16px 20px 32px;
+  scroll-padding-block-end: 32px;
   scrollbar-color: #8da79f transparent;
   scrollbar-width: thin;
 }
@@ -6029,6 +6045,45 @@ td small {
 
 .setup-modal {
   width: min(800px, 100%);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+}
+
+.setup-heading,
+.setup-modal > .wizard-steps,
+.setup-modal > .wizard-actions,
+.setup-modal > .inline-result {
+  flex-shrink: 0;
+}
+
+.wizard-certificate-file {
+  min-width: 0;
+  width: 100%;
+}
+
+.wizard-rest-help {
+  margin-block: 12px;
+}
+
+.wizard-rest-help summary {
+  cursor: pointer;
+}
+
+.wizard-advanced {
+  margin-block: 12px;
+}
+
+.wizard-advanced summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.wizard-advanced-fields {
+  display: grid;
+  gap: 12px;
+  margin-block-start: 12px;
 }
 
 .setup-heading {
@@ -6063,7 +6118,7 @@ td small {
 
 .wizard-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   margin: 20px 0;
@@ -6112,7 +6167,11 @@ td small {
 }
 
 .wizard-body {
-  min-height: 350px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-inline-end: 8px;
 }
 
 .wizard-body h3 {
@@ -6133,6 +6192,7 @@ td small {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: end;
 }
 
 .network-review-toolbar {
@@ -6189,6 +6249,30 @@ td small {
   flex-direction: column;
 }
 
+.discovered-networks .network-review-item {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.discovered-networks .network-review-item > span {
+  min-width: 0;
+  flex: 1 1 140px;
+  overflow-wrap: anywhere;
+}
+
+.discovered-networks .network-review-item > span[aria-hidden] {
+  flex: 0 0 auto;
+}
+
+.discovered-networks .network-review-item .card-actions {
+  flex: 1 1 190px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
 .discovered-networks strong {
   font-size: 9px;
 }
@@ -6196,18 +6280,6 @@ td small {
 .discovered-networks small {
   margin-top: 3px;
   color: #83908e;
-  font-size: 8px;
-}
-
-.wizard-provider-check {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.wizard-provider-check span {
-  color: #7d8a89;
   font-size: 8px;
 }
 
@@ -6659,9 +6731,12 @@ td small {
 }
 
 .cdn-client-overrides summary span {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   justify-content: space-between;
+  flex-wrap: wrap;
+  inline-size: calc(100% - 1.5em);
+  vertical-align: top;
   gap: 12px;
 }
 
@@ -6969,7 +7044,7 @@ td small {
 
 .service-pack-geoip input { width: 15px; height: 15px; margin: 0; accent-color: var(--green); }
 .service-pack-geoip-note,
-.service-pack-geoip-error { display: block; margin: -5px 0 10px; font-size: 11px; line-height: 1.4; }
+.service-pack-geoip-error { display: block; margin: 0 0 10px; font-size: 11px; line-height: 1.4; }
 .service-pack-geoip-note { color: var(--ink-soft); }
 .service-pack-geoip-error { color: var(--red); }
 
@@ -8214,7 +8289,7 @@ td small {
   }
 
   .wizard-steps {
-    grid-template-columns: repeat(5, 44px);
+    grid-template-columns: repeat(3, 44px);
     justify-content: space-between;
     border: 0;
     background: transparent;
@@ -10735,7 +10810,7 @@ td small {
   }
 
   .policy-editor-body {
-    padding: 18px 17px;
+    padding: 18px 17px 32px;
   }
 
   .policy-editor-footer {

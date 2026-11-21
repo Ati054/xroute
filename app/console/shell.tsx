@@ -216,6 +216,8 @@ export function GatewayConsole({
     draftEnvelope?.pending_config_changes ??
       overviewForDraft?.pending_config_changes,
   );
+  const visiblePendingChanges = pendingConfigChanges.slice(0, 8);
+  const remainingPendingChanges = pendingConfigChangeCount - visiblePendingChanges.length;
   const reportedRuntimeUpdateRequired =
     overviewForDraft?.runtime_update_required ??
     draftEnvelope?.runtime_update_required;
@@ -438,6 +440,20 @@ export function GatewayConsole({
       setPreparingApply(false);
     }
   }
+
+  useEffect(() => {
+    const closeTopDialog = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+      const close = dialogs.item(dialogs.length - 1)?.querySelector<HTMLButtonElement>(".modal-close");
+      if (close && !close.disabled) {
+        event.preventDefault();
+        close.click();
+      }
+    };
+    document.addEventListener("keydown", closeTopDialog);
+    return () => document.removeEventListener("keydown", closeTopDialog);
+  }, []);
 
   useEffect(() => {
     if (screen !== "routing") return;
@@ -737,8 +753,8 @@ export function GatewayConsole({
                 >
                   <strong>{tr("Что изменилось")}</strong>
                   <ul>
-                    {(pendingConfigChanges.length
-                      ? pendingConfigChanges.slice(0, 8)
+                    {(visiblePendingChanges.length
+                      ? visiblePendingChanges
                       : [{
                           collection: "configuration",
                           op: "replace",
@@ -747,12 +763,12 @@ export function GatewayConsole({
                       <li key={`${asText(change.path, "change")}-${index}`}>
                         {pendingConfigChanges.length
                           ? pendingChangeText(change, locale)
-                          : tr("{value1} изменений конфигурации", { value1: pendingConfigChangeCount })}
+                          : tr("Изменены настройки конфигурации")}
                       </li>
                     ))}
                   </ul>
-                  {pendingConfigChanges.length > 8 ? (
-                    <small>{tr("Ещё")} {pendingConfigChanges.length - 8}</small>
+                  {visiblePendingChanges.length > 0 && remainingPendingChanges > 0 ? (
+                    <small>{tr("Ещё {count}", { count: remainingPendingChanges })}</small>
                   ) : null}
                 </div>
               ) : null}
@@ -1108,6 +1124,7 @@ export function GatewayConsole({
         <SetupWizard
           onClose={() => setSetupOpen(false)}
           onDraftChanged={refreshAll}
+          onApply={() => { setSetupOpen(false); void prepareApply(); }}
           config={draftConfig}
         />
       ) : null}

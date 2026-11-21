@@ -1,5 +1,8 @@
 "use client";
 
+import { operationLabel, operationOutcomeTone } from "../operation-labels";
+import { projectRootFromContainer } from "../storage-root";
+
 import { JsonObject, createRecoveryBackup, discoverRouterOs, downloadRecoveryBackup, getLifecycleStatus, getRecoveryBackups, getSystemLogs, getUninstallPreview, getXrayLogs, importRouterOsExport, isUncertainOperationError, preflightContainerImageUpload, restoreRecoveryBackup, runDiagnostics, runDraftOperation, saveCurrentDraft, scheduleFullUninstall, scheduleImageUpdate, uploadContainerImage, uploadRecoveryBackup } from "../api-client";
 import { useLanguage } from "../i18n";
 import { RollbackDialog } from "./apply-dialog";
@@ -478,7 +481,7 @@ export function Operations({
   const watchdogConfig = asObject(config.watchdog);
   const liveRouteros = asObject(overview?.routeros);
   const liveContainer = asObject(liveRouteros.container);
-  const lifecycleStorageRoot = asText(lifecycleStatus?.storage_root, "");
+  const lifecycleStorageRoot = asText(lifecycleStatus?.storage_root, "") || projectRootFromContainer(liveContainer.root_dir);
   const lifecycleOperation = asObject(lifecycleStatus?.operation);
   const lifecycleOperationState = asText(lifecycleOperation.state, "");
   const lifecycleOperationVersion = asText(lifecycleOperation.version, candidateVersion);
@@ -664,8 +667,8 @@ export function Operations({
     setRecoveryMessage("");
     try {
       await createRecoveryBackup<JsonObject>();
-      await refreshRecovery();
-      setRecoveryMessage(tr("Зашифрованная копия сохранена на SSD и в RouterOS Files."));
+      setRecoveryMessage(tr("Зашифрованная копия сохранена на диске XRoute."));
+      await Promise.allSettled([refreshRecovery(), onRefresh()]);
     } catch (error) {
       setRecoveryMessage(prefixedErrorMessage(error));
     } finally {
@@ -679,8 +682,8 @@ export function Operations({
     setRecoveryMessage("");
     try {
       await uploadRecoveryBackup<JsonObject>(file);
-      await refreshRecovery();
       setRecoveryMessage(tr("Архив проверен и добавлен в список восстановления."));
+      await Promise.allSettled([refreshRecovery(), onRefresh()]);
     } catch (error) {
       setRecoveryMessage(prefixedErrorMessage(error));
     } finally {
@@ -779,7 +782,7 @@ export function Operations({
     setCandidateReference("");
     setCandidateVersion("");
     setCandidateChecksum("");
-    setLifecycleMessage(tr("Загружаю образ прямо на SSD; проверю архитектуру и SHA-256…"));
+    setLifecycleMessage(tr("Загрузка образа и проверка архитектуры и SHA-256…"));
     try {
       await preflightContainerImageUpload(file);
       const result = await uploadContainerImage<JsonObject>(file, setImageUploadProgress);
@@ -898,10 +901,10 @@ export function Operations({
                     : "muted"
               }
             >
-              {asText(watchdogRuntime.state, tr("Нет данных о работе служб"))}
+              {watchdogRuntime.state ? operationLabel(watchdogRuntime.state, tr) : tr("Нет данных о работе служб")}
             </StatusPill>
           </div>
-          <p className="eyebrow">{tr("Фактическая настройка черновика")}</p>
+          <p className="eyebrow">{tr("Параметры watchdog")}</p>
           <h3>{tr("Watchdog контейнера")}</h3>
           <p>
              {tr("Проверка каждые")} {asText(watchdogConfig.interval_seconds, "—")}  {tr("сек.; порог отказа —")} {asText(watchdogConfig.failure_threshold, "—")}{tr(", восстановления —")} {asText(watchdogConfig.recovery_threshold, "—")}.
@@ -909,9 +912,9 @@ export function Operations({
           <div className="watchdog-chain">
             <span>{tr("Сбой")}</span>
             <i>→</i>
-            <span>{tr("Локальные:")} {asText(runtime?.routing && asObject(runtime.routing).local_on_outage, "wan-direct")}</span>
+            <span>{tr("Локальные:")} {operationLabel(asText(asObject(runtime?.routing).local_on_outage, "wan-direct"), tr)}</span>
             <i>→</i>
-            <span>{tr("Удалённые:")} {asText(runtime?.routing && asObject(runtime.routing).remote_on_outage, "drop")}</span>
+            <span>{tr("Удалённые:")} {operationLabel(asText(asObject(runtime?.routing).remote_on_outage, "drop"), tr)}</span>
             <i>→</i>
             <span>{asText(watchdogConfig.max_restarts_per_hour, "—")}  {tr("рестартов/ч")}</span>
           </div>
@@ -980,7 +983,7 @@ export function Operations({
           <div className="xray-log-title-line">
             <h3>{tr("Журналы XRoute")}</h3>
             <StatusPill tone={configuredXrayLogLevel === "none" ? "muted" : configuredXrayLogLevel === "debug" ? "warn" : "info"}>
-              {tr("В черновике:")} {configuredXrayLogLevel}
+              {tr("Уровень журнала:")} {configuredXrayLogLevel}
             </StatusPill>
           </div>
           <p>{tr("Журналы Xray, панели, веб-сервера и обновлений.")}</p>
@@ -1035,11 +1038,11 @@ export function Operations({
                   <tr key={`${asText(event.timestamp, "event")}-${index}`}>
                     <td><code>{revision}</code></td>
                     <td>{formatTimestamp(event.timestamp, locale)}</td>
-                    <td>{asText(event.action, tr("операция"))}</td>
+                    <td>{operationLabel(event.action, tr)}</td>
                     <td>{asText(event.actor, tr("локально"))}</td>
                     <td>
-                      <StatusPill tone={event.outcome === "ok" ? "ok" : "danger"}>
-                        {asText(event.outcome, tr("неизвестно"))}
+                      <StatusPill tone={operationOutcomeTone(event.outcome)}>
+                        {operationLabel(event.outcome, tr)}
                       </StatusPill>
                     </td>
                     <td><code>{asText(event.request_id, "—")}</code></td>
@@ -1062,7 +1065,7 @@ export function Operations({
           <div>
             <h3>{tr("Резервные копии XRoute")}</h3>
             <p>
-               {tr("Три последние копии хранятся на SSD и в RouterOS Files. Архив зашифрован паролем администратора панели и не содержит образ, журнал или кэш.")} </p>
+               {tr("На диске XRoute хранятся до трёх копий. Архив зашифрован паролем администратора панели и не содержит образ, журнал или кэш.")} </p>
           </div>
           <div className="recovery-toolbar">
             <label className="button button-secondary recovery-upload-button">
@@ -1097,13 +1100,8 @@ export function Operations({
                     XRoute {asText(archive.application_version, "—")} · {formatBytes(archive.size_bytes, locale)}
                   </small>
                 </div>
-                <div className="recovery-locations" aria-label={tr("Места хранения")}>
-                  <StatusPill tone={archive.ssd === true ? "ok" : "warn"}>
-                    SSD
-                  </StatusPill>
-                  <StatusPill tone={archive.routeros_files === true ? "ok" : "warn"}>
-                    RouterOS Files
-                  </StatusPill>
+                <div className="recovery-locations">
+                  <StatusPill tone="ok">{tr("Диск XRoute")}</StatusPill>
                 </div>
                 <div className="recovery-row-actions">
                   <button
@@ -1126,7 +1124,7 @@ export function Operations({
           })}
           {!asObjectList(recoveryStatus?.items).length ? (
             <div className="empty-result">
-               {tr("Копий пока нет. Нажмите «Создать копию» — панель проверит обе точки хранения и настроит ротацию до трёх архивов.")} </div>
+               {tr("Копий пока нет. Нажмите «Создать копию».")} </div>
           ) : null}
         </div>
         {restoreArchive ? (
@@ -1208,12 +1206,12 @@ export function Operations({
               <p className="modal-lead">{tr("RouterOS сохранит прежний контейнер остановленным и запустит его снова, если новый образ не пройдёт проверку работоспособности.")}</p>
               <label className="field browser-image-upload" htmlFor="container-image-archive">
                  {tr("Новый образ XRoute · один .tar")} <input id="container-image-archive" type="file" accept=".tar,application/x-tar,application/octet-stream" aria-describedby="container-image-upload-help" disabled={imageUploadBusy || lifecycleBusy} onChange={(event) => { void uploadImageFromBrowser(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                <small id="container-image-upload-help">{imageUploadBusy ? tr("Записываю прямо на SSD…") : tr("Панель проверит XRoute, совместимость архитектуры и SHA-256. Второй архив и файл .sha256 не нужны.")}</small>
+                <small id="container-image-upload-help">{imageUploadBusy ? tr("Запись образа на диск XRoute…") : tr("Панель проверит XRoute, совместимость архитектуры и SHA-256. Второй архив и файл .sha256 не нужны.")}</small>
               </label>
               {imageUploadBusy ? (
                 <div className="image-upload-progress" aria-live="polite">
                   <div><strong>{imageUploadProgress.percent}%</strong><span>{formatBytes(imageUploadProgress.loadedBytes, locale)} / {formatBytes(imageUploadProgress.totalBytes, locale)}</span></div>
-                  <div className="progress-track" role="progressbar" aria-label={tr("Загрузка образа на SSD")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={imageUploadProgress.percent}>
+                  <div className="progress-track" role="progressbar" aria-label={tr("Загрузка образа")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={imageUploadProgress.percent}>
                     <span style={{ width: `${imageUploadProgress.percent}%` }} />
                   </div>
                 </div>
@@ -1221,7 +1219,7 @@ export function Operations({
               {candidateReference ? <div className="notice notice-success lifecycle-candidate-notice"><span className="notice-icon">✓</span><div><strong>{tr("Образ")} {candidateVersion}  {tr("проверен и готов")}</strong><p>SHA-256: {candidateChecksum.slice(0, 16)}{tr("… Архитектура и контрольная сумма проверены.")}</p></div></div> : null}
               {updateDialogOpen && lifecycleMessage ? <div className={`inline-result ${isErrorMessage(lifecycleMessage) ? "inline-result-error" : ""}`} role={isErrorMessage(lifecycleMessage) ? "alert" : "status"}><span>{isErrorMessage(lifecycleMessage) ? "!" : "i"}</span>{lifecycleMessage}</div> : null}
               <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Обновить контейнер с автоматическим откатом")}</strong><small>{tr("Панель временно перезапустится; маршрутизация заранее перейдёт в fail-open.")}</small></span></label>
-              <aside className="notice notice-neutral"><span className="notice-icon">i</span><div><strong>{tr("Перед остановкой запускается автоматическая проверка")}</strong><p>{tr("RouterOS проверяет project-owned объекты, отключает diversion и сохраняет прежний контейнер для отката.")}</p></div></aside>
+              <aside className="notice notice-neutral"><span className="notice-icon">i</span><div><strong>{tr("Перед остановкой запускается автоматическая проверка")}</strong><p>{tr("RouterOS проверяет служебные объекты XRoute, отключает перенаправление трафика и сохраняет прежний контейнер для отката.")}</p></div></aside>
               <div className="modal-actions"><button className="button button-tertiary" type="button" disabled={lifecycleBusy} onClick={() => setUpdateDialogOpen(false)}>{tr("Отмена")}</button><button className="button button-primary" type="submit" disabled={lifecycleBusy || imageUploadBusy || !candidateReference}>{lifecycleBusy ? tr("Ставлю в очередь…") : tr("Подготовить обновление")}</button></div>
             </form>
           </section>
@@ -1247,7 +1245,7 @@ export function Operations({
               <p className="eyebrow">{tr("Опасная операция")}</p>
               <h2 id="full-uninstall-title">{tr("Полностью удалить XRoute")}</h2>
               <p className="modal-lead">{tr("Удаляются только подтверждённый каталог проекта и служебные объекты XRoute.")}</p>
-              {uninstallPreview ? <div className="lifecycle-preview"><div><strong>{tr("Будет удалено")}</strong><ul>{asStringList(uninstallPreview.removes).map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>{tr("Будет сохранено")}</strong><ul>{asStringList(uninstallPreview.preserves).map((item) => <li key={item}>{item}</li>)}</ul></div></div> : null}
+              {uninstallPreview ? <div className="lifecycle-preview"><div><strong>{tr("Будет удалено")}</strong><ul>{asStringList(uninstallPreview.removes).map((item) => <li key={item}>{tr(item)}</li>)}</ul></div><div><strong>{tr("Будет сохранено")}</strong><ul>{asStringList(uninstallPreview.preserves).map((item) => <li key={item}>{tr(item)}</li>)}</ul></div></div> : null}
               <label className="checkbox-field lifecycle-confirmation"><input name="confirmed" type="checkbox" required /><span><strong>{tr("Удалить XRoute полностью")}</strong><small>{tr("Каталог")} {lifecycleStorageRoot || tr("проекта")}  {tr("и только служебные объекты XRoute.")}</small></span></label>
               <div className="modal-actions"><button className="button button-tertiary" type="button" disabled={lifecycleBusy} onClick={() => setUninstallDialogOpen(false)}>{tr("Отмена")}</button><button className="button button-danger" type="submit" disabled={lifecycleBusy || !lifecycleStorageRoot}>{lifecycleBusy ? tr("Проверяю…") : tr("Проверить и удалить")}</button></div>
             </form>
@@ -1419,7 +1417,7 @@ function LifecycleUpdateProgressDialog({
         </div>
 
         <ol className="lifecycle-progress-steps">
-          <li data-state={stepState(true, false)}><span>1</span><div><strong>{tr("Архив проверен")}</strong><small>{tr("ARM64, версия и SHA-256 подтверждены.")}</small></div></li>
+          <li data-state={stepState(true, false)}><span>1</span><div><strong>{tr("Архив проверен")}</strong><small>{tr("Архитектура, версия и SHA-256 подтверждены.")}</small></div></li>
           <li data-state={stepState(switched, !switched)}><span>2</span><div><strong>{tr("Распаковка и переключение")}</strong><small>{tr("RouterOS сохраняет рабочий контейнер для автоматического возврата.")}</small></div></li>
           <li data-state={stepState(completed, probation)}><span>3</span><div><strong>{rolledBack ? tr("Предыдущая версия восстановлена") : state === "failed" ? tr("Рабочая версия не изменена") : tr("Health-check и контрольный период")}</strong><small>{failed ? tr("Рабочая конфигурация сохранена; откройте журнал обновления.") : tr("После подтверждения новая версия станет рабочей.")}</small></div></li>
         </ol>

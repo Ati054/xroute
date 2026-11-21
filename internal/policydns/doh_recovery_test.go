@@ -241,6 +241,7 @@ func TestDoHRecoversAfterHTTP2FailureAndClosedIdleConnection(t *testing.T) {
 func TestDoHDiscardsUnresponsiveHTTP2Connection(t *testing.T) {
 	var staleRemote atomic.Value
 	staleRemote.Store("")
+	var healthyRemote atomic.Value
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor != 2 {
 			t.Errorf("protocol HTTP/%d", r.ProtoMajor)
@@ -254,6 +255,7 @@ func TestDoHDiscardsUnresponsiveHTTP2Connection(t *testing.T) {
 			return
 		}
 		staleRemote.CompareAndSwap("", r.RemoteAddr)
+		healthyRemote.Store(r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/dns-message")
 		_, _ = w.Write(dnsAResponse(q, 60))
 	}))
@@ -283,6 +285,14 @@ func TestDoHDiscardsUnresponsiveHTTP2Connection(t *testing.T) {
 	r, err := u.exchange(context.Background(), q)
 	if err != nil || !matchingQuestion(q, r) {
 		t.Fatalf("next request reused unresponsive connection: %v", err)
+	}
+	staleRemote.Store(healthyRemote.Load())
+	r, err = u.exchange(t.Context(), q)
+	if err != nil || !matchingQuestion(q, r) {
+		t.Fatalf("same query did not recover from a stalled reused connection: %v", err)
+	}
+	if healthyRemote.Load() == staleRemote.Load() {
+		t.Fatal("retry reused the stalled connection")
 	}
 }
 

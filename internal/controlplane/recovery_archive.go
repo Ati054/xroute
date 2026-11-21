@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/geoipasset"
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 const (
@@ -75,21 +75,24 @@ func recoveryArchiveFailureClass(err error) recoveryFailureClass {
 }
 
 func recoveryArchiveFailurePresentation(err error) (classifier, action, message string) {
+	if errors.Is(err, errSubscriptionCatalogReferencesPending) {
+		return "source_collection", "retry_when_idle", "Дождитесь завершения текущей операции и повторите создание резервной копии."
+	}
 	switch recoveryArchiveFailureClass(err) {
 	case recoveryFailureSourceChurn:
-		return "source_churn", "retry_when_idle", "Состояние шлюза менялось во время подготовки копии. Обновление не запланировано; повторите после завершения текущих операций."
+		return "source_churn", "retry_when_idle", "Дождитесь завершения текущей операции и повторите создание резервной копии."
 	case recoveryFailureProtection:
-		return "protection", "check_recovery_protection", "Защита копии восстановления недоступна. Обновление не запланировано; проверьте защиту резервных копий."
+		return "protection", "check_recovery_protection", "Шифрование резервных копий недоступно."
 	case recoveryFailureSourceCollection:
-		return "source_collection", "check_recovery_data", "Набор данных для копии не прошёл проверку безопасности. Обновление не запланировано."
+		return "source_collection", "check_recovery_data", "Данные для резервной копии не прошли проверку."
 	case recoveryFailureStaging:
-		return "staging", "check_recovery_storage", "Не удалось безопасно подготовить копию восстановления. Обновление не запланировано."
+		return "staging", "check_recovery_storage", "Не удалось подготовить резервную копию. Проверьте диск XRoute."
 	case recoveryFailureArchiveWrite:
-		return "archive_write", "check_recovery_storage", "Не удалось записать копию восстановления. Обновление не запланировано."
+		return "archive_write", "check_recovery_storage", "Не удалось записать резервную копию. Проверьте диск XRoute."
 	case recoveryFailureFinalize:
-		return "finalize", "check_recovery_storage", "Не удалось завершить копию восстановления. Обновление не запланировано."
+		return "finalize", "check_recovery_storage", "Не удалось сохранить резервную копию. Проверьте диск XRoute."
 	default:
-		return "unknown", "check_recovery_storage", "Не удалось создать обязательную копию восстановления. Обновление не запланировано."
+		return "unknown", "check_recovery_storage", "Не удалось создать резервную копию. Проверьте диск XRoute."
 	}
 }
 

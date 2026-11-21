@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Ati054/xroute/internal/imagebundle"
+	"github.com/Ati054/xroute/internal/managedidentity"
 	"github.com/Ati054/xroute/internal/routeros"
 )
 
@@ -61,7 +62,7 @@ func run(args []string, output io.Writer) error {
 		return fmt.Errorf("validate recovery archive: %w", err)
 	}
 	root = strings.Trim(root, "/")
-	reference := root + "/data/lifecycle-uploads/sb-gateway-upload-" + checksum[:16] + ".tar"
+	reference := root + "/data/lifecycle-uploads/" + managedidentity.Literal("xroute-upload-") + checksum[:16] + ".tar"
 	script, err := routeros.RenderOfflineImageRecovery(routeros.ImageUpdateSpec{
 		Architecture:  architecture,
 		CatalogSchema: details.SubscriptionCatalogSchema,
@@ -84,6 +85,6 @@ func run(args []string, output io.Writer) error {
 		_ = os.Remove(destination)
 		return errors.Join(writeErr, closeErr)
 	}
-	fmt.Fprintf(output, "ARCHIVE_VERIFIED=PASS\nROUTEROS_ARCHIVE=%s\nRECOVERY_SCRIPT=%s\n", reference, destination)
+	fmt.Fprintf(output, "ARCHIVE_VERIFIED=PASS\nROUTEROS_NAMESPACE=%s\nROUTEROS_ARCHIVE=%s\nRECOVERY_SCRIPT=%s\n", managedidentity.Prefix(), reference, destination)
 	return nil
 }

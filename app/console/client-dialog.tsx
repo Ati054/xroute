@@ -40,7 +40,8 @@ export function AddDialog({
       const name = itemName(network);
       const kind = asText(network.kind, "internal");
       const imported = id.startsWith("imported-") || network.imported === true;
-      const displayName = imported
+      const defaultWizardName = name === id && (id === "management-lan" || id.startsWith("wizard-internal-"));
+      const displayName = imported || defaultWizardName
         ? kind === "management"
           ? tr("Сеть управления MikroTik")
           : tr("Внутренние маршрутизируемые сети")
@@ -296,17 +297,19 @@ export function AddDialog({
   ]
     .map(ipv4CidrRange)
     .filter((range): range is [number, number] => range !== null);
+  const ignoredDestinations = new Set(asObjectList(asObject(asObject(config.routeros).import_review).networks)
+    .filter((network) => network.status === "ignored")
+    .map((network) => asText(network.cidr, "")));
+  function visibleDestination(cidr: string): boolean {
+    const range = ipv4CidrRange(cidr);
+    return Boolean(cidr) && !ignoredDestinations.has(cidr) &&
+      (!range || !runtimeLinkRanges.some((reserved) => ipv4RangesOverlap(range, reserved)));
+  }
   const discoveredAccessDestinations = asObjectList(
     routerSources.discovery.access_destinations,
   ).filter((destination) => {
     const cidr = asText(destination.cidr, "");
-    if (configuredNetworkByCidr.has(cidr)) return true;
-    const range = ipv4CidrRange(cidr);
-    return Boolean(
-      range &&
-        isPrivateIpv4Cidr(cidr) &&
-        !runtimeLinkRanges.some((reserved) => ipv4RangesOverlap(range, reserved)),
-    );
+    return visibleDestination(cidr) && (configuredNetworkByCidr.has(cidr) || isPrivateIpv4Cidr(cidr));
   });
   const liveUnconfiguredGroupId = "routeros-live-unconfigured";
   const hasLiveUnconfiguredDestinations = discoveredAccessDestinations.some(
@@ -371,10 +374,11 @@ export function AddDialog({
         detail: string;
       } => entry !== null,
     );
-  const fallbackDestinationEntries = configuredInternalNetworks.flatMap(
+  const liveDestinationCidrs = new Set(liveDestinationEntries.map((entry) => entry.cidr));
+  const configuredDestinationEntries = configuredInternalNetworks.flatMap(
     (network) =>
       network.cidrs
-        .filter((cidr) => !/\/(32|128)$/.test(cidr))
+        .filter((cidr) => visibleDestination(cidr) && !liveDestinationCidrs.has(cidr) && !/\/(32|128)$/.test(cidr))
         .map((cidr) => ({
           cidr,
           groupId: network.id,
@@ -382,14 +386,10 @@ export function AddDialog({
             network.kind === "management"
               ? tr("Сеть управления")
               : tr("Внутренняя подсеть"),
-          detail: tr("Подсеть из группы «{value1}»; текущий маршрут временно недоступен", { value1: network.displayName }),
+          detail: tr("Подсеть из настроек XRoute"),
         })),
   );
-  const destinationEntries =
-    discoveredAccessDestinations.length ||
-    routerSources.discovery.access_destination_inventory_complete === true
-      ? liveDestinationEntries
-      : fallbackDestinationEntries;
+  const destinationEntries = [...liveDestinationEntries, ...configuredDestinationEntries];
   const networkOptions = destinationGroupDefinitions
     .map((group) => ({
       ...group,
@@ -1246,7 +1246,7 @@ export function AddDialog({
             {!policyOptions.length ? (
               <div className="inline-result inline-result-error" role="alert">
                 <span>!</span>
-                 {tr("Сначала создайте фактическую политику выхода в разделе «Маршрутизация». Демонстрационные варианты здесь не подставляются.")} </div>
+                 {tr("Сначала создайте маршрутный лист в разделе «Маршрутизация».")} </div>
             ) : null}
             {saveError ? (
               <div className="inline-result inline-result-error" role="alert">

@@ -85,6 +85,9 @@ func TestRenderNginxCandidateBuildsDirectAndCDNSubscriptionWithoutDuplicateLocat
 	if updated, err := UpgradeNginxCapacity(result); err != nil || updated != result {
 		t.Fatalf("newly generated Nginx capacity is not current: %v", err)
 	}
+	if updated, err := UpgradeNginxStaticCompression(result); err != nil || updated != result || strings.Count(result, "gzip on;") != 1 {
+		t.Fatalf("newly generated static compression is not current: %v", err)
+	}
 	if strings.Contains(result, "${") {
 		t.Fatal("Nginx candidate contains unresolved variables")
 	}

@@ -7,6 +7,21 @@ const text = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const packageVersion = JSON.parse(await text("package.json")).version;
 const escapedPackageVersion = packageVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+test("Docker build context includes every embedded RouterOS script", async () => {
+  const [assets, ignore] = await Promise.all([
+    text("routeros/assets.go"),
+    text(".dockerignore"),
+  ]);
+  const allowed = new Set(ignore.split(/\r?\n/).map((line) => line.trim()));
+  const scripts = [...assets.matchAll(/^\/\/go:embed ([^\r\n]+)$/gm)]
+    .flatMap((match) => match[1].split(/\s+/))
+    .filter((name) => name.endsWith(".rsc"));
+  assert.ok(scripts.length > 0);
+  for (const name of scripts) {
+    assert.ok(allowed.has(`!routeros/${name}`), `Docker context excludes embedded ${name}`);
+  }
+});
+
 test("regional catalog cards match maintained service packs", async () => {
   const [catalogText, page] = await Promise.all([
     text("internal/rulesets/service-packs.json"),
@@ -590,6 +605,24 @@ test("fresh install positions filter jumps by RouterOS item id", async () => {
   assert.doesNotMatch(install, /place-before=0/);
   assert.match(install, /place-before=\[:pick \$firstForward 0 1\]/);
   assert.match(install, /place-before=\[:pick \$firstInput 0 1\]/);
+  for (const table of ["mangle", "nat", "filter"]) {
+    assert.doesNotMatch(install, new RegExp(`\\[/ip/firewall/${table}/find\\]`));
+  }
+  assert.match(install, /firstMangleRules \[\/ip\/firewall\/mangle\/find where dynamic=no\]/);
+  assert.match(install, /firstForward \[\/ip\/firewall\/filter\/find where chain=forward and dynamic=no\]/);
+  assert.match(install, /firstInput \[\/ip\/firewall\/filter\/find where chain=input and dynamic=no\]/);
+});
+
+test("FastTrack installation accepts an unset matcher before checking for custom marks", async () => {
+  for (const [artifact, variable] of [
+    ["guided-installer.rsc.in", "originalFasttrack"],
+    ["preflight.rsc", "mark"],
+    ["fasttrack-patch.rsc", "current"],
+  ]) {
+    const source = await readFile(new URL("../routeros/" + artifact, import.meta.url), "utf8");
+    assert.ok(source.includes(variable + " [:tostr [/ip/firewall/filter/get $fasttrack connection-mark]]"), artifact);
+    assert.ok(source.includes('($' + variable + ' != "no-mark")'), artifact);
+  }
 });
 
 test("single-entry RouterOS bootstrap validates the full bundle before mutation", async () => {

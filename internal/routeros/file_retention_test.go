@@ -118,9 +118,84 @@ func TestPruneManagedFilesRetainsThreeBackupGenerationsAndRemovesInstallArtifact
 
 func TestPruneManagedFilesRejectsUnsafeStorageRootBeforeNetwork(t *testing.T) {
 	client := &Client{}
-	for _, root := range []string{"usb1", "../usb1/sb-gateway", "usb1/../flash", ""} {
+	for _, root := range []string{"usb1", "../usb1/sb-gateway", "usb1/../flash", "flash/xroute", "pub", "xroute/./data", ""} {
 		if _, err := client.PruneManagedFiles(context.Background(), root); err == nil {
 			t.Fatalf("unsafe storage root accepted: %q", root)
 		}
+	}
+}
+
+func TestPruneManagedFilesSupportsConfirmedCHRSystemDirectory(t *testing.T) {
+	for _, architecture := range []string{"x86", "x86_64"} {
+		t.Run(architecture, func(t *testing.T) {
+			resourceRead := false
+			deleted := []string{}
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/rest/system/resource":
+					resourceRead = true
+					_, _ = io.WriteString(w, `{"board-name":"CHR","architecture-name":"`+architecture+`"}`)
+				case r.Method == http.MethodGet && r.URL.Path == "/rest/file":
+					if !resourceRead {
+						t.Error("system files inventoried before confirming CHR")
+					}
+					_, _ = io.WriteString(w, `[
+						{".id":"*1","name":"xroute/install.rsc"},
+						{".id":"*2","name":"xroute/state/keep.json"},
+						{".id":"*3","name":"other/install.rsc"},
+						{".id":"*4","name":"xroute-other/install.rsc"},
+						{".id":"*5","name":"xroute/xroute-1.7.2-linux-amd64.tar"},
+						{".id":"*6","name":"xroute/users.txt"},
+						{".id":"*7","name":"xroute/setup.rsc"}
+					]`)
+				case r.Method == http.MethodDelete:
+					deleted = append(deleted, r.URL.Path)
+					_, _ = io.WriteString(w, `{}`)
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected", http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+			client := newTestClient(t, server)
+			defer client.CloseIdleConnections()
+			got, err := client.PruneManagedFiles(t.Context(), "xroute")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sort.Strings(deleted)
+			if got.Install != 3 || got.Backups != 0 || strings.Join(deleted, ",") != "/rest/file/*1,/rest/file/*5,/rest/file/*7" {
+				t.Fatalf("unexpected cleanup: result=%+v deleted=%v", got, deleted)
+			}
+		})
+	}
+}
+
+func TestPruneSystemDirectoryRequiresLiveCHRProofBeforeFileAccess(t *testing.T) {
+	for _, resource := range []string{
+		`{"board-name":"RB5009","architecture-name":"arm64"}`,
+		`{"board-name":"CHR","architecture-name":"arm64"}`,
+		`{"board-name":"RouterBOARD","architecture-name":"x86_64"}`,
+		`{"board-name":"CHR"}`,
+		`[]`,
+	} {
+		t.Run(resource, func(t *testing.T) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != "/rest/system/resource" {
+					t.Errorf("file access without valid platform proof: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "forbidden", http.StatusForbidden)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, resource)
+			}))
+			defer server.Close()
+			client := newTestClient(t, server)
+			defer client.CloseIdleConnections()
+			if _, err := client.PruneManagedFiles(t.Context(), "xroute"); err == nil {
+				t.Fatal("unconfirmed system disk accepted")
+			}
+		})
 	}
 }

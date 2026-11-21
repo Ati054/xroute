@@ -504,7 +504,11 @@ func (client *Client) installFixedManagedScript(ctx context.Context, name, sourc
 		}
 		id = text(row[".id"])
 	}
-	payload := map[string]any{"name": name, "source": source, "comment": comment, "policy": "read,write,test,policy"}
+	policy := "read,write,test,policy"
+	if name == fullUninstallWorker {
+		policy = "ftp," + policy + ",sensitive"
+	}
+	payload := map[string]any{"name": name, "source": source, "comment": comment, "policy": policy}
 	if id == "" {
 		created, err := client.request(ctx, http.MethodPut, "/rest/system/script", payload)
 		if err != nil {

@@ -34,7 +34,8 @@ function renderSharedTLSFields(props) {
     selectTransportTlsProfile,
     selectedTlsProfileComplete,
     asText,
-    itemName,
+    tlsProfileName,
+    locale,
   } = props;
   return (${sharedTLSFields.getText(parsed)});
 }
@@ -66,7 +67,8 @@ function render(choice, profiles = [readyProfile, incompleteProfile], sharedTlsM
       selectedTlsProfileComplete: choice === "ready",
       asText: (value, fallback = "") =>
         typeof value === "string" ? value : fallback,
-      itemName: (profile) => profile.display_name || profile.id,
+      tlsProfileName: (profile) => profile.display_name || profile.id,
+      locale: "ru",
     }),
   );
 }

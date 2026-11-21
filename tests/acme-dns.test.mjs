@@ -34,7 +34,7 @@ test("ACME-DNS import errors never include JSON fragments or keys", () => {
 });
 test("ACME-DNS form guards endpoint changes and stale asynchronous responses", () => {
   const source = readFileSync(new URL("../app/acme-fields.tsx", import.meta.url), "utf8");
-  assert.match(source, /value="acmedns">ACME-DNS/);
+  assert.match(source, /value="acmedns">\{tr\("ACME-DNS/);
   assert.match(source, /storedProvider === settings.provider/);
   assert.match(source, /acme_dns_server === settings.acme_dns_server/);
   assert.match(source, /current.current === started/);
@@ -56,10 +56,11 @@ test("ACME-DNS manual wait parser serializes only valid integer minutes", () => 
 test("actual ACME form exposes CNAME, keeps other provider forms unchanged, and renders only current running status", () => {
   const source = readFileSync(new URL("../app/acme-fields.tsx", import.meta.url), "utf8");
   const parsed = ts.createSourceFile("acme-fields.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const functions = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && ["canonicalAcmeDomains", "sameAcmeDomains", "acmeIssueAvailable", "acmeRunningStage", "acmeRunningOperationStatus", "AcmeFields", "AcmeDNSFields"].includes(node.name?.text))
+  const functions = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && ["canonicalAcmeDomains", "sameAcmeDomains", "acmeIssueAvailable", "acmeRunningStage", "acmeDate", "acmeStatusText", "acmeRunningOperationStatus", "AcmeFields", "AcmeDNSFields"].includes(node.name?.text))
     .map(node => node.getText(parsed).replace(/^export /, "")).join("\n");
   const compiled = ts.transpileModule(functions, { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
-  const exports = new Function("React", "acmeDNSDelegations", "acmeDNSDomains", "importAcmeDNSAccounts", `${"const {useState,useEffect,useRef}=React;"}${compiled};return { AcmeFields, acmeRunningStage, acmeRunningOperationStatus, acmeIssueAvailable };`)(React, acmeDNSDelegations, acmeDNSDomains, importAcmeDNSAccounts);
+  const useLanguage = () => ({locale: "ru", tr: (source, values = {}) => source.replace(/\{(\w+)\}/g, (_, key) => values[key])});
+  const exports = new Function("React", "acmeDNSDelegations", "acmeDNSDomains", "importAcmeDNSAccounts", "useLanguage", "localeFormat", `${"const {useState,useEffect,useRef}=React;"}${compiled};return { AcmeFields, acmeRunningStage, acmeRunningOperationStatus, acmeIssueAvailable };`)(React, acmeDNSDelegations, acmeDNSDomains, importAcmeDNSAccounts, useLanguage, () => "ru-RU");
   const Fields = exports.AcmeFields;
   const settings = {provider:"acmedns", acme_dns_server:"https://auth.example.net", domains:["api.example.com"], email:"admin@example.com", enabled:true, terms_accepted:true};
   const model = {settings, credentials:{accounts:importAcmeDNSAccounts(JSON.stringify(account),settings.domains)}, status:{}, loaded:true};
@@ -83,23 +84,23 @@ test("actual ACME form exposes CNAME, keeps other provider forms unchanged, and 
   }
   const failureSettings = {...settings, provider:"gcore"};
   const initialFailure = renderToStaticMarkup(React.createElement(Fields,{model:{...model,settings:failureSettings,credentials:{},status:{state:"failed", message:"Выпуск не выполнен. Повторите вручную.", manual_retry_only:true, ca_retry_not_before:"2026-09-10T00:00:00Z"}}}));
-  assert.match(initialFailure, /Ручной повтор возможен после:/);
+  assert.match(initialFailure, /Повтор вручную доступен после/);
   assert.doesNotMatch(initialFailure, /Следующая попытка:/);
   const renewalFailure = renderToStaticMarkup(React.createElement(Fields,{model:{...model,settings:failureSettings,credentials:{},status:{state:"failed", message:"Продление не выполнено.", next_attempt:"2026-09-10T00:00:00Z", ca_retry_not_before:"2026-09-11T00:00:00Z"}}}));
   assert.match(renewalFailure, /Следующая попытка:/);
-  assert.doesNotMatch(renewalFailure, /Ручной повтор возможен после:/);
+  assert.doesNotMatch(renewalFailure, /Повтор вручную доступен после/);
   const running = {...model, settings:failureSettings, credentials:{}, status:{state:"running", message:"Проверка DNS и выпуск сертификата…", operation_stage:"dns_precheck", settings:failureSettings, credentials_configured:true, last_attempt:"2026-09-08T16:26:37.739Z", operation_timeout_seconds:16260}};
   const runningHTML = renderToStaticMarkup(React.createElement(Fields,{model:running}));
   assert.match(runningHTML, /Проверка DNS и подтверждение домена…/);
   assert.doesNotMatch(runningHTML, />Проверка DNS и выпуск сертификата…</);
-  assert.match(runningHTML, /Начато:/);
-  assert.match(runningHTML, /Лимит ожидания: 4 ч 31 мин/);
+  assert.match(runningHTML, /Начало:/);
+  assert.match(runningHTML, /Время ожидания: 4\sч 31\sмин/);
   for (const lastAttempt of [undefined, "not-a-timestamp"]) {
     const invalid = renderToStaticMarkup(React.createElement(Fields,{model:{...running, status:{...running.status, last_attempt:lastAttempt}}}));
-    assert.doesNotMatch(invalid, /Invalid Date|Начато:|Лимит ожидания:/);
+    assert.doesNotMatch(invalid, /Invalid Date|Начало:|Время ожидания:/);
   }
   const staleRunning = renderToStaticMarkup(React.createElement(Fields,{model:{...running, loadError:"Не удалось получить статус сертификата."}}));
-  assert.doesNotMatch(staleRunning, /Проверка DNS и выпуск сертификата|Лимит ожидания:/);
+  assert.doesNotMatch(staleRunning, /Проверка DNS и выпуск сертификата|Время ожидания:/);
   assert.match(staleRunning, /API-токен\s*<input[^>]*placeholder="Сохранён"/);
   assert.doesNotMatch(staleRunning, /API-токен\s*<input[^>]*\srequired(?:=|\s|>)/);
   assert.equal(exports.acmeRunningStage({state:"running", operation_stage:"certificate_received"}), "Сертификат получен.");

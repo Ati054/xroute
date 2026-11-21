@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { GatewayApiError, getContainerMemoryStatus, updateContainerMemory, type JsonObject } from "./api-client";
 import { memoryMiB, validMemoryMiB } from "./container-memory-settings";
+import { errorMessage } from "./console/shared";
 import { useLanguage } from "./i18n";
 
 export function ContainerMemory({ container, onChanged }: { container: JsonObject; onChanged: () => Promise<void> }) {
-  const { tr } = useLanguage();
+  const { locale, tr } = useLanguage();
   const [high, setHigh] = useState(() => memoryMiB(container.memory_high));
   const [maximum, setMaximum] = useState(() => memoryMiB(container.memory_max));
   const [actual, setActual] = useState(container);
@@ -76,7 +77,7 @@ export function ContainerMemory({ container, onChanged }: { container: JsonObjec
       void onChanged().catch(() => {});
     } catch (error) {
       setFailed(true);
-      setMessage(error instanceof Error ? error.message : tr("Не удалось изменить лимиты памяти."));
+      setMessage(error instanceof Error ? errorMessage(error, locale) : tr("Не удалось изменить лимиты памяти."));
       if (error instanceof GatewayApiError && ["container_memory_schedule_unconfirmed", "upstream_unavailable", "timeout", "unreachable"].includes(error.code ?? "")) setPending(true);
     } finally { setBusy(false); }
   }

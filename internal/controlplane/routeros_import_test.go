@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,6 +11,95 @@ import (
 	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
+func TestRouterOSExportContinuationPreservesTokensAndQuotedSpaces(t *testing.T) {
+	commands := routerOSExportCommands("/interface list member\r\n" +
+		"add interface=ether2 list=\\\r\n    SB_MANAGEMENT_INGRESS comment=\"two  spaces\"\r\n" +
+		"/container add root-dir=usb1/xroute/root-1.7.2 comment=\"XROUTE con\\\n    tainer\"\n" +
+		"/ip firewall address-list\nadd address=192.0.2.0/24 \\\n    list=SB_INTERNAL_NETWORKS\n")
+	if len(commands) != 3 || commands[0].properties["list"] != "SB_MANAGEMENT_INGRESS" ||
+		commands[0].properties["comment"] != "two  spaces" || commands[1].properties["comment"] != "XROUTE container" ||
+		commands[2].properties["address"] != "192.0.2.0/24" || commands[2].properties["list"] != "SB_INTERNAL_NETWORKS" {
+		t.Fatalf("export continuations changed values: %#v", commands)
+	}
+}
+
+func TestRouterOSSetupConnectionUsesManagedExport(t *testing.T) {
+	namespace := managedidentity.Prefix()
+	export := "/ip address\nadd address=172.31.255.1/30 interface=bridge-test comment=\"" + namespace + " container gateway\"\n" +
+		"/ip firewall filter\nadd action=accept protocol=tcp dst-address=172.31.255.1 dst-port=59443 comment=\"" + namespace + " RouterOS REST allow\"\n" +
+		"/user\nadd name=test-rest group=xroute-api comment=\"" + namespace + " control-plane REST user\"\n" +
+		"/ip service\nset ssh port=2223\n"
+	facts, err := parseRouterOSExport(export)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := facts.setupConnection
+	if conn["base_url"] != "https://172.31.255.1:59443" || conn["username"] != "test-rest" || conn["ssh_port"] != 2223 {
+		t.Fatalf("setup connection = %#v", conn)
+	}
+	ambiguous, err := parseRouterOSExport(export + "/ip service set ssh port=2224\n")
+	if err != nil || ambiguous.setupConnection["base_url"] != conn["base_url"] || ambiguous.setupConnection["ssh_port"] != nil {
+		t.Fatalf("ambiguous SSH settings must leave the SSH port blank: %+v, %v", ambiguous, err)
+	}
+	guidedExport := strings.ReplaceAll(export, "/user\nadd name=test-rest group=xroute-api comment=\""+namespace+" control-plane REST user\"\n",
+		"/system script\nadd name="+namespace+"-guided-management-state comment=\""+namespace+" guided management restore state\"\n")
+	guided, err := parseRouterOSExport(guidedExport)
+	if err != nil || guided.setupConnection["username"] != managedidentity.Literal("xroute-api") {
+		t.Fatalf("guided setup connection: %+v, %v", guided, err)
+	}
+	manualExport := strings.ReplaceAll(export, "/user\nadd name=test-rest group=xroute-api comment=\""+namespace+" control-plane REST user\"\n",
+		"/user group\nadd name=xroute-api comment=\""+namespace+" REST group\"\n")
+	manualExport = strings.Replace(manualExport, "dst-port=59443", "dst-port=58443", 1)
+	manual, err := parseRouterOSExport(manualExport)
+	if err != nil || manual.setupConnection["base_url"] != "https://172.31.255.1:58443" ||
+		manual.setupConnection["ssh_port"] != 2223 || manual.setupConnection["username"] != nil {
+		t.Fatalf("manual setup connection: %+v, %v", manual, err)
+	}
+	wrongDestination, err := parseRouterOSExport(strings.Replace(manualExport, "dst-address=172.31.255.1", "dst-address=172.31.255.2", 1))
+	if err != nil || wrongDestination.setupConnection != nil {
+		t.Fatalf("REST rule at another address produced setup parameters: %+v, %v", wrongDestination, err)
+	}
+}
+
+func TestRouterOSExportContinuationKeepsQuotedLeadingSpace(t *testing.T) {
+	commands := routerOSExportCommands("# wrapped comment \\\n/interface bridge\nadd name=home comment=\"first\\\n      second\"\n")
+	if len(commands) != 1 || commands[0].properties["comment"] != "first  second" {
+		t.Fatalf("quoted space changed: %#v", commands)
+	}
+}
+
+func TestRouterOSImportRestoresInstallerDirectoryAndInternalReview(t *testing.T) {
+	server := newTestServer(t)
+	cookie, csrf := bootstrapSession(t, server)
+	config, err := server.getDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+	objectAt(config, "storage")["root"] = ""
+	config["networks"] = []any{}
+	if _, err := server.repository.saveDraft(config); err != nil {
+		t.Fatal(err)
+	}
+	export := "/container\nadd root-dir=/usb1/xroute/root-1.7.2 comment=\"" + managedidentity.Literal("XROUTE container") + "\"\n" +
+		"/ip firewall address-list\nadd address=192.0.2.0/24 list=SB_INTERNAL_NETWORKS comment=\"" + managedidentity.Literal("XROUTE internal network") + "\"\n" +
+		"add address=198.51.100.0/24 list=SB_INTERNAL_NETWORKS comment=unowned\n"
+	response := performRequest(t, server, http.MethodPost, apiPrefix+"/routeros/import", map[string]any{"export_text": export}, map[string]string{csrfHeader: csrf}, cookie)
+	if response.Code != http.StatusOK {
+		t.Fatalf("import: %d %s", response.Code, response.Body.String())
+	}
+	stored, err := server.getDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if objectAt(stored, "storage")["root"] != "usb1/xroute" {
+		t.Fatal("installer directory not restored")
+	}
+	statuses := reviewedNetworkStatuses(objectAt(stored, "routeros"))
+	if statuses["192.0.2.0/24"] != "accepted" || statuses["198.51.100.0/24"] == "accepted" {
+		t.Fatalf("review trust broadened: %#v", statuses)
+	}
+}
+
 func TestRouterOSImportUsesInstalledManagementSelectionAsHint(t *testing.T) {
 	for _, namespace := range []string{managedidentity.Prefix()} {
 		t.Run(namespace, func(t *testing.T) {
@@ -17,19 +107,28 @@ func TestRouterOSImportUsesInstalledManagementSelectionAsHint(t *testing.T) {
 				"/interface list member\nadd interface=home list=SB_MANAGEMENT_INGRESS comment=\"" + namespace + " management ingress\"\n" +
 				"add interface=ether1 list=WAN\n" +
 				"add interface=ether1 list=LAN\n" +
+				"add interface=vpn-in list=SB_MANAGEMENT_INGRESS comment=\"" + namespace + " management ingress\"\n" +
 				"add interface=disabled-lan list=SB_MANAGEMENT_INGRESS disabled=yes comment=\"" + namespace + " management ingress\"\n" +
 				"/ip address\nadd address=192.168.77.1/24 interface=home\nadd address=192.168.78.1/24 interface=home\nadd address=192.168.99.1/24 interface=ether1\n" +
 				"/ip firewall address-list\nadd address=192.168.78.0/24 list=SB_MANAGEMENT_SOURCES comment=\"" + namespace + " management source\"\n" +
+				"add address=10.24.4.0/24 list=SB_MANAGEMENT_SOURCES comment=\"" + namespace + " management source\"\n" +
 				"add address=192.168.77.0/24 list=SB_MANAGEMENT_SOURCES disabled=yes comment=\"" + namespace + " management source\"\n"
 			facts, err := parseRouterOSExport(value)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(facts.managementIngress) != 1 || !facts.managementIngress["home"] {
+			if len(facts.managementIngress) != 2 || !facts.managementIngress["home"] || !facts.managementIngress["vpn-in"] {
 				t.Fatalf("management hint includes WAN or disabled interfaces: %#v", facts.managementIngress)
 			}
 			if len(facts.managementNetworks) != 1 || !facts.managementNetworks["192.168.78.0/24"] {
 				t.Fatalf("installer-selected source was lost or broadened: %#v", facts.managementNetworks)
+			}
+			access := facts.managedPanelAccess
+			if got := fmt.Sprint(access["allowed_ingress_interfaces"]); got != "[home vpn-in]" {
+				t.Fatalf("installed interface list = %s", got)
+			}
+			if got := fmt.Sprint(access["allowed_source_cidrs"]); got != "[10.24.4.0/24 192.168.78.0/24]" {
+				t.Fatalf("installed CIDR list = %s", got)
 			}
 		})
 	}

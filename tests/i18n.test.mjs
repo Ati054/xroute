@@ -150,3 +150,26 @@ test("semantic RU and EN message shells expose the same keys", async () => {
   const keys = (object) => object.properties.filter(ts.isPropertyAssignment).map(propertyName).sort();
   assert.deepEqual(keys(localeObjects.en), keys(localeObjects.ru));
 });
+
+test("all uninstall preview entries have translations in every panel language", async () => {
+  const source = await readFile(path.join(root, "internal/controlplane/lifecycle_uninstall.go"), "utf8");
+  const lists = [...source.matchAll(/"(?:removes|preserves)": \[\]any\{([\s\S]*?)\}/g)];
+  assert.equal(lists.length, 2);
+  const entries = lists.flatMap(([, list]) => [...list.matchAll(/"([^"\n]+)"/g)].map(([, text]) => text));
+  assert.ok(entries.length >= 9);
+  const catalogSource = await readFile(path.join(root, "app/i18n-text.ts"), "utf8");
+  const english = variableObject(parse("i18n-text.ts", catalogSource, ts.ScriptKind.TS), "englishText");
+  const keys = new Set(english.properties.filter(ts.isPropertyAssignment).map(propertyName));
+  for (const text of entries) assert.ok(keys.has(text), "Missing English uninstall entry: " + text);
+  for (const locale of ["fa", "zh-Hans", "zh-Hant"]) {
+    const catalog = JSON.parse(await readFile(path.join(root, "app/translations", locale + ".json"), "utf8"));
+    for (const text of entries) {
+      assert.ok(catalog[text]?.trim(), locale + ": " + text);
+      assert.doesNotMatch(catalog[text], /[А-Яа-яЁё]/);
+    }
+  }
+  const operations = await readFile(path.join(root, "app/console/operations.tsx"), "utf8");
+  for (const field of ["removes", "preserves"]) {
+    assert.ok(operations.includes(`asStringList(uninstallPreview.${field}).map((item) => <li key={item}>{tr(item)}</li>)`));
+  }
+});

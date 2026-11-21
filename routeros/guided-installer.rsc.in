@@ -47,34 +47,37 @@
 :if ([:len $fasttrack] > 1) do={ :error "XRoute: several FastTrack rules exist; use the manual installer" }
 :local originalFasttrack ""
 :if ([:len $fasttrack] = 1) do={
-  :set originalFasttrack [/ip/firewall/filter/get $fasttrack connection-mark]
+  :set originalFasttrack [:tostr [/ip/firewall/filter/get $fasttrack connection-mark]]
   :if (($originalFasttrack != "") && ($originalFasttrack != "no-mark")) do={ :error "XRoute: custom FastTrack matcher; no rule was changed" }
 }
 
-# Only mounted ext4 disks with room for extraction and later rollback qualify.
+# CHR can use its system disk. Hardware routers require mounted ext4 storage.
+# Each choice stores the complete project path, including the root-disk case.
 :local disks [:toarray ""]
 :put "\r\nChoose storage (existing disks are never formatted):"
+:if (($expectedArch = "amd64") && ([:pick [/system/resource/get board-name] 0 3] = "CHR") && ([/system/resource/get free-hdd-space] >= 1073741824)) do={
+  :set disks ($disks, "xroute")
+  :put ([:len $disks] . ") System disk: xroute (" . ([/system/resource/get free-hdd-space] / 1048576) . " MiB free)")
+}
 :foreach d in=[/disk/find where mounted=yes and disabled=no and fs="ext4"] do={
   :local mount [/disk/get $d mount-point]
   :if (([:len $mount] > 0) && ([:pick $mount 0 5] != "flash") && ([/disk/get $d free] >= 1073741824)) do={
-    :if ([:len $disks] < 9) do={ :set disks ($disks, $mount); :put ([:len $disks] . ") " . $mount . " (" . ([/disk/get $d free] / 1048576) . " MiB free)") }
+    :if ([:len $disks] < 9) do={ :set disks ($disks, ($mount . "/xroute")); :put ([:len $disks] . ") " . $mount . " (" . ([/disk/get $d free] / 1048576) . " MiB free)") }
   }
 }
-:if ([:len $disks] = 0) do={ :error "XRoute: connect an ext4 SSD/USB disk with at least 1 GiB free. No disk was formatted" }
-:local disk [:pick $disks [$choose [:len $disks]]]
-:local installRoot ($disk . "/xroute")
+:if ([:len $disks] = 0) do={ :error "XRoute: storage needs at least 1 GiB free; use an ext4 SSD/USB disk, or expand the CHR system disk. No disk was formatted" }
+:local installRoot [:pick $disks [$choose [:len $disks]]]
 :local archiveName ("xroute-" . $releaseVersion . "-linux-" . $releaseArch . ".tar")
 :local archivePath ($installRoot . "/" . $archiveName)
-:local offlineImage false
 :local uploaded [/file/find where name=$archivePath]
-:if ([:len $uploaded] = 1) do={ :if ([/file/get $uploaded size] = $imageBytes) do={ :set offlineImage true } }
+:if ([:len $uploaded] != 1) do={ :error ("XRoute: image missing at " . $archivePath . ". Upload the xroute folder from the offline bundle and run setup.rsc again") }
+:if ([/file/get $uploaded size] != $imageBytes) do={ :error ("XRoute: wrong image size at " . $archivePath . ". Upload the complete matching offline bundle") }
 :local stageIdentity ($releaseVersion . ":" . $releaseArch . ":" . $imageSHA256)
 :local stageMarker ($installRoot . "/xroute-install.marker")
 :if ([:len [/file/find where name=$installRoot]] > 0) do={
   :if ([:len [/file/find where name=$stageMarker]] = 1) do={
     :if ([/file/get [/file/find where name=$stageMarker] contents] != $stageIdentity) do={ :error "XRoute: storage belongs to another installer or release; no files were overwritten" }
   } else={
-    :if ($offlineImage != true) do={ :error ("XRoute: " . $installRoot . " already exists without the complete matching archive. Upload the ready xroute folder; no files were overwritten") }
     # A ready offline bundle may be adopted, but unrelated files are never
     # adopted as application data or silently overwritten.
     :local prefix ($installRoot . "/")
@@ -134,33 +137,13 @@
 :if ([:len $routerIP] = 0) do={ :error "XRoute: no conflict-free internal network found; use the manual installer" }
 :put ("\r\nStorage: " . $installRoot . "\r\nManagement LAN: " . $lanInterface . " " . $lanCIDR)
 :put ("New container network: " . $network . "\r\nNew RouterOS HTTPS service: TCP 59443, LAN and container only")
-:if ($offlineImage = true) do={ :put "Uploaded release archive found: installation will not contact GitHub." }
+:put "Using the uploaded release image."
 :put "No LAN/WAN addresses, DHCP, default route or client routing will be replaced."
 :put "Press 1 to INSTALL, or any other key to cancel:"
 :local confirmed [$choose 1]
 
-# Release image transport: begin
-:local imageURL ""
-:if ($offlineImage != true) do={
-:onerror imageLookupError in={
-  :local reply [/tool/fetch url=("https://api.github.com/repos/Ati054/xroute/releases/tags/v" . $releaseVersion) check-certificate=yes http-header-field="Accept: application/vnd.github+json" output=user as-value duration=1m]
-  :local release [:deserialize ($reply->"data") from=json]
-  :if ((($release->"tag_name") != ("v" . $releaseVersion)) || (($release->"draft") = true) || (($release->"prerelease") = true)) do={ :error "The stable release is not available" }
-  :local assetId 0
-  :foreach asset in=($release->"assets") do={
-    :if (($asset->"name") = ("xroute-" . $releaseVersion . "-linux-" . $releaseArch . ".tar")) do={
-      :if (($assetId != 0) || (($asset->"state") != "uploaded") || (($asset->"size") != $imageBytes) || (($asset->"digest") != ("sha256:" . $imageSHA256))) do={ :error "Image metadata does not match this installer" }
-      :set assetId [:tonum ($asset->"id")]
-    }
-  }
-  :if ($assetId < 1) do={ :error "The image for this architecture is not published" }
-  :set imageURL ("https://api.github.com/repos/Ati054/xroute/releases/assets/" . $assetId)
-} do={ :error ("XRoute: release image lookup failed before installation: " . $imageLookupError) }
-}
-# Release image transport: end
-
 # All executable installer content comes from this single versioned release asset.
-:if ([:len [/file/find where name=$installRoot]] = 0) do={ /file/add name=$installRoot type=directory }
+:if ([/file/get $uploaded size] != $imageBytes) do={ :error "XRoute: image size changed; installation stopped before changes" }
 :if ([:len [/file/find where name=$stageMarker]] = 0) do={ /file/add name=$stageMarker type=file contents=$stageIdentity }
 @@FILES@@
 /import file-name=($installRoot . "/variables.example.rsc")
@@ -185,15 +168,8 @@
 :global "SB_ADDRESSES_CONFIRMED" true
 :global "SB_ROUTEROS_API_PASSWORD" [:rndstr length=32 from="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]
 :local apiPassword $"SB_ROUTEROS_API_PASSWORD"
-:if ($offlineImage != true) do={
-:put "\r\nDownloading the release image over verified HTTPS. This can take several minutes."
-:onerror downloadError in={
-  /tool/fetch url=$imageURL http-header-field="Accept: application/octet-stream" check-certificate=yes dst-path=$"SB_IMAGE_FILE" duration=15m
-} do={ :set "SB_ROUTEROS_API_PASSWORD"; :error "XRoute: image download failed. Check Internet, DNS and router time; no network or service configuration was changed" }
-} else={ :put "\r\nUsing the uploaded release image; no image download is needed." }
-:if ([/file/get [/file/find where name=$"SB_IMAGE_FILE"] size] != $imageBytes) do={ :set "SB_ROUTEROS_API_PASSWORD"; :error "XRoute: image size mismatch; installation stopped before network changes" }
 # RouterOS does not expose streaming SHA-256 for large files. HTTPS and length
-# are checked here; offline installation also supports an administrator SHA check.
+# are checked by the downloader and installer respectively. Verify SHA-256 before upload.
 :put ("Release archive SHA256 (for independent verification): " . $imageSHA256)
 /export file=($installRoot . "/routeros-before-install")
 /system/backup/save name=($installRoot . "/routeros-before-install") password=$apiPassword encryption=aes-sha256
@@ -234,6 +210,9 @@
   }
   :global "XROUTE_GUIDED_INSTALL_ROOT" $installRoot
   /import file-name=($installRoot . "/bootstrap.rsc")
+  # Preserve the original listeners and the exact certificates for removal.
+  :local managementState {"schema"=1;"root"=$installRoot;"https_port"=$oldPort;"https_certificate"=$oldCert;"https_addresses"=$oldAddresses;"ssh_addresses"=$oldSSHAddresses;"installed_https_addresses"=[:tostr [/ip/service/get $https available-from]];"installed_ssh_addresses"=[:tostr [/ip/service/get $sshService available-from]];"ca_fingerprint"=[/certificate/get [/certificate/find where name="xroute-ca"] fingerprint];"leaf_fingerprint"=[/certificate/get [/certificate/find where name="xroute-local"] fingerprint]}
+  /system/script/add name="XROUTE-guided-management-state" policy=read comment="XROUTE guided management restore state" source=[:serialize to=json value=$managementState]
 } do={
   :global "XROUTE_GUIDED_INSTALL_ROOT"; :set "XROUTE_GUIDED_INSTALL_ROOT"
   :set "SB_ROUTEROS_API_PASSWORD"

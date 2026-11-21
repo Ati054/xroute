@@ -18,6 +18,11 @@ func (server *Server) containerMemoryStatus(response http.ResponseWriter, reques
 	if _, ok := server.requireSession(response, request); !ok {
 		return
 	}
+	if !server.mutationMu.TryLock() {
+		server.writeErrorResponse(response, request, 409, "state_mutation_in_progress", "Another operation is in progress; retry status later.")
+		return
+	}
+	defer server.mutationMu.Unlock()
 	config, err := server.repository.loadActive()
 	if err != nil {
 		server.internalStateError(response, request, err)
@@ -36,24 +41,12 @@ func (server *Server) containerMemoryStatus(response http.ResponseWriter, reques
 		server.writeErrorResponse(response, request, 502, "routeros_unavailable", "RouterOS container status is unavailable.")
 		return
 	}
-	var current map[string]any
-	count := 0
-	for _, row := range rows {
-		if text(row["comment"]) == managedidentity.Literal("XROUTE container") {
-			current = row
-			count++
-		}
-	}
-	if count != 1 {
+	current := ownedMemoryContainer(rows)
+	if current == nil {
 		server.writeErrorResponse(response, request, 409, "container_memory_live_state_invalid", "The managed container is missing or ambiguous.")
 		return
 	}
 	container := containerSummary(current, nil, true)
-	if !server.mutationMu.TryLock() {
-		server.writeErrorResponse(response, request, 409, "state_mutation_in_progress", "Another operation is in progress; retry status later.")
-		return
-	}
-	defer server.mutationMu.Unlock()
 	high, highOK := routerOSByteSize(current["memory-high"])
 	maximum, maxOK := routerOSByteSize(current["memory-max"])
 	operation, err := server.repository.auxiliary(containerMemoryOperation)
@@ -62,33 +55,14 @@ func (server *Server) containerMemoryStatus(response http.ResponseWriter, reques
 		return
 	}
 	if operation["pending"] == true {
-		schedulers, err := stack.REST.List(ctx, "/rest/system/scheduler?.proplist=name")
+		queued, err := stack.REST.ContainerMemoryUpdatePending(ctx)
 		if err != nil {
 			server.writeErrorResponse(response, request, 502, "routeros_unavailable", "RouterOS memory scheduler status is unavailable.")
 			return
 		}
-		queued := false
-		for _, scheduler := range schedulers {
-			if text(scheduler["name"]) == routeros.ContainerMemoryScheduler {
-				queued = true
-			}
-		}
-		previousState, previousPending := operation["state"], operation["pending"]
-		high, highOK := routerOSByteSize(container["memory_high"])
-		maximum, maxOK := routerOSByteSize(container["memory_max"])
-		wantHigh, _ := numberToInt64(operation["high_bytes"])
-		wantMax, _ := numberToInt64(operation["max_bytes"])
-		deadline, deadlineErr := time.Parse(time.RFC3339Nano, text(operation["deadline"]))
-		if !queued && highOK && maxOK && high == wantHigh && maximum == wantMax && strings.Trim(text(container["root_dir"]), "/") == strings.Trim(text(operation["root_dir"]), "/") && container["healthy"] == true {
-			operation["pending"], operation["state"] = false, "completed"
-		} else if deadlineErr == nil && !server.now().Before(deadline) {
-			operation["pending"], operation["state"] = queued, "unconfirmed"
-		}
-		if previousState != operation["state"] || previousPending != operation["pending"] {
-			if err := server.repository.saveAuxiliary(containerMemoryOperation, operation); err != nil {
-				server.internalStateError(response, request, err)
-				return
-			}
+		if err := server.reconcileContainerMemoryReadback(operation, container, queued); err != nil {
+			server.internalStateError(response, request, err)
+			return
 		}
 	}
 	if highOK && maxOK {

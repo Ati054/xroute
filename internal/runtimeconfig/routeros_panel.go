@@ -76,7 +76,7 @@ func renderRouterOSPanelIngress(model RouterOSRenderModel) []string {
 	lines = append(lines, `/ip/firewall/nat/move $panelRule2 destination=$panelRule3`)
 	// Only our two narrow jumps move. Foreign rules retain their relative order.
 	for _, index := range []int{1, 0} {
-		lines = append(lines, fmt.Sprintf(`:local panelFirst%d [:pick [/ip/firewall/nat/find] 0 1]; :if ($panelFirst%d != $panelRule%d) do={ /ip/firewall/nat/move $panelRule%d destination=$panelFirst%d }`, index, index, index, index, index))
+		lines = append(lines, fmt.Sprintf(`:local panelFirst%d [:pick [/ip/firewall/nat/find where dynamic=no] 0 1]; :if (([:len $panelFirst%d] > 0) && ($panelFirst%d != $panelRule%d)) do={ /ip/firewall/nat/move $panelRule%d destination=$panelFirst%d }`, index, index, index, index, index, index))
 	}
 	return lines
 }

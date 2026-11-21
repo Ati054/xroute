@@ -43,7 +43,8 @@ test("README language links resolve and the global landing page uses English UI"
     for (const target of readmes) assert.ok(firstLine.includes("(" + target + ")"), name + ": missing language link " + target);
     assert.ok(body.includes("https://github.com/Ati054/xroute-openwrt"));
     assert.match(body, /ARM64/);
-    assert.match(body, /x86-64 CHR|CHR.*x86-64/);
+    assert.match(body, /x86[-_]64.*CHR|CHR.*x86[-_]64/);
+    assert.match(body, /AMD64/);
     for (const match of body.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) {
       if (!match[1].startsWith("http") && !match[1].startsWith("#")) await readFile(new URL("../" + match[1], import.meta.url));
     }

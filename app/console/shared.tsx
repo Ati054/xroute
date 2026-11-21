@@ -4,6 +4,7 @@ import { GatewayApiError, JsonObject, discoverRouterOs, getCurrentDraft, resolve
 import { type Locale, type MessageKey, useLanguage } from "../i18n";
 import { formatLocalizedText, localizedText } from "../i18n-text";
 import { isLocale, localeFormat, SUPPORTED_LOCALES } from "../locales";
+import { operationLabel, operationOutcomeTone } from "../operation-labels";
 import { LTE_PINPOINT_DOMAINS, LTE_PINPOINT_DOMAINS_BY_PACK } from "../lte-pinpoint-domains";
 import { nodeDisplayLabel, nodeLocationDetail, nodePresentation } from "../node-presentation";
 import { subscriptionFeedGroups } from "../subscription-feed";
@@ -364,6 +365,28 @@ function currentUiLocale(): Locale {
   return isLocale(current) ? current : "ru";
 }
 
+const containerMemoryErrors = new Map([
+  ["invalid_container_memory", "Укажите целые значения: 16 ≤ memory-high ≤ memory-max ≤ 8192 МиБ."],
+  ["container_memory_confirmation_required", "Подтвердите перезапуск контейнера."],
+  ["container_memory_live_state_invalid", "Проверьте состояние контейнера и каталог XRoute."],
+  ["container_memory_not_running", "Запустите контейнер перед изменением лимитов."],
+  ["container_memory_unavailable", "Текущие лимиты и расход памяти недоступны."],
+  ["container_memory_below_usage", "Жёсткий лимит должен превышать расход памяти минимум на 16 МиБ."],
+  ["container_memory_schedule_unconfirmed", "Изменение не подтверждено. Проверьте контейнер и журнал RouterOS."],
+]);
+
+const recoveryErrors = new Map([
+  ["recovery_archive_exists", "Этот архив уже сохранён."],
+  ["reauthentication_failed", "Неверный пароль администратора панели."],
+  ["invalid_recovery_filename", "Выберите резервную копию XRoute в формате .sbgw."],
+  ["invalid_recovery_archive", "Архив повреждён или имеет неверное имя или формат."],
+  ["invalid_recovery_source", "Выберите место хранения резервной копии."],
+  ["recovery_upload_too_large", "Архив превышает допустимый размер."],
+  ["recovery_upload_failed", "Загрузка архива прервалась. Повторите попытку."],
+  ["recovery_archive_missing", "Выбранная резервная копия недоступна."],
+  ["recovery_already_pending", "Восстановление уже запланировано. Перезапустите контейнер, чтобы завершить его."],
+]);
+
 export function errorMessage(error: unknown, locale: Locale = currentUiLocale()): string {
   if (error instanceof GatewayApiError) {
     const request = error.requestId ? formatLocalizedText(" · запрос {id}", locale, { id: error.requestId }) : "";
@@ -454,7 +477,7 @@ export function errorMessage(error: unknown, locale: Locale = currentUiLocale())
                           ? "Подписка загрузилась с ошибкой или содержит неподдерживаемые узлы. Проверьте ссылку."
                           : error.code === "subscription_publication_disabled"
                             ? "Публикация подписки отключена."
-                            : error.message;
+                            : containerMemoryErrors.get(error.code) ?? recoveryErrors.get(error.code) ?? error.message;
     return `${localizedText(translated, locale)}${request}`;
   }
   const message = error instanceof Error ? error.message : String(error);
@@ -2442,12 +2465,12 @@ export function asObjectList(value: unknown): JsonObject[] {
     : [];
 }
 
-export function cdnDeploymentsForTransport(transport: JsonObject): JsonObject[] {
+export function cdnDeploymentsForTransport(transport: JsonObject, locale: Locale = currentUiLocale()): JsonObject[] {
   const configured = asObjectList(transport.cdn_deployments);
   const deployments = configured.length ? configured : [
     {
       id: "primary",
-      display_name: "Основной CDN",
+      display_name: localizedText("Основной CDN", locale),
       enabled: true,
       cdn_provider: asText(transport.cdn_provider, "cloudflare"),
       hostname: asText(transport.hostname, ""),
@@ -2929,6 +2952,13 @@ export function itemName(item: JsonObject): string {
   );
 }
 
+export function tlsProfileName(profile: JsonObject, locale: Locale): string {
+  const name = itemName(profile);
+  return profile.id === "cdn-default" && name === "CDN TLS · основной"
+    ? localizedText(name, locale)
+    : name;
+}
+
 export function shortRevision(value: unknown): string {
   const revision = asText(value, "");
   return revision ? revision.slice(0, 12) : "";
@@ -2967,7 +2997,9 @@ export function activityTitle(action: unknown, outcome: unknown, locale: Locale 
   if (actionName === "recovery.backup_reconciled") {
     return localizedText("Резервная копия синхронизирована", locale);
   }
-  if (actionName === "recovery.backup") return localizedText("Создана резервная копия", locale);
+  if ((actionName === "recovery.create" || actionName === "recovery.backup") && result === "ok") {
+    return localizedText("Создана резервная копия", locale);
+  }
   if (actionName === "recovery.backup_scheduled") {
     return localizedText("Запланировано резервное копирование", locale);
   }
@@ -2981,19 +3013,13 @@ export function activityTitle(action: unknown, outcome: unknown, locale: Locale 
   if (actionName === "reverse_vless_exits.client_config") {
     return localizedText("Скачана конфигурация Reverse VLESS", locale);
   }
-  if (actionName.endsWith(".create")) return localizedText("Добавлен объект конфигурации", locale);
-  if (actionName.endsWith(".update")) return localizedText("Настройки объекта изменены", locale);
-  if (actionName.endsWith(".delete")) return localizedText("Объект конфигурации удалён", locale);
-  return actionName || localizedText("Системное событие", locale);
+  return actionName ? operationLabel(actionName, (label) => localizedText(label, locale)) : localizedText("Системное событие", locale);
 }
 
 export function activityTone(outcome: unknown): "ok" | "info" | "warn" {
   const result = asText(outcome, "");
-  if (["failed", "rolled_back", "candidate_rejected"].includes(result)) {
-    return "warn";
-  }
-  if (["ok", "unchanged"].includes(result)) return "ok";
-  return "info";
+  const tone = operationOutcomeTone(result);
+  return result === "rolled_back" || tone === "danger" ? "warn" : tone === "ok" ? "ok" : "info";
 }
 
 export function activityMetadata(event: JsonObject, locale: Locale = "ru"): string {
@@ -3153,11 +3179,17 @@ export function pendingChangeText(change: JsonObject, locale: Locale = "ru"): st
       remove: "Удалён",
       replace: "Изменён",
     },
-    local_users: {
+    local_clients: {
       noun: "локальный клиент",
       add: "Добавлен",
       remove: "Удалён",
       replace: "Изменён",
+    },
+    networks: {
+      noun: "подсеть",
+      add: "Добавлена",
+      remove: "Удалена",
+      replace: "Изменена",
     },
     remote_users: {
       noun: "удалённый клиент",
@@ -3184,13 +3216,19 @@ export function pendingChangeText(change: JsonObject, locale: Locale = "ru"): st
     return formatLocalizedText(`${verb} ${entity.noun}{name}`, locale, { name: name ? ` ${quotes[0]}${name}${quotes[1]}` : "" });
   }
   const sections: Record<string, string> = {
-    ingress: "публичные подключения",
-    public_exposure: "публичный доступ",
-    routeros: "интеграция RouterOS",
-    routing: "маршрутизация",
-    system: "настройки шлюза",
+    dns: "Изменены настройки DNS",
+    ingress: "Изменены публичные подключения",
+    public_exposure: "Изменён публичный доступ",
+    routeros: "Изменена интеграция с RouterOS",
+    routing: "Изменена маршрутизация",
+    security: "Изменены настройки безопасности",
+    service_packs: "Изменены наборы сервисов",
+    storage: "Изменены настройки хранилища",
+    system: "Изменены настройки шлюза",
+    updates: "Изменены настройки обновлений",
+    watchdog: "Изменены настройки Watchdog",
   };
-  return localizedText(`Изменены ${sections[collection] ?? "настройки конфигурации"}`, locale);
+  return localizedText(sections[collection] ?? "Изменены настройки конфигурации", locale);
 }
 
 export type RevisionState = "loading" | "applied" | "draft";

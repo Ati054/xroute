@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Ati054/xroute/internal/managedidentity"
 )
 
 func recoveryArchive(t *testing.T, platform string) (string, string) {
@@ -65,6 +67,10 @@ func TestRecoveryCLIValidatesArchiveAndRefusesOverwrite(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "ARCHIVE_VERIFIED=PASS") {
 		t.Fatal("verification receipt missing")
+	}
+	if !strings.Contains(output.String(), "ROUTEROS_NAMESPACE="+managedidentity.Prefix()+"\n") ||
+		!strings.Contains(output.String(), "/data/lifecycle-uploads/"+managedidentity.Literal("xroute-upload-")+checksum[:16]+".tar\n") {
+		t.Fatal("recovery output does not use the configured RouterOS namespace")
 	}
 	before, err := os.ReadFile(destination)
 	if err != nil {

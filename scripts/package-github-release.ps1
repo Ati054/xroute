@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot 'release-checksums.ps1')
 $package = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "package.json") | ConvertFrom-Json
 $version = [string]$package.version
 if ($version -notmatch '^\d+\.\d+\.\d+(?:-rc\.[1-9][0-9]*)?$') {
@@ -89,7 +90,11 @@ try {
     if ($Architecture -eq "amd64") { $bundleName = "xroute-$version-routeros-amd64-bundle.zip" }
     $bundlePath = Join-Path $outputRoot $bundleName
     $stagingRoot = Join-Path $outputRoot ".bundle-staging"
-    foreach ($target in @($bundlePath, "$bundlePath.sha256", (Join-Path $outputRoot $archiveName), (Join-Path $outputRoot "$archiveName.sha256"), (Join-Path $outputRoot $installerName), (Join-Path $outputRoot "$installerName.sha256"), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath) + ".sha256")), (Join-Path $outputRoot "RELEASE-NOTES.md"), (Join-Path $outputRoot "SHA256SUMS"), $stagingRoot)) {
+    $obsoleteInstallers = foreach ($arch in @('arm64', 'amd64')) {
+        Join-Path $outputRoot "xroute-$version-install-$arch.rsc"
+        Join-Path $outputRoot "xroute-$version-install-$arch.rsc.sha256"
+    }
+    foreach ($target in @($bundlePath, "$bundlePath.sha256", (Join-Path $outputRoot $archiveName), (Join-Path $outputRoot "$archiveName.sha256"), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath))), (Join-Path $outputRoot ([System.IO.Path]::GetFileName($sourceArchivePath) + ".sha256")), (Join-Path $outputRoot "RELEASE-NOTES.md"), $stagingRoot) + $obsoleteInstallers) {
         if (Test-Path -LiteralPath $target) {
             if (-not $Force) { throw "Release output already exists; use -Force to replace it: $target" }
             Remove-ReleasePath $target $outputRoot
@@ -104,16 +109,11 @@ try {
     Copy-Item -LiteralPath $routerOSScripts -Destination (Join-Path $stagingRoot "routeros") -Recurse
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL.md") -Destination $stagingRoot
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/INSTALL-RU.md") -Destination $stagingRoot
-    $installationImages = Join-Path $stagingRoot 'images'
-    New-Item -ItemType Directory -Path $installationImages | Out-Null
-    foreach ($imageName in @('install-files-en.png')) {
-        Copy-Item -LiteralPath (Join-Path $projectRoot "docs/images/$imageName") -Destination $installationImages
-    }
     Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE") -Destination $stagingRoot
     Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $bundlePath -CompressionLevel Optimal
     Remove-ReleasePath $stagingRoot $outputRoot
 
-    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath, $installerPath, $sourceArchivePath -Destination $outputRoot
+    Copy-Item -LiteralPath $archivePath, $archiveChecksumPath, $manifestPath, $sourceArchivePath -Destination $outputRoot
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/releases/$version.md") -Destination (Join-Path $outputRoot "RELEASE-NOTES.md")
 
     $bundleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundlePath).Hash.ToLowerInvariant()
@@ -121,23 +121,8 @@ try {
     $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceCopy).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText("$bundlePath.sha256", "$bundleHash  $bundleName`n", [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText("$sourceCopy.sha256", "$sourceHash  $([System.IO.Path]::GetFileName($sourceCopy))`n", [System.Text.UTF8Encoding]::new($false))
-    $installerCopy = Join-Path $outputRoot $installerName
-    $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installerCopy).Hash.ToLowerInvariant()
-    [System.IO.File]::WriteAllText("$installerCopy.sha256", "$installerHash  $installerName`n", [System.Text.UTF8Encoding]::new($false))
 
-    $checksumTargets = @(
-        $bundlePath,
-        (Join-Path $outputRoot $archiveName),
-        (Join-Path $outputRoot ([System.IO.Path]::GetFileName($manifestPath))),
-        $sourceCopy,
-        $installerCopy,
-        (Join-Path $outputRoot "RELEASE-NOTES.md")
-    )
-    $checksumLines = foreach ($target in $checksumTargets) {
-        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLowerInvariant()
-        "$hash  $([System.IO.Path]::GetFileName($target))"
-    }
-    [System.IO.File]::WriteAllLines((Join-Path $outputRoot "SHA256SUMS"), $checksumLines, [System.Text.UTF8Encoding]::new($false))
+    Write-XRouteReleaseChecksums -Directory $outputRoot -Version $version
 
     Write-Output "GITHUB_RELEASE_ASSETS=$outputRoot"
     Write-Output "ROUTEROS_BUNDLE=$bundlePath"

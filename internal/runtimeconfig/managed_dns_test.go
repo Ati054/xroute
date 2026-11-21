@@ -120,6 +120,25 @@ func TestRouterOSManagedDNSUsesSharedGateAndPreservesLocalBypass(t *testing.T) {
 	}
 }
 
+func TestRouterOSRulePositioningSkipsDynamicRules(t *testing.T) {
+	config := routerOSModelConfig()
+	objectValue(objectValue(config["system"])["management"])["routeros_panel_port"] = 18443
+	source, err := RenderRouterOSTrafficCandidate(config, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unsafe := range []string{"[/ip/firewall/nat/find]", "place-before=0"} {
+		if strings.Contains(source, unsafe) {
+			t.Fatalf("generated Apply can target a dynamic first rule: %s", unsafe)
+		}
+	}
+	for _, variable := range []string{"firstDNSNat", "panelFirst0", "firstOutageNat"} {
+		if !strings.Contains(source, ":local "+variable+" ") {
+			t.Fatalf("firewall positioning branch was not exercised: %s", variable)
+		}
+	}
+}
+
 func TestManagedDNSPortCannotBeUsedByPublicTransportOrPanel(t *testing.T) {
 	config := routerOSModelConfig()
 	objectValue(objectValue(config["system"])["management"])["routeros_panel_port"] = ManagedDNSPort

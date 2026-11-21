@@ -16,7 +16,7 @@
 # Files.  Set SB_IMAGE_SOURCE="registry" only when an OCI registry is
 # deliberately used; the RouterOS version/channel is unrelated to this choice.
 :global "SB_IMAGE_SOURCE" "file"
-:global "SB_IMAGE_FILE" ($"SB_STORAGE_ROOT" . "/xroute-1.7.1-linux-arm64.tar")
+:global "SB_IMAGE_FILE" ($"SB_STORAGE_ROOT" . "/xroute-1.7.8-linux-arm64.tar")
 :global "SB_IMAGE" ""
 :global "SB_BRIDGE" "bridge-xroute"
 :global "SB_VETH" "veth-xroute"
@@ -29,7 +29,7 @@
 :global "SB_ROUTING_TABLE" "to-xroute"
 # Physical routers use external storage. On x86 CHR, a dedicated directory on
 # the system disk (for example xroute) or a second disk is also supported.
-:global "SB_ROOT_DIR" ($"SB_STORAGE_ROOT" . "/root-1.7.1")
+:global "SB_ROOT_DIR" ($"SB_STORAGE_ROOT" . "/root-1.7.8")
 :global "SB_CONFIG_DIR" ($"SB_STORAGE_ROOT" . "/config")
 :global "SB_DATA_DIR" ($"SB_STORAGE_ROOT" . "/data")
 :global "SB_LOGS_DIR" ($"SB_STORAGE_ROOT" . "/logs")

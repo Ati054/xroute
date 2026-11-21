@@ -24,26 +24,26 @@ func decodeHotScopePool(t *testing.T, body string) hotPolicyPool {
 	return pool
 }
 
-func TestHotPolicyScopeIncludesForwardingChangesAndLocalPolicies(t *testing.T) {
+func TestHotPolicyScopeSeparatesAvailabilityFromObservation(t *testing.T) {
 	for _, scenario := range []struct {
-		name, target string
-		required     []string
+		name, target       string
+		required, observed []string
 	}{
-		{"unchanged", scopedPreviousPool, []string{"route"}},
-		{"renamed-remote", strings.ReplaceAll(scopedPreviousPool, "Original label", "New label"), []string{"route"}},
-		{"monitor-only", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"best","policy":{"failure_threshold":7}`), []string{"route"}},
-		{"remote-endpoint", strings.ReplaceAll(scopedPreviousPool, `"fingerprint":"original"`, `"fingerprint":"changed"`), []string{"remote", "route"}},
-		{"remote-membership", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), []string{"remote", "route"}},
-		{"remote-mode", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"priority"`), []string{"remote", "route"}},
-		{"remote-service-access", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"best","policy":{"candidate_service_ids":["service"],"candidate_service_access":{"group":["service"]}}`), []string{"remote", "route"}},
-		{"remote-prefix", strings.ReplaceAll(scopedPreviousPool, `"local_policy_ids"`, `"policy_prefixes":{"remote":"new-prefix"},"local_policy_ids"`), []string{"remote", "route"}},
-		{"remote-becomes-local", strings.ReplaceAll(scopedPreviousPool, `"local_policy_ids":["route"]`, `"local_policy_ids":["route","remote"]`), []string{"remote", "route"}},
-		{"remote-change-without-local-clients", strings.ReplaceAll(strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), `"local_policy_ids":["route"]`, `"local_policy_ids":[]`), []string{"remote"}},
+		{"unchanged", scopedPreviousPool, []string{"route"}, nil},
+		{"renamed-remote", strings.ReplaceAll(scopedPreviousPool, "Original label", "New label"), []string{"route"}, nil},
+		{"monitor-only", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"best","policy":{"failure_threshold":7}`), []string{"route"}, nil},
+		{"remote-endpoint", strings.ReplaceAll(scopedPreviousPool, `"fingerprint":"original"`, `"fingerprint":"changed"`), []string{"route"}, []string{"remote"}},
+		{"remote-membership", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), []string{"route"}, []string{"remote"}},
+		{"remote-mode", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"priority"`), []string{"route"}, []string{"remote"}},
+		{"remote-service-access", strings.ReplaceAll(scopedPreviousPool, `"mode":"best"`, `"mode":"best","policy":{"candidate_service_ids":["service"],"candidate_service_access":{"group":["service"]}}`), []string{"route"}, []string{"remote"}},
+		{"remote-prefix", strings.ReplaceAll(scopedPreviousPool, `"local_policy_ids"`, `"policy_prefixes":{"remote":"new-prefix"},"local_policy_ids"`), []string{"route"}, []string{"remote"}},
+		{"remote-becomes-local", strings.ReplaceAll(scopedPreviousPool, `"local_policy_ids":["route"]`, `"local_policy_ids":["route","remote"]`), []string{"remote", "route"}, nil},
+		{"remote-change-without-local-clients", strings.ReplaceAll(strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), `"local_policy_ids":["route"]`, `"local_policy_ids":[]`), nil, []string{"remote"}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			got := requiredHotPolicies(decodeHotScopePool(t, scopedPreviousPool), decodeHotScopePool(t, scenario.target))
-			if !reflect.DeepEqual(got, scenario.required) {
-				t.Fatalf("required=%v, want %v", got, scenario.required)
+			scope := hotPolicyReadiness(decodeHotScopePool(t, scopedPreviousPool), decodeHotScopePool(t, scenario.target))
+			if !reflect.DeepEqual(scope.RequiredPolicies, scenario.required) || !reflect.DeepEqual(scope.ObservedPolicies, scenario.observed) {
+				t.Fatalf("scope=%+v, want required %v and observed %v", scope, scenario.required, scenario.observed)
 			}
 		})
 	}
@@ -57,7 +57,8 @@ func TestHotPolicyActivationScopesBlockedSelectors(t *testing.T) {
 			blocked      bool
 		}{
 			{"unrelated-remote", strings.ReplaceAll(scopedPreviousPool, `"old"`, `"new"`), map[string]string{"route": "new", "remote": "block"}, false},
-			{"changed-remote", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), map[string]string{"route": "old", "remote": "block"}, true},
+			{"changed-remote", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), map[string]string{"route": "old", "remote": "block"}, false},
+			{"new-unassigned-reverse", strings.Replace(scopedPreviousPool, `"health_policies":{`, `"health_policies":{"reverse":{"mode":"priority","candidates":["reverse-exit"]},`, 1), map[string]string{"route": "old", "reverse": "block"}, false},
 			{"changed-local", strings.ReplaceAll(scopedPreviousPool, `"old"`, `"new"`), map[string]string{"route": "block", "remote": "remote-old"}, true},
 			{"unchanged-local", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), map[string]string{"route": "block", "remote": "remote-new"}, true},
 			{"missing-changed-remote", strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new"), map[string]string{"route": "old"}, true},
@@ -100,8 +101,8 @@ func TestHotPolicyActivationScopesBlockedSelectors(t *testing.T) {
 	}
 }
 
-func TestHotPolicyChangedRemoteBlockTimesOutAndRollsBack(t *testing.T) {
-	target := strings.ReplaceAll(scopedPreviousPool, "remote-old", "remote-new")
+func TestHotPolicyLocalBlockTimesOutAndRollsBack(t *testing.T) {
+	target := strings.ReplaceAll(scopedPreviousPool, `"old"`, `"new"`)
 	runtime, candidate, _ := hotPolicyFixtureWithPools(t, scopedPreviousPool, target)
 	type result struct {
 		receipt runtimeconfig.ActivationReceipt
@@ -116,10 +117,10 @@ func TestHotPolicyChangedRemoteBlockTimesOutAndRollsBack(t *testing.T) {
 		done <- result{receipt, err}
 	}()
 	waitTestPool(t, runtime.options.XrayHealthPool, target, previousStamp)
-	acknowledgeTestPool(t, runtime, map[string]string{"route": "old", "remote": "block"})
+	acknowledgeTestPool(t, runtime, map[string]string{"route": "block", "remote": "block"})
 	failed := <-done
 	if !errors.Is(failed.err, context.DeadlineExceeded) || !hotPolicyChange(failed.receipt.Changed()) {
-		t.Fatalf("blocked changed remote did not return rollback receipt: %v %v", failed.err, failed.receipt.Changed())
+		t.Fatalf("blocked local policy did not return rollback receipt: %v %v", failed.err, failed.receipt.Changed())
 	}
 	rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer rollbackCancel()
@@ -127,13 +128,13 @@ func TestHotPolicyChangedRemoteBlockTimesOutAndRollsBack(t *testing.T) {
 	previousStamp = testPoolStamp(t, runtime.options.XrayHealthPool)
 	go func() { rollback <- runtime.rollbackSubscription(rollbackCtx, failed.receipt) }()
 	waitTestPool(t, runtime.options.XrayHealthPool, scopedPreviousPool, previousStamp, rollback)
-	acknowledgeTestPool(t, runtime, map[string]string{"route": "old", "remote": "block"})
+	acknowledgeTestPool(t, runtime, map[string]string{"route": "block", "remote": "block"})
 	select {
 	case err := <-rollback:
-		t.Fatalf("rollback omitted the changed remote from its scope: %v", err)
+		t.Fatalf("rollback accepted a blocked local policy: %v", err)
 	case <-time.After(300 * time.Millisecond):
 	}
-	acknowledgeTestPool(t, runtime)
+	acknowledgeTestPool(t, runtime, map[string]string{"route": "old", "remote": "block"})
 	if err := <-rollback; err != nil {
 		t.Fatal(err)
 	}

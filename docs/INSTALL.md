@@ -1,22 +1,23 @@
-# Install XRoute 1.7.1
+# Install XRoute 1.7.8
 
 > New installations use `XROUTE` ownership labels. Upgraded installations keep
 > `SB-GATEWAY` labels and their existing paths; use that prefix in the examples
 > below for an older installation. Never rename these objects manually.
 
-This release provides ARM64 images. The x86-64 CHR build is being tested separately and is not included in these downloads.
+This release provides separate ARM64 and AMD64 images.
 
-This guide covers the first installation on an ARM64 MikroTik running
-RouterOS 7. Use the matching Russian guide if needed:
+This guide covers the first installation on an ARM64 MikroTik or x86_64 CHR
+running RouterOS 7. Use the matching Russian guide if needed:
 [INSTALL-RU.md](INSTALL-RU.md).
 
 ## Requirements
 
-- ARM64 MikroTik with RouterOS 7 and the matching `container` package.
+- ARM64 MikroTik or x86_64 CHR with RouterOS 7 and the matching `container` package.
 - At least 512 MiB RAM, with 256 MiB free before installation.
 - A mounted ext4 SSD/USB disk with at least 1 GiB free for extraction,
   data and later image updates.
-  Do not place the container on internal flash.
+  On x86_64 CHR, a project directory on the system disk is also supported when
+  at least 1 GiB is free. Do not use internal flash on a hardware router.
 - Wired access from an administrator computer on a trusted management LAN.
 - An enabled SSH service. For guided installation, `www-ssl` must be unused
   and TCP 59443 available; the installer creates the local REST certificates.
@@ -25,15 +26,20 @@ RouterOS 7. Use the matching Russian guide if needed:
 
 Record the current RouterOS version and channel before changing the router.
 The `container` package version must match RouterOS.
+On CHR, the free RouterOS license limits transmission to 1 Mbit/s per interface.
+XRoute does not change this limit; choose an appropriate CHR license for your
+required speed. See [MikroTik CHR licensing](https://help.mikrotik.com/docs/spaces/ROS/pages/18350234/Cloud%2BHosted%2BRouter%2BCHR).
 Installer service checks select static listeners; active SSH or REST sessions
 are not treated as duplicate service configuration.
 
 ## Release files
 
-Download the assets from [release 1.7.1](https://github.com/Ati054/xroute/releases/tag/v1.7.1):
+Download the assets from [release 1.7.8](https://github.com/Ati054/xroute/releases/tag/v1.7.8):
 
-- `xroute-1.7.1-routeros-bundle.zip`
-- `xroute-1.7.1-routeros-bundle.zip.sha256`
+- `xroute-1.7.8-routeros-bundle.zip`
+- `xroute-1.7.8-routeros-bundle.zip.sha256`
+- For x86_64 CHR, use `xroute-1.7.8-routeros-amd64-bundle.zip` and its `.sha256`
+  instead. RouterOS architecture names `x86` and `x86_64` both need AMD64.
 
 The ZIP is downloaded and extracted **on your computer**. The router does not
 need GitHub access. It contains:
@@ -44,25 +50,27 @@ need GitHub access. It contains:
 - this installation guide in English and Russian
 
 Verify the bundle before extracting it.
+The commands below show ARM64 filenames; use the AMD64 bundle and
+`xroute-1.7.8-linux-amd64.tar.sha256` for CHR.
 
 PowerShell:
 
 ```powershell
-(Get-FileHash .\xroute-1.7.1-routeros-bundle.zip -Algorithm SHA256).Hash
-Get-Content .\xroute-1.7.1-routeros-bundle.zip.sha256
+(Get-FileHash .\xroute-1.7.8-routeros-bundle.zip -Algorithm SHA256).Hash
+Get-Content .\xroute-1.7.8-routeros-bundle.zip.sha256
 ```
 
 Linux or macOS:
 
 ```sh
-sha256sum -c xroute-1.7.1-routeros-bundle.zip.sha256
+sha256sum -c xroute-1.7.8-routeros-bundle.zip.sha256
 ```
 
 After extraction, open a terminal inside the ready `xroute/` folder and
 verify the container archive too:
 
 ```sh
-sha256sum -c xroute-1.7.1-linux-arm64.tar.sha256
+sha256sum -c xroute-1.7.8-linux-arm64.tar.sha256
 ```
 
 Use the expected SHA-256 from the matching archive's `.sha256` file and manifest
@@ -88,20 +96,28 @@ in this release. Do not use a checksum from another version or rebuild.
    /system/device-mode/update container=yes
    ```
 
-5. Connect an ext4 SSD/USB disk. Prepare a new disk using RouterOS storage tools
+5. On a hardware router, connect an ext4 SSD/USB disk. Prepare a new disk using RouterOS storage tools
    only after saving anything it contains. The installer never formats disks.
+   CHR can use its system disk when at least 1 GiB is free.
 
 ## Install from your computer
 
+Use the offline ZIP for your architecture. `setup.rsc` requires the matching
+`.tar` in the same folder on the router. Copy the entire `xroute` folder before
+starting setup.
+
+The offline ZIP contains `setup.rsc`. The separate `.tar` is the image for
+updates from the web panel.
+
 1. In WinBox or WebFig **Files**, upload the ready **`xroute` folder** onto
-   the external disk. For a disk named `usb1`, the result must be:
+   the chosen disk. The ARM64 example for an external disk named `usb1` is:
 
    ```text
    usb1/xroute/
      setup.rsc
-     xroute-1.7.1-linux-arm64.tar
-     xroute-1.7.1-linux-arm64.tar.sha256
-     xroute-1.7.1-linux-arm64.manifest.json
+     xroute-1.7.8-linux-arm64.tar
+     xroute-1.7.8-linux-arm64.tar.sha256
+     xroute-1.7.8-linux-arm64.manifest.json
    ```
 
 2. In the MikroTik terminal, run:
@@ -114,7 +130,10 @@ in this release. Do not use a checksum from another version or rebuild.
    your trusted administrator LAN, review the summary and press **1** to install.
    Press **0** to cancel before installation starts.
 
-   ![Release files uploaded to the external disk in WebFig](images/install-files-en.png)
+   On a single-disk x86_64 CHR, upload the AMD64 bundle's `xroute` folder directly
+   to the root shown in **Files**. Run `/import file-name=xroute/setup.rsc` and
+   choose **System disk: xroute**. A mounted ext4 second disk is also available
+   in the menu. The installer never formats or resizes a disk.
 
 3. Save the generated REST password privately. The installer creates an encrypted
    pre-install backup, local HTTPS certificates and the XRoute service account.
@@ -159,7 +178,7 @@ $awaitCertificate "xroute-local"
 }
 ```
 
-The IP in `subject-alt-name` must match the RouterOS address in the REST URL. For the wizard's CA PEM field, export the **public** certificate: `/certificate export-certificate xroute-ca type=pem`. No private key is needed.
+The IP in `subject-alt-name` must match the RouterOS address in the REST URL. Export the public CA with `/certificate export-certificate xroute-ca type=pem` and select the resulting file in the wizard.
 
 ### Configure `variables.rsc`
 
@@ -168,7 +187,7 @@ private. Set at least the following values:
 
 - `SB_IMAGE_FILE`
 - `SB_STORAGE_ROOT` and `SB_ROOT_DIR`
-- router, container, and TPROXY addresses
+- router and container addresses
 - managed clients and internal networks
 - management source networks and ingress interfaces
 - RouterOS REST port and certificate name
@@ -179,8 +198,8 @@ addresses match the router. The default image and root paths for this release
 are:
 
 ```routeros
-:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.1-linux-arm64.tar"
-:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.1"
+:global "SB_IMAGE_FILE" "usb1/xroute/xroute-1.7.8-linux-arm64.tar"
+:global "SB_ROOT_DIR" "usb1/xroute/root-1.7.8"
 ```
 
 ### Upload and install manually
@@ -199,7 +218,7 @@ usb1/xroute/
   variables.rsc
   watchdog.rsc
   webfig-bootstrap.rsc
-  xroute-1.7.1-linux-arm64.tar
+  xroute-1.7.8-linux-arm64.tar
 ```
 
 Copy the contents of the bundle's `routeros/` directory, not the directory
@@ -244,38 +263,48 @@ Open the panel from the management LAN. The default address is:
 https://172.31.255.2:9443
 ```
 
-Create the panel administrator account on first launch. Then use the wizard to:
+On first launch, set a password for the panel administrator (`admin`). The panel
+uses your browser language unless you have already selected a language; the
+selector remains available on the sign-in screen. Then use the wizard to:
 
-1. upload a RouterOS export without sensitive values;
-   create it with `/export file=routeros-export` (without `show-sensitive`);
-2. enter the RouterOS HTTPS URL, username, password and SSH port;
-3. review container and DNS addresses, select the panel access network and your LAN/VPN networks;
-4. optionally add a provider subscription and a hostname for client subscriptions;
-5. save the draft, select **Apply**, review the changes and confirm them.
+1. **MikroTik**. Select the RouterOS export and enter the REST password.
+   To create an export, run `/export file=routeros-export`.
+2. **Networks**. Review the container addresses and classify any newly
+   discovered LAN and VPN networks. Internal DNS defaults to the RouterOS
+   address on the container network. The wizard keeps a different resolver
+   already configured on the gateway.
+3. **Review**. Save the draft, select **Apply**, review the changes and confirm them.
 
-The panel runs checks before applying changes. You can configure routes, devices
-and inbound connections later. A provider subscription and a public domain are optional.
+After Apply, use **Connections** to add a provider subscription or publish an
+HTTPS subscription for remote devices. Public inbounds are disabled by default.
 
 For guided installation, download `routeros-export.rsc` and `routeros-ca.crt`
-from the installation folder in **Files**. Upload the export in the wizard;
-open the public `.crt` as text and paste its PEM contents into **CA PEM**.
-Use the REST URL, username, password and SSH port printed by `setup.rsc`.
-The wizard reads the installer's selected panel access interface and subnet
-from the export, even without a RouterOS `LAN` interface list. Review the suggested
-values; the panel checks them against the current RouterOS settings before applying changes.
-Reopening the wizard preserves its saved internal networks, including manually
-added CIDRs. Reviewing an import does not remove independently configured networks
-or enable disabled networks.
+from the installation folder in **Files**. Select the export and the `.crt`
+file in the wizard. Leave the CA field empty if the panel already trusts the
+RouterOS certificate.
+Use the REST password printed by `setup.rsc` or the password you set for the
+dedicated REST account before running `bootstrap.rsc`. The wizard fills in
+connection settings as soon as you select the RouterOS export. If any are
+missing, it opens **Manual REST setup**. After a manual installation, the
+export usually contains the REST address and port without the username.
+Enter the account name you set in `variables.rsc`.
+The wizard reuses the panel access interfaces and subnets configured by the
+installer. You can review or edit them under **Panel access**. If the export
+contains no XRoute access rules and the draft has no access settings, the wizard
+opens these fields for you to confirm. For a remote network that is missing
+from the export, add its CIDR under **Internal networks**.
+
+Reopening the wizard preserves extra panel access interfaces, subnets,
+saved internal networks and configured public inbounds. Use **Settings**
+to edit the full list of panel access interfaces and subnets.
 
 The RouterOS certificate protects the panel's HTTPS REST connection to the
 router. It is separate from the panel's own local HTTPS certificate and from
 certificates for optional public proxy listeners. No public domain is needed
 for this local management connection.
 
-Outbound-only use does not require a domain, an inbound listener or a public
-certificate. Leave the remote-access hostname empty. For server-only use,
-the provider subscription can be left empty and configured later. Existing
-VPN interfaces can be selected for management or client access when needed.
+For server-only use, configure public inbounds in **Connections** after the
+first Apply. You can select existing VPN interfaces for management or client access.
 
 Successful bootstrap removes the private `variables.rsc` automatically. If the
 installation stops early, remove it manually after diagnosis. Keep an encrypted
@@ -299,9 +328,14 @@ outage handling keeps that stricter policy.
 ## Update and recovery
 
 Use **Operations → Container image update** for later releases. Upload the new
-`linux/arm64` `.tar`; do not upload the release ZIP or the `.sha256` file into
-the update form. The panel verifies the archive and retains the previous
-container until the new image passes probation.
+`.tar` matching your router: `linux/arm64` for ARM64 or `linux/amd64` for x86_64
+CHR. Do not upload the release ZIP or the `.sha256` file into
+the update form. The panel stores the image in the XRoute project directory
+and checks the architecture and SHA-256. It keeps the previous container
+until the new image passes probation.
 
 See [OPERATIONS.md](OPERATIONS.md) for backup, recovery, rollback, and removal.
+The panel allows up to 30 minutes to upload an image. If your transfer
+takes longer, copy the verified `.tar` to the router and follow the
+[offline update procedure](OPERATIONS.md#offline-update).
 Use [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if preflight or readiness fails.

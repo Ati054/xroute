@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Ati054/xroute/internal/managedidentity"
+	routerosassets "github.com/Ati054/xroute/routeros"
 )
 
 func TestScheduleFullUninstallStagesWorkerBeforeOneShotScheduler(t *testing.T) {
@@ -26,7 +27,7 @@ func TestScheduleFullUninstallStagesWorkerBeforeOneShotScheduler(t *testing.T) {
 			_, _ = response.Write([]byte(`[]`))
 		case request.Method == http.MethodPut && request.URL.Path == "/rest/system/script":
 			var payload map[string]any
-			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload["name"] != fullUninstallWorker || !strings.Contains(text(payload["source"]), `/file/remove $storageEntry`) {
+			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload["name"] != fullUninstallWorker || payload["policy"] != "ftp,read,write,test,policy,sensitive" || !strings.Contains(text(payload["source"]), `/file/remove $storageEntry`) {
 				http.Error(response, "bad worker", http.StatusBadRequest)
 				return
 			}
@@ -35,7 +36,7 @@ func TestScheduleFullUninstallStagesWorkerBeforeOneShotScheduler(t *testing.T) {
 			_, _ = response.Write([]byte(`[]`))
 		case request.Method == http.MethodPut && request.URL.Path == "/rest/system/scheduler":
 			var payload map[string]any
-			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload["interval"] != "10s" || payload["on-event"] != "/system/script/run "+fullUninstallWorker {
+			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload["interval"] != "10s" || payload["policy"] != "ftp,read,write,test,policy,sensitive" || payload["on-event"] != "/system/script/run "+fullUninstallWorker {
 				http.Error(response, "bad scheduler", http.StatusBadRequest)
 				return
 			}
@@ -79,6 +80,32 @@ func TestScheduleFullUninstallRejectsUnsafeStorageWithoutRouterOSRequest(t *test
 	}
 }
 
+func TestFullUninstallRemovesExecutingAccountAfterFilesAndScripts(t *testing.T) {
+	manual, err := os.ReadFile(filepath.Join("..", "..", "routeros", "uninstall.rsc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, source := range map[string]string{"scheduled": renderFullUninstallWorker("xroute"), "manual": managedidentity.Script(string(manual))} {
+		t.Run(name, func(t *testing.T) {
+			files := strings.LastIndex(source, `/file/remove $storageEntry`)
+			user := strings.LastIndex(source, managedidentity.Literal(`/user/remove [find where comment="XROUTE control-plane REST user"]`))
+			group := strings.LastIndex(source, managedidentity.Literal(`/user/group/remove [find where comment="XROUTE REST group"]`))
+			if files < 0 || user <= files || group <= user {
+				t.Fatal("executing account must retain permissions until storage cleanup finishes")
+			}
+			if scripts := strings.LastIndex(source, `/system/script/remove`); scripts > user {
+				t.Fatal("script cleanup must precede executing account removal")
+			}
+		})
+	}
+}
+
+func TestFullUninstallUsesManualManagedBackupCleanup(t *testing.T) {
+	if !strings.Contains(renderFullUninstallWorker("xroute"), routerosassets.ManagedBackupCleanupSource()) {
+		t.Fatal("scheduled full removal must share the manual backup cleanup")
+	}
+}
+
 func TestFullUninstallIncludesRetainedImageBeforeRemovingStorage(t *testing.T) {
 	worker := renderFullUninstallWorker("usb1/sb-gateway")
 	if !strings.Contains(worker, `comment="SB-GATEWAY container" || comment="SB-GATEWAY container previous"`) || !strings.Contains(worker, `container root is outside managed storage`) {
@@ -92,6 +119,17 @@ func TestFullUninstallIncludesRetainedImageBeforeRemovingStorage(t *testing.T) {
 	}
 	if strings.Contains(worker, `comment~"^SB-GATEWAY"]`) || !strings.Contains(worker, `comment~"^SB-GATEWAY "]`) {
 		t.Fatal("uninstall must not claim foreign comment prefixes without the ownership delimiter")
+	}
+}
+
+func TestFullUninstallSharesGuidedManagementCleanupBeforeStateRemoval(t *testing.T) {
+	worker := renderFullUninstallWorker("xroute")
+	cleanup := routerosassets.GuidedManagementCleanupSource()
+	if !strings.Contains(worker, `:local storageRoot "xroute"`) || !strings.Contains(worker, cleanup) {
+		t.Fatal("scheduled removal must use the manual installer's exact cleanup")
+	}
+	if strings.Index(worker, cleanup) > strings.Index(worker, `/system/script/remove $scriptId`) {
+		t.Fatal("management ownership state was removed before restoring services")
 	}
 }
 

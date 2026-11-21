@@ -13,7 +13,8 @@ const [page, client, css] = await Promise.all([
 test("browser upload preflights before streaming and reports byte progress", () => {
   assert.match(page, /await preflightContainerImageUpload\(file\);\s+const result = await uploadContainerImage<JsonObject>\(file, setImageUploadProgress\)/);
   assert.match(client, /request\.upload\.addEventListener\("progress"/);
-  assert.match(page, /role="progressbar" aria-label=\{tr\("Загрузка образа на SSD"\)\}/);
+  assert.match(page, /role="progressbar" aria-label=\{tr\("Загрузка образа"\)\}/);
+  assert.match(page, /Запись образа на диск XRoute…/);
   assert.match(css, /\.image-upload-progress/);
 });
 

@@ -30,7 +30,8 @@ const (
 // EnsureStartupNginxTrafficReadiness upgrades the exact schema-2 runtime that
 // predates route-aware readiness. It preserves every public listener and only
 // adds the private RouterOS probe before the internal server's deny-all tail.
-// Both supported schemas also receive the transport-local streaming limits.
+// Both supported schemas also receive the transport-local streaming limits
+// and management static-asset compression.
 func EnsureStartupNginxTrafficReadiness(path string) (bool, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -67,6 +68,12 @@ func EnsureStartupNginxTrafficReadiness(path string) (bool, error) {
 		updated = upgradeStartupNginxSubscriptionRefresh(text)
 		normalized = normalized || text != updated
 		text = updated
+		updated = upgradeStartupNginxRecoveryUpload(text)
+		normalized = normalized || text != updated
+		text = updated
+		updated = upgradeStartupNginxStaticCompression(text)
+		normalized = normalized || text != updated
+		text = updated
 		warnStartupNginxStreamingLimits(text)
 		if normalized {
 			if err := writeAtomic(path, []byte(text), 0o600, false); err != nil {
@@ -88,6 +95,8 @@ func EnsureStartupNginxTrafficReadiness(path string) (bool, error) {
 	text = runtimeconfig.UpgradeNginxStreamingLimits(text)
 	text = upgradeStartupNginxCapacity(text)
 	text = upgradeStartupNginxSubscriptionRefresh(text)
+	text = upgradeStartupNginxRecoveryUpload(text)
+	text = upgradeStartupNginxStaticCompression(text)
 	warnStartupNginxStreamingLimits(text)
 	if err := writeAtomic(path, []byte(text), 0o600, false); err != nil {
 		return false, err
@@ -104,10 +113,28 @@ func upgradeStartupNginxCapacity(config string) string {
 	return updated
 }
 
+func upgradeStartupNginxStaticCompression(config string) string {
+	updated, err := runtimeconfig.UpgradeNginxStaticCompression(config)
+	if err != nil {
+		log.Printf("startup Nginx static compression warning: %v; use Check and Apply to regenerate managed configuration", err)
+		return config
+	}
+	return updated
+}
+
 func upgradeStartupNginxSubscriptionRefresh(config string) string {
 	updated, err := runtimeconfig.UpgradeNginxSubscriptionRefreshTimeout(config)
 	if err != nil {
 		log.Printf("startup Nginx subscription refresh timeout warning: %v; use Check and Apply to regenerate managed configuration", err)
+		return config
+	}
+	return updated
+}
+
+func upgradeStartupNginxRecoveryUpload(config string) string {
+	updated, err := runtimeconfig.UpgradeNginxRecoveryUpload(config, recoveryMaxArchiveBytes)
+	if err != nil {
+		log.Printf("startup Nginx recovery upload warning: %v; use Check and Apply to regenerate managed configuration", err)
 		return config
 	}
 	return updated

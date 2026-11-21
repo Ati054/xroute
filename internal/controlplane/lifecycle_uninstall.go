@@ -24,17 +24,19 @@ func (server *Server) uninstallPreview(response http.ResponseWriter, request *ht
 	server.writeJSON(response, http.StatusOK, map[string]any{
 		"storage_root": root,
 		"removes": []any{
-			managedidentity.Literal("точный RouterOS-контейнер XROUTE"),
-			managedidentity.Literal("firewall, маршруты, списки и scheduler с владением XROUTE"),
-			managedidentity.Literal("envs, mounts, veth и bridge с владением XROUTE"),
-			"выделенный каталог проекта на внешнем накопителе",
-			managedidentity.Literal("REST user/group и управляемые backup-файлы XROUTE"),
+			"Контейнер XRoute",
+			"Правила firewall, маршруты, списки и задания XRoute",
+			"Переменные контейнера, точки монтирования и интерфейсы XRoute",
+			"Выделенный каталог проекта",
+			"Служебная учётная запись RouterOS и резервные копии XRoute",
+			"Сертификаты, созданные мастером XRoute",
 		},
 		"preserves": []any{
-			"чужие правила firewall и маршруты RouterOS",
-			"существующие VPN-интерфейсы и peers",
-			"остальные файлы и каталоги внешнего накопителя",
-			"пакеты RouterOS, channel и device-mode",
+			"Остальные правила firewall и маршруты RouterOS",
+			"Существующие VPN-интерфейсы и пиры",
+			"Файлы вне каталога проекта",
+			"Пакеты RouterOS, канал обновлений и device-mode",
+			"Настроенные вручную службы RouterOS",
 		},
 		// Stable API token; the panel displays its localized XRoute confirmation.
 		"confirmation": "УДАЛИТЬ SB-GATEWAY",

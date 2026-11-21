@@ -1,5 +1,6 @@
 import { readConsoleSource } from "./console-source.mjs";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { disableSubscriptionPublication } from "../app/subscription-publication.ts";
 import { normalizeLocalizedSource } from "./source-localization.mjs";
@@ -39,11 +40,12 @@ test("Connections keeps the publication toggle outside disabled endpoint fields"
 });
 
 test("client-only defaults do not require public TLS", async () => {
+  const defaults = JSON.parse(await readFile(new URL("../internal/controlplane/default-config.json", import.meta.url), "utf8"));
   const page = normalizeLocalizedSource(await readConsoleSource());
   assert.match(page, /return required\.every\(\(transport\) =>/);
-  assert.match(page, /subscription_endpoint_enabled:\s*Boolean\(subscriptionHost\)/);
-  assert.match(page, /if \(step === 2 && subscriptionHost && !subscriptionHost\.includes\("\."\)\)/);
-  assert.match(page, /transports:\s*currentTransports\.map\(\(transport\) => \(\{[\s\S]*enabled:\s*false,[\s\S]*cdn_deployments:[\s\S]*enabled:\s*false/);
+  assert.match(page, /ingress:\s*unconfiguredSubscription\s*\?\s*\{\s*\.\.\.ingress,\s*subscription_endpoint_enabled:\s*false/);
+  assert.ok(defaults.transports.every(transport => transport.enabled === false &&
+    (transport.cdn_deployments ?? []).every(deployment => deployment.enabled === false)));
   assert.match(page, /tls_profiles:\s*asObjectList\(config\.tls_profiles\)\.filter\([\s\S]*profile\.certificate_secret_ref[\s\S]*profile\.private_key_secret_ref/);
 });
 

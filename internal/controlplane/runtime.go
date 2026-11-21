@@ -587,7 +587,7 @@ func (runtime *nativeRuntime) waitHotRuntime(ctx context.Context, poolPath strin
 			}
 			if json.Unmarshal(body, &marker) == nil && marker.PoolSHA256 == expected &&
 				marker.PoolMTimeUnixNano == expectedMTime && marker.XrayPID > 0 &&
-				hotPolicyScopeReady(policyScope.RequiredPolicies, marker.PolicySelections) {
+				hotPolicyScopeReady(policyScope, marker.PolicySelections) {
 				ready, readyErr := os.ReadFile(runtime.options.XrayReadyFile)
 				if readyErr == nil && strings.TrimSpace(string(ready)) == strconv.Itoa(marker.XrayPID) {
 					current, statErr := os.Stat(poolPath)

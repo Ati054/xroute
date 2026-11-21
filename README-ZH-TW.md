@@ -5,11 +5,11 @@
 # 適用於 MikroTik RouterOS 7 的 XRoute
 
 我開發 XRoute，是為了管理 MikroTik 上的代理路由，不必再手動修改 JSON。
-它將網頁面板、Xray 與路由工具整合在同一個容器中，提供適用於 ARM64 路由器的映像檔。
+它將網頁面板、Xray 與路由工具整合在同一個容器中，提供適用於 ARM64 路由器和 x86_64 CHR 的映像檔。
 您可以為每部裝置選擇路由，讓指定服務經由一般 WAN 連線，
 並依需要加入備援伺服器。
 
-目前版本提供 ARM64 映像檔；x86-64 CHR 映像檔將於完成獨立測試後另行發布。
+ARM64 與 AMD64 映像檔分別提供。在 x86_64 CHR 上，安裝程式可以使用系統磁碟上的專案目錄。
 
 [安裝指南](docs/INSTALL.md) · [下載](https://github.com/Ati054/xroute/releases/latest)
 
@@ -21,8 +21,8 @@
 
 ## 需要準備什麼
 
-- 支援容器且執行 RouterOS 7 的 ARM64 MikroTik（例如 hAP ax³）。
-- 外接 SSD/USB 磁碟，並為容器及其資料保留足夠空間。
+- 支援容器且執行 RouterOS 7 的 ARM64 MikroTik（例如 hAP ax³）或 x86_64 CHR。
+- 硬體路由器使用外接 SSD/USB 磁碟；CHR 磁碟至少需要 1 GiB 可用空間。
 - 網際網路連線，以及支援的代理訂閱或其他出口。
 - 若入站連線需要，請準備網域與憑證。僅使用出站路由時不需要網域。
 
@@ -44,9 +44,9 @@ XRoute 會新增帶有專屬標記的 RouterOS 物件。對既有物件的變更
 
 ## 安裝
 
-1. 在**電腦上**從 [Releases](https://github.com/Ati054/xroute/releases/latest) 下載套件組，核對 SHA-256 後解壓縮。
-2. 將準備好的 **`xroute` 資料夾**上傳至外接 ext4 SSD，例如 `usb1/xroute/`。
-3. 在 MikroTik 終端機執行 `/import file-name=usb1/xroute/setup.rsc`，選擇磁碟及可信任的管理 LAN，確認摘要後安裝。
+1. 在**電腦上**從 [Releases](https://github.com/Ati054/xroute/releases/latest) 下載對應架構的套件：硬體路由器選擇 ARM64，x86_64 CHR 選擇 AMD64。核對 SHA-256 後解壓縮。
+2. 將準備好的 **`xroute` 資料夾**上傳至外接 ext4 SSD（例如 `usb1/xroute/`），或 CHR 系統磁碟的根目錄（`xroute/`）。
+3. 在 MikroTik 終端機執行 `/import file-name=usb1/xroute/setup.rsc`；使用 CHR 系統磁碟時，執行 `/import file-name=xroute/setup.rsc`。選擇對應的儲存位置及可信任的管理 LAN，確認摘要後安裝。
 4. 開啟安裝程式顯示的面板位址，完成首次設定。
 
 此方式**不需要路由器連線至 GitHub**。安裝程式會建立本機 REST 憑證與服務帳號，保留現有 VPN；稍後再從面板選擇使用 XRoute 的裝置。
@@ -120,7 +120,7 @@ Copyright © 2026 [Ati054](https://github.com/Ati054)。
 
 # XRoute 儲存在哪裡？會改動現有網路嗎？
 
-容器映像檔、規則資料庫和訂閱目錄儲存在外接 SSD 或 USB 儲存裝置上，避免占滿或
+在硬體路由器上，容器映像檔、規則資料庫和訂閱目錄儲存在外接 SSD 或 USB 儲存裝置上，避免占滿或
 耗損路由器內建快閃記憶體。XRoute 會建立帶標記的 RouterOS 物件。只有在安裝過程或
 Apply 計畫中明確選取後，才會修改現有網路物件；不會取代 LAN 和 Wi-Fi 設定。
 套用網路變更前會建立備份，並啟用自動復原保護。

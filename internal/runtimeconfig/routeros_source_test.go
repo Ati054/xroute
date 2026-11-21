@@ -66,6 +66,18 @@ func TestBuildRouterOSRenderModelDefaultsToNoAdditionalRecoveryCooldown(t *testi
 	}
 }
 
+func TestBuildRouterOSRenderModelWithoutLegacyTUN(t *testing.T) {
+	config := routerOSModelConfig()
+	delete(objectValue(objectValue(config["system"])["networking"]), "tun_address")
+	model, err := BuildRouterOSRenderModel(config, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.TunNetwork != "" || len(model.WireGuardExits) != 1 {
+		t.Fatalf("unexpected network model: TUN=%q, WireGuard exits=%d", model.TunNetwork, len(model.WireGuardExits))
+	}
+}
+
 func TestBuildRouterOSRenderModelPublishesDirectGRPCTLSPinPort(t *testing.T) {
 	config := routerOSModelConfig()
 	config["transports"] = []any{map[string]any{

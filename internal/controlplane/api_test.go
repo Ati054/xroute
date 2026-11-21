@@ -3,6 +3,7 @@ package controlplane
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,6 +29,58 @@ func TestControlPlaneWriteTimeoutCoversBoundedOperations(t *testing.T) {
 func TestControlPlaneReadTimeoutCoversStreamingUploads(t *testing.T) {
 	if controlPlaneReadTimeout < 10*time.Minute {
 		t.Fatalf("control-plane read timeout %s is too short for a streamed appliance archive", controlPlaneReadTimeout)
+	}
+}
+
+type uploadDeadlineRecorder struct {
+	*httptest.ResponseRecorder
+	readDeadline, writeDeadline time.Time
+}
+
+func (r *uploadDeadlineRecorder) SetReadDeadline(value time.Time) error {
+	r.readDeadline = value
+	return nil
+}
+
+func (r *uploadDeadlineRecorder) SetWriteDeadline(value time.Time) error {
+	r.writeDeadline = value
+	return nil
+}
+
+func TestUploadDeadlinesCoverSlowLinksAndStayScoped(t *testing.T) {
+	server := newTestServer(t)
+	now := time.Unix(1_700_000_000, 0)
+	server.now = func() time.Time { return now }
+	for _, tc := range []struct {
+		path string
+		want time.Duration
+	}{
+		{"/lifecycle/image-upload", 30 * time.Minute},
+		{"/recovery/backups/upload", 30 * time.Minute},
+	} {
+		r := &uploadDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+		server.ServeHTTP(r, httptest.NewRequest(http.MethodPut, apiPrefix+tc.path, nil))
+		if r.Code != http.StatusUnauthorized {
+			t.Fatalf("upload authentication was bypassed: %d", r.Code)
+		}
+		if r.readDeadline.Sub(now) != tc.want || r.writeDeadline.Sub(now) != tc.want {
+			t.Fatalf("%s deadlines = %v / %v", tc.path, r.readDeadline.Sub(now), r.writeDeadline.Sub(now))
+		}
+	}
+	preflight := &uploadDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	server.ServeHTTP(preflight, httptest.NewRequest(http.MethodPost, apiPrefix+"/recovery/backups/upload/preflight", nil))
+	if !preflight.readDeadline.IsZero() || !preflight.writeDeadline.IsZero() {
+		t.Fatal("preflight inherited the streaming upload deadline")
+	}
+	config, err := os.ReadFile("../../templates/nginx.conf.j2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, location, found := strings.Cut(string(config), "location = /api/v1/recovery/backups/upload {")
+	location, _, _ = strings.Cut(location, "}")
+	if !found || recoveryMaxArchiveBytes%(1<<20) != 0 ||
+		!strings.Contains(location, fmt.Sprintf("client_max_body_size %dm;", recoveryMaxArchiveBytes>>20)) {
+		t.Fatal("Nginx and controller recovery upload limits differ")
 	}
 }
 
@@ -193,7 +246,7 @@ func TestReadOnlyStateEndpointsUseCompatibleDocuments(t *testing.T) {
 		t.Fatalf("draft failed: %d %s", draft.Code, draft.Body.String())
 	}
 	draftBody := decodeResponse(t, draft)
-	if draftBody["revision"] != "386e2e7fcc28b501297df1ef0be355e0c4ac8d97876ba3591cfc21d29c724b70" {
+	if draftBody["revision"] != "290bc16d4c897784235dfb31bb5095582ba0606143ce303684e61ed74a3e7df1" {
 		t.Fatalf("default config revision drifted: %v", draftBody["revision"])
 	}
 	config := draftBody["config"].(map[string]any)

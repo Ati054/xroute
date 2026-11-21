@@ -27,6 +27,7 @@ type hotPolicyPool struct {
 type hotRuntimeScope struct {
 	PoolSHA256       string
 	RequiredPolicies []string
+	ObservedPolicies []string
 }
 
 type hotForwardingPolicy struct {
@@ -82,10 +83,11 @@ func hotPolicyScope(previousPath, targetPath string) (hotRuntimeScope, error) {
 	if err != nil {
 		return hotRuntimeScope{}, err
 	}
-	return hotRuntimeScope{target.SHA256, requiredHotPolicies(previous, target)}, nil
+	return hotPolicyReadiness(previous, target), nil
 }
 
-func requiredHotPolicies(previous, target hotPolicyPool) []string {
+func hotPolicyReadiness(previous, target hotPolicyPool) hotRuntimeScope {
+	scope := hotRuntimeScope{PoolSHA256: target.SHA256}
 	required := make(map[string]bool)
 	for _, id := range target.LocalPolicyIDs {
 		if id = strings.TrimSpace(id); id != "" {
@@ -93,23 +95,31 @@ func requiredHotPolicies(previous, target hotPolicyPool) []string {
 		}
 	}
 	for id, policy := range target.Policies {
+		if required[id] || len(policy.Candidates) == 0 {
+			continue
+		}
 		old, exists := previous.Policies[id]
 		if !exists || !reflect.DeepEqual(old, policy) || previous.PolicyPrefixes[id] != target.PolicyPrefixes[id] {
-			required[id] = true
+			scope.ObservedPolicies = append(scope.ObservedPolicies, id)
 		}
 	}
-	result := make([]string, 0, len(required))
 	for id := range required {
-		result = append(result, id)
+		scope.RequiredPolicies = append(scope.RequiredPolicies, id)
 	}
-	sort.Strings(result)
-	return result
+	sort.Strings(scope.RequiredPolicies)
+	sort.Strings(scope.ObservedPolicies)
+	return scope
 }
 
-func hotPolicyScopeReady(required []string, selections map[string]string) bool {
-	for _, id := range required {
+func hotPolicyScopeReady(scope hotRuntimeScope, selections map[string]string) bool {
+	for _, id := range scope.RequiredPolicies {
 		selected := strings.TrimSpace(selections[id])
 		if selected == "" || selected == "block" {
+			return false
+		}
+	}
+	for _, id := range scope.ObservedPolicies {
+		if strings.TrimSpace(selections[id]) == "" {
 			return false
 		}
 	}

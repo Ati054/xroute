@@ -313,7 +313,11 @@ export function createRecoveryBackup<T = JsonObject>(): Promise<T> {
   });
 }
 
-export function uploadRecoveryBackup<T = JsonObject>(file: File): Promise<T> {
+export async function uploadRecoveryBackup<T = JsonObject>(file: File): Promise<T> {
+  await apiRequest("/recovery/backups/upload/preflight", {
+    method: "POST",
+    body: JSON.stringify({ filename: file.name, size_bytes: file.size }),
+  });
   return apiRequest<T>("/recovery/backups/upload", {
     method: "PUT",
     headers: {
@@ -321,7 +325,7 @@ export function uploadRecoveryBackup<T = JsonObject>(file: File): Promise<T> {
       "X-SB-Recovery-Filename": file.name,
     },
     body: file,
-    timeoutMs: 5 * 60_000,
+    timeoutMs: 30 * 60_000,
   });
 }
 

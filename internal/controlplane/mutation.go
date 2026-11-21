@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -27,11 +28,11 @@ func (server *Server) stateMutationConflict(allowed string) (string, error) {
 			return "container-startup", nil
 		}
 	}
-	memory, err := server.repository.auxiliary(containerMemoryOperation)
+	memoryPending, err := server.reconcilePendingContainerMemory(context.Background())
 	if err != nil {
 		return "", err
 	}
-	if memory["pending"] == true {
+	if memoryPending {
 		return "container-memory", nil
 	}
 	if allowed != mutationApply {

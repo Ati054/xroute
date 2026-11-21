@@ -93,6 +93,10 @@ type Server struct {
 	validationMu              sync.Mutex
 	validationRevision        string
 	validationResult          configValidation
+	pendingConfigMu           sync.Mutex
+	pendingActiveRevision     string
+	pendingDraftRevision      string
+	pendingConfig             pendingConfigSummary
 	subscriptionMu            subscriptionGate
 	subscriptionWake          chan struct{}
 	subscriptionRuntimeIdle   subscriptionRuntimeIdle
@@ -201,6 +205,7 @@ func Run(ctx context.Context, opts Options) error {
 	go server.runSubscriptionScheduler(runContext)
 	go server.runSubscriptionCatalogRetention(runContext)
 	go server.runApplyRecoveryScheduler(runContext)
+	go server.runContainerMemoryReconciliation(runContext)
 	go server.runRouterOSLiveNetworkScheduler(runContext)
 	go server.runRouterOSFetchLogScheduler(runContext)
 	go server.runRouterOSManagedScriptsScheduler(runContext)
@@ -296,14 +301,18 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	response.Header().Set("X-Frame-Options", "DENY")
 	response.Header().Set("Referrer-Policy", "no-referrer")
 	response.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-	if request.ContentLength > maxRequestBytes && request.URL.Path != apiPrefix+"/lifecycle/image-upload" && request.URL.Path != apiPrefix+"/recovery/backups/upload" {
+	streamingUpload := request.Method == http.MethodPut &&
+		(request.URL.Path == apiPrefix+"/lifecycle/image-upload" || request.URL.Path == apiPrefix+"/recovery/backups/upload")
+	if request.ContentLength > maxRequestBytes && !streamingUpload {
 		server.writeError(response, requestID, http.StatusRequestEntityTooLarge, "request_too_large", "Request body exceeds the allowed safety limit.")
 		return
 	}
-	if request.URL.Path == apiPrefix+"/lifecycle/image-upload" || request.URL.Path == apiPrefix+"/recovery/backups/upload" {
+	if streamingUpload {
 		controller := http.NewResponseController(response)
-		_ = controller.SetReadDeadline(server.now().Add(controlPlaneReadTimeout))
-		_ = controller.SetWriteDeadline(server.now().Add(10 * time.Minute))
+		// Match the exact Nginx upload locations.
+		deadline := server.now().Add(30 * time.Minute)
+		_ = controller.SetReadDeadline(deadline)
+		_ = controller.SetWriteDeadline(deadline)
 	} else if request.URL.Path == apiPrefix+"/lifecycle/image-update" {
 		// The recovery archive is a bounded local stream and must complete before
 		// the RouterOS scheduler can be created.
@@ -391,6 +400,7 @@ func (server *Server) routes() {
 	server.mux.HandleFunc("POST "+apiPrefix+"/recovery/backups", server.createRecoveryBackup)
 	server.mux.HandleFunc("GET "+apiPrefix+"/recovery/backups/{name}/download", server.downloadRecoveryBackup)
 	server.mux.HandleFunc("PUT "+apiPrefix+"/recovery/backups/upload", server.uploadRecoveryBackup)
+	server.mux.HandleFunc("POST "+apiPrefix+"/recovery/backups/upload/preflight", server.preflightRecoveryUpload)
 	server.mux.HandleFunc("POST "+apiPrefix+"/recovery/restore", server.restoreRecoveryBackup)
 	server.mux.HandleFunc("GET "+apiPrefix+"/{collection}", server.listCollection)
 	server.mux.HandleFunc("POST "+apiPrefix+"/{collection}", server.createCollectionItem)

@@ -14,6 +14,16 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && SUPPORTED_LOCALES.some((locale) => locale === value);
 }
 
+export function browserLocale(language: string): Locale {
+  const parts = language.toLowerCase().replaceAll("_", "-").split("-");
+  if (parts[0] === "ru") return "ru";
+  if (parts[0] === "fa") return "fa";
+  if (parts[0] === "zh") {
+    return parts.some((part) => ["hant", "tw", "hk"].includes(part)) ? "zh-Hant" : "zh-Hans";
+  }
+  return "en";
+}
+
 export function localeFormat(locale: Locale): string {
   return LOCALE_DETAILS[locale].format;
 }

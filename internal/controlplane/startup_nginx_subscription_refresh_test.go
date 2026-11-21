@@ -16,7 +16,7 @@ func TestStartupNginxUpgradesSubscriptionRefreshWithoutApply(t *testing.T) {
 				probe = nginxTrafficReady
 			}
 			ordinary := `location /api/ { proxy_set_header Authorization $http_authorization; proxy_pass http://127.0.0.1:8080; }`
-			original := header + "\nhttp { server { listen\n9443 ssl; " + ordinary + " }\n" + nginxInternalStart + probe + nginxInternalTail + "    }\n}\n"
+			original := header + "\nhttp { server { listen\n9443 ssl; " + ordinary + " location ^~ /_next/static/ { alias /opt/ui/_next/static/; } }\n" + nginxInternalStart + probe + nginxInternalTail + "    }\n}\n"
 			original = strings.ReplaceAll(original, "\n", newline)
 			if err := os.WriteFile(path, []byte(original), 0600); err != nil {
 				t.Fatal(err)
@@ -25,6 +25,9 @@ func TestStartupNginxUpgradesSubscriptionRefreshWithoutApply(t *testing.T) {
 				t.Fatalf("startup upgrade: %t %v", changed, err)
 			}
 			updated := string(mustReadFile(t, path))
+			if strings.Count(updated, "gzip on;") != 1 {
+				t.Fatal("startup static compression missing")
+			}
 			if !strings.Contains(updated, ordinary) || strings.Count(updated, "proxy_read_timeout 180s;") != 1 || strings.Count(updated, "Authorization $http_authorization;") != 2 {
 				t.Fatal("startup refresh policy missing or ordinary policy changed")
 			}

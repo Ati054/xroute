@@ -3,7 +3,7 @@
 import { JsonObject } from "../api-client";
 import { useLanguage } from "../i18n";
 import { SubscriptionDialog } from "./routing";
-import { RevisionState, SectionTitle, StatusPill, asObjectList, asStringList, asText, configuredItemStatus, formatNodeCount, itemName } from "./shared";
+import { RevisionState, SectionTitle, StatusPill, asObjectList, asStringList, asText, configuredItemStatus, configuredItemTone, formatNodeCount, itemName } from "./shared";
 import { useState } from "react";
 
 export function Clients({
@@ -62,9 +62,10 @@ export function Clients({
         return {
           name: itemName(client),
           id: asText(client.id, "unknown"),
-          source: `${sourceKindLabels[asText(client.source_kind, "lan")] ?? "LAN / VPN"} · ${asText(client.source_scope, "") === "lan-all" ? tr("все устройства") : asStringList(client.source_cidrs).join(", ") || "не задан"}`,
+          source: `${sourceKindLabels[asText(client.source_kind, "lan")] ?? "LAN / VPN"} · ${asText(client.source_scope, "") === "lan-all" ? tr("все устройства") : asStringList(client.source_cidrs).join(", ") || tr("не задан")}`,
           services: policy.id ? itemName(policy) : tr("Не назначен"),
           final: tr("{value1}; при сбое: {value2}", { value1: trafficMode === "wan_with_vless_exceptions" ? tr("WAN + исключения VLESS") : tr("VLESS + исключения WAN"), value2: outageSummary }),
+          tone: configuredItemTone(enabled, revisionState),
           status: configuredItemStatus(
             enabled,
             revisionState,
@@ -136,6 +137,7 @@ export function Clients({
           transportDetails: activeTransports.length
             ? tr("Добавляются автоматически: {value1}", { value1: activeTransports.join(" · ") })
             : "",
+          tone: configuredItemTone(user.enabled !== false, revisionState),
           status: configuredItemStatus(
             user.enabled !== false,
             revisionState,
@@ -239,11 +241,7 @@ export function Clients({
                       <td data-label={tr("Сервисы")}>{client.services}</td>
                       <td data-label={tr("Остальное")}>{client.final}</td>
                       <td data-label={tr("Состояние")}>
-                        <StatusPill
-                          tone={
-                            client.status === "Выключено" ? "muted" : "warn"
-                          }
-                        >
+                        <StatusPill tone={client.tone}>
                           {client.status}
                         </StatusPill>
                       </td>
@@ -282,7 +280,7 @@ export function Clients({
                     <div className="user-card-identity">
                       <div className="user-card-title">
                         <h3>{user.name}</h3>
-                        <StatusPill tone={user.status === "Выключен" ? "muted" : "warn"}>
+                        <StatusPill tone={user.tone}>
                           {user.status}
                         </StatusPill>
                       </div>

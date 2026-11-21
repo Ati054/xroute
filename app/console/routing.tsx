@@ -442,7 +442,7 @@ export function Routing({
           active: !runtimeDetailsReady
             ? tr("Сверяю с ядром…")
             : runtimeConfirmed
-              ? selectedLabel || "Нет доступного узла"
+              ? selectedLabel || tr("Нет доступного узла")
               : health.checked_at
                 ? tr("Не подтверждено ядром")
                 : tr("После применения"),
