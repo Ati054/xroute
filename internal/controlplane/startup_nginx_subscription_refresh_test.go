@@ -28,8 +28,14 @@ func TestStartupNginxUpgradesSubscriptionRefreshWithoutApply(t *testing.T) {
 			if strings.Count(updated, "gzip on;") != 1 {
 				t.Fatal("startup static compression missing")
 			}
-			if !strings.Contains(updated, ordinary) || strings.Count(updated, "proxy_read_timeout 180s;") != 1 || strings.Count(updated, "Authorization $http_authorization;") != 2 {
+			if !strings.Contains(updated, ordinary) || strings.Count(updated, "proxy_read_timeout 180s;") != 1 ||
+				strings.Count(updated, "Authorization $http_authorization;") != 3 {
 				t.Fatal("startup refresh policy missing or ordinary policy changed")
+			}
+			if strings.Count(updated, "location = /api/v1/recovery/backups/upload {") != 1 ||
+				strings.Count(updated, "proxy_request_buffering off;") != 1 ||
+				strings.Count(updated, "proxy_read_timeout 1800s;") != 1 {
+				t.Fatal("startup recovery upload policy missing")
 			}
 			if changed, err := EnsureStartupNginxTrafficReadiness(path); err != nil || changed {
 				t.Fatalf("second startup: %t %v", changed, err)
